@@ -1,0 +1,1531 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "docbox",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/box/{scope}/folder": {
+      "post": {
+        "tags": [
+          "folder"
+        ],
+        "summary": "Create folder",
+        "description": "Creates a new folder in the provided document box folder",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope to create the folder within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Folder created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Destination folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/folder/{folder_id}": {
+      "get": {
+        "tags": [
+          "folder"
+        ],
+        "summary": "Get folder by ID",
+        "description": "Requests a specific folder by ID. Will return the folder itself\nas well as the first resolved set of children for the folder",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the folder resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "ID of the folder to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Folder obtained successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "folder"
+        ],
+        "summary": "Update folder",
+        "description": "Updates a folder, can be a name change, a folder move, or both",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the folder resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "ID of the folder to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated folder successfully"
+          },
+          "400": {
+            "description": "Attempted to move a root folder or a folder into itself",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "folder"
+        ],
+        "summary": "Delete a folder by ID",
+        "description": "Deletes a document box folder and all its contents. This will\ntraverse the folder contents as a stack deleting all files and\nfolders within the folder before deleting itself",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the folder resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "ID of the folder to delete",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted folder successfully"
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/folder/{folder_id}/edit-history": {
+      "get": {
+        "tags": [
+          "folder"
+        ],
+        "summary": "Get folder edit history",
+        "description": "Request the edit history for the provided folder",
+        "operationId": "get_edit_history",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the folder resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "ID of the folder to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Obtained edit history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EditHistory"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/link": {
+      "post": {
+        "tags": [
+          "link"
+        ],
+        "summary": "Create link",
+        "description": "Creates a new link within the provided document box",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope to create the link within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLink"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Link created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkWithExtra"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Destination folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/link/{link_id}": {
+      "get": {
+        "tags": [
+          "link"
+        ],
+        "summary": "Get link by ID",
+        "description": "Request a specific link by ID",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the link resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "ID of the link to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Link obtained successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkWithExtra"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Link not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "link"
+        ],
+        "summary": "Update link",
+        "description": "Updates a link, can be a name change, value change, a folder move, or all",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the link resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "ID of the link to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated link successfully"
+          },
+          "404": {
+            "description": "Link not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "link"
+        ],
+        "summary": "Delete a link by ID",
+        "description": "Deletes a specific link using its ID",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the link resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "ID of the link to delete",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted link successfully"
+          },
+          "404": {
+            "description": "Link not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/link/{link_id}/edit-history": {
+      "get": {
+        "tags": [
+          "link"
+        ],
+        "summary": "Get link edit history",
+        "description": "Request the edit history for the provided link",
+        "operationId": "get_edit_history",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the link resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "ID of the link to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Obtained edit history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EditHistory"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Link not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/link/{link_id}/favicon": {
+      "get": {
+        "tags": [
+          "link"
+        ],
+        "summary": "Get link favicon",
+        "description": "Obtain the favicon image for the website that\nthe link points to",
+        "operationId": "get_favicon",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the link resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "ID of the link to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Obtained link favicon",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkWithExtra"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Link not found or no favicon was found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/link/{link_id}/image": {
+      "get": {
+        "tags": [
+          "link"
+        ],
+        "summary": "Get link social image",
+        "description": "Obtain the \"Social Image\" for the website, this resolves the website\nmetadata and finds the OGP metadata image responding with the image\ndirectly",
+        "operationId": "get_image",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the link resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "ID of the link to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Obtained link social image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkWithExtra"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Link not found or no image was found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/link/{link_id}/metadata": {
+      "get": {
+        "tags": [
+          "link"
+        ],
+        "summary": "Get link website metadata",
+        "description": "Requests metadata for the link. This will make a request\nto the site at the link value to extract metadata from\nthe website itself such as title, and OGP metadata",
+        "operationId": "get_metadata",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the link resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "ID of the link to request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Obtained link metadata successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkWithExtra"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Link not found or failed to resolve metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/task/{task_id}": {
+      "get": {
+        "tags": [
+          "task"
+        ],
+        "summary": "Get the details about a specific task, used to poll\nthe current progress of a task",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the task is within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "ID of the task to query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task found successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateFolderRequest": {
+        "type": "object",
+        "description": "Request to create a folder",
+        "required": [
+          "name",
+          "folder_id"
+        ],
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Folder to store folder in"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name for the folder"
+          }
+        }
+      },
+      "CreateLink": {
+        "type": "object",
+        "description": "Request to create a document box",
+        "required": [
+          "name",
+          "value",
+          "folder_id"
+        ],
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Folder to store link in"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name for the link"
+          },
+          "value": {
+            "type": "string",
+            "description": "Link URL"
+          }
+        }
+      },
+      "EditHistory": {
+        "type": "object",
+        "required": [
+          "id",
+          "user",
+          "type",
+          "metadata",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this change was made"
+          },
+          "file_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "ID of the file that was edited (If a file was edited)"
+          },
+          "folder_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "ID of the file that was edited (If a folder was edited)"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this history entry"
+          },
+          "link_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "ID of the file that was edited (If a link was edited)"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/EditHistoryMetadata",
+            "description": "Metadata associated with the change"
+          },
+          "type": {
+            "$ref": "#/components/schemas/EditHistoryType",
+            "description": "The type of change that was made"
+          },
+          "user": {
+            "$ref": "#/components/schemas/EditHistoryUser",
+            "description": "User that made the edit"
+          }
+        }
+      },
+      "EditHistoryMetadata": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "target_id",
+              "type"
+            ],
+            "properties": {
+              "original_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid",
+                "description": "Folder moved from"
+              },
+              "target_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Folder moved to"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "MoveToFolder"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "original_name",
+              "new_name",
+              "type"
+            ],
+            "properties": {
+              "new_name": {
+                "type": "string",
+                "description": "New name"
+              },
+              "original_name": {
+                "type": "string",
+                "description": "Previous name"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Rename"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "previous_value",
+              "new_value",
+              "type"
+            ],
+            "properties": {
+              "new_value": {
+                "type": "string",
+                "description": "New URL"
+              },
+              "previous_value": {
+                "type": "string",
+                "description": "Previous URL"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "LinkValue"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Metadata associated with an edit history"
+      },
+      "EditHistoryType": {
+        "type": "string",
+        "enum": [
+          "MoveToFolder",
+          "Rename",
+          "LinkValue"
+        ]
+      },
+      "EditHistoryUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Unique ID of the user"
+          },
+          "image_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last saved image ID for the user"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last saved name for the user"
+          }
+        }
+      },
+      "FileWithExtra": {
+        "type": "object",
+        "description": "File with the resolved creator and last modified data",
+        "required": [
+          "id",
+          "name",
+          "mime",
+          "folder_id",
+          "hash",
+          "size",
+          "encrypted",
+          "created_at",
+          "created_by",
+          "last_modified_by"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the file was created"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/Option",
+            "description": "User who created the file"
+          },
+          "encrypted": {
+            "type": "boolean",
+            "description": "Whether the file was determined to be encrypted when processing"
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Parent folder ID"
+          },
+          "hash": {
+            "type": "string",
+            "description": "Hash of the file bytes stored in S3"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the file"
+          },
+          "last_modified_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last time the file was modified"
+          },
+          "last_modified_by": {
+            "$ref": "#/components/schemas/Option",
+            "description": "User who last modified the file"
+          },
+          "mime": {
+            "type": "string",
+            "description": "Mime type of the file content"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the file"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Optional parent file if the file is a child"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Size of the file in bytes"
+          }
+        }
+      },
+      "FolderPathSegment": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "FolderResponse": {
+        "type": "object",
+        "description": "Response for requesting a document box",
+        "required": [
+          "folder",
+          "children"
+        ],
+        "properties": {
+          "children": {
+            "$ref": "#/components/schemas/ResolvedFolderWithExtra",
+            "description": "Resolved contents of the folder"
+          },
+          "folder": {
+            "$ref": "#/components/schemas/FolderWithExtra",
+            "description": "The folder itself"
+          }
+        }
+      },
+      "FolderWithExtra": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "created_by",
+          "last_modified_by"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the folder was created"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/Option",
+            "description": "User who created the folder"
+          },
+          "folder_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Parent folder ID if the folder is a child"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the folder"
+          },
+          "last_modified_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last time the folder was modified"
+          },
+          "last_modified_by": {
+            "$ref": "#/components/schemas/Option",
+            "description": "User who last modified the folder"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the file"
+          }
+        }
+      },
+      "HttpErrorResponse": {
+        "type": "object",
+        "description": "HTTP error JSON format for serializing responses",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "LinkWithExtra": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "value",
+          "folder_id",
+          "created_at",
+          "created_by",
+          "last_modified_by"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the file was created"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/Option",
+            "description": "User who created the file"
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Parent folder ID"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the file"
+          },
+          "last_modified_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last time the file was modified"
+          },
+          "last_modified_by": {
+            "$ref": "#/components/schemas/Option",
+            "description": "User who last modified the file"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the link"
+          },
+          "value": {
+            "type": "string",
+            "description": "value of the link"
+          }
+        }
+      },
+      "Option": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/components/schemas/User",
+            "description": "Wrapper type for extracting a [User] that was joined\nfrom another table where the fields are prefixed with \"lmb_\""
+          }
+        ]
+      },
+      "ResolvedFolderWithExtra": {
+        "type": "object",
+        "description": "Folder with all the children resolved, children also\nresolve the user and last modified data",
+        "required": [
+          "path",
+          "folders",
+          "files",
+          "links"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileWithExtra"
+            },
+            "description": "List of files within the folder"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FolderWithExtra"
+            },
+            "description": "List of folders within the folder"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkWithExtra"
+            },
+            "description": "List of links within the folder"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FolderPathSegment"
+            },
+            "description": "Path to the resolved folder"
+          }
+        }
+      },
+      "String": {
+        "type": "string"
+      },
+      "Task": {
+        "type": "object",
+        "description": "Represents a stored asynchronous task progress",
+        "required": [
+          "id",
+          "document_box",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the task was created"
+          },
+          "document_box": {
+            "$ref": "#/components/schemas/String",
+            "description": "ID of the document box the task belongs to"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique ID of the task"
+          },
+          "output_data": {
+            "description": "Output data from the task completion"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus",
+            "description": "Status of the task"
+          }
+        }
+      },
+      "TaskStatus": {
+        "type": "string",
+        "enum": [
+          "Pending",
+          "Completed",
+          "Failed"
+        ]
+      },
+      "UpdateFolderRequest": {
+        "type": "object",
+        "description": "Request to rename and or move a folder",
+        "properties": {
+          "folder_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "New parent folder for the folder"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name for the folder"
+          }
+        }
+      },
+      "UpdateLinkRequest": {
+        "type": "object",
+        "description": "Request to rename a file",
+        "properties": {
+          "folder_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "New parent folder for the link"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name for the link"
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Value for the link"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique ID of the user"
+          },
+          "image_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last saved image ID for the user"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last saved name for the user"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "link",
+      "description": "Link related APIs"
+    },
+    {
+      "name": "folder",
+      "description": "Folder related APIs"
+    },
+    {
+      "name": "task",
+      "description": "Background task related APIs"
+    }
+  ]
+}

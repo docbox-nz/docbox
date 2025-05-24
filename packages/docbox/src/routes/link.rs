@@ -54,6 +54,7 @@ pub const LINK_TAG: &str = "link";
         ("scope" = String, Path, description = "Scope to create the link within"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, req))]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -120,7 +121,7 @@ pub async fn create(
     tag = LINK_TAG,
     path = "/box/{scope}/link/{link_id}",
     responses(
-        (status = 200, description = "Link created successfully", body = LinkWithExtra),
+        (status = 200, description = "Link obtained successfully", body = LinkWithExtra),
         (status = 404, description = "Link not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
@@ -129,6 +130,7 @@ pub async fn create(
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, link_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
@@ -165,6 +167,7 @@ pub async fn get(
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, link_id))]
 pub async fn get_metadata(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -212,6 +215,7 @@ pub async fn get_metadata(
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, link_id))]
 pub async fn get_favicon(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -256,6 +260,7 @@ pub async fn get_favicon(
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, link_id))]
 pub async fn get_image(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -290,7 +295,7 @@ pub async fn get_image(
     path = "/box/{scope}/link/{link_id}/edit-history",
     responses(
         (status = 200, description = "Obtained edit history", body = [EditHistory]),
-        (status = 404, description = "Link not found or no image was found", body = HttpErrorResponse),
+        (status = 404, description = "Link not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
@@ -298,6 +303,7 @@ pub async fn get_image(
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, link_id))]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
@@ -307,7 +313,7 @@ pub async fn get_edit_history(
         .await
         // Failed to query link
         .map_err(|cause| {
-            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            tracing::error!(?cause, "failed to query link");
             HttpCommonError::ServerError
         })?
         // Link not found
@@ -315,7 +321,11 @@ pub async fn get_edit_history(
 
     let history = EditHistory::all_by_link(&db, link_id)
         .await
-        .context("failed to get link edit history")?;
+        // Failed to query edit history
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query link edit history");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(Json(history))
 }
@@ -337,6 +347,7 @@ pub async fn get_edit_history(
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, link_id, req))]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -348,7 +359,7 @@ pub async fn update(
         .await
         // Failed to query link
         .map_err(|cause| {
-            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            tracing::error!(?cause, "failed to query link");
             HttpCommonError::ServerError
         })?
         // Link not found
@@ -416,9 +427,10 @@ pub async fn update(
     ),
     params(
         ("scope" = String, Path, description = "Scope the link resides within"),
-        ("link_id" = Uuid, Path, description = "ID of the link to request"),
+        ("link_id" = Uuid, Path, description = "ID of the link to delete"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, link_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantSearch(opensearch): TenantSearch,
@@ -429,13 +441,18 @@ pub async fn delete(
         .await
         // Failed to query link
         .map_err(|cause| {
-            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            tracing::error!(?cause, "failed to query link");
             HttpCommonError::ServerError
         })?
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    delete_link(&db, &opensearch, &events, link, scope).await?;
+    delete_link(&db, &opensearch, &events, link, scope)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to delete folder");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(StatusCode::NO_CONTENT)
 }

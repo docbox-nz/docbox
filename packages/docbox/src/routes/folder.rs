@@ -7,7 +7,7 @@ use axum::{extract::Path, http::StatusCode, Json};
 use axum_valid::Garde;
 
 use crate::{
-    error::{DynHttpError, HttpErrorResponse, HttpResult, HttpStatusResult},
+    error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
         action_user::ActionUser,
         tenant::{TenantDb, TenantEvents, TenantSearch, TenantStorage},
@@ -17,8 +17,7 @@ use crate::{
 use docbox_core::{
     search::models::UpdateSearchIndexData,
     services::folders::{
-        create_folder, delete_folder, move_folder, rollback_create_folder, update_folder_name,
-        CreateFolderData, CreateFolderState,
+        delete_folder, move_folder, safe_create_folder, update_folder_name, CreateFolderData,
     },
 };
 use docbox_database::models::{
@@ -45,41 +44,48 @@ pub const FOLDER_TAG: &str = "folder";
         ("scope" = String, Path, description = "Scope to create the folder within"),
     )
 )]
+#[tracing::instrument(skip_all, fields(scope, req))]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     TenantEvents(events): TenantEvents,
     Path(scope): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<CreateFolderRequest>>,
 ) -> Result<(StatusCode, Json<FolderResponse>), DynHttpError> {
-    let parent_folder = Folder::find_by_id(&db, &scope, req.folder_id)
+    let folder_id = req.folder_id;
+    let parent_folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
-        .context("unable to query folder")?
+        // Failed to query destination folder
+        .map_err(|cause| {
+            tracing::error!(
+                ?scope,
+                ?folder_id,
+                ?cause,
+                "failed to query link destination folder"
+            );
+            HttpCommonError::ServerError
+        })?
+        // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
     // Update stored editing user data
     let created_by = action_user.store_user(&db).await?;
 
-    let mut create_state = CreateFolderState::default();
-
+    // Make the create query
     let create = CreateFolderData {
         folder: parent_folder,
         name: req.name,
         created_by: created_by.as_ref().map(|value| value.id.to_string()),
     };
 
-    let folder = match create_folder(&db, &opensearch, &events, create, &mut create_state).await {
-        Ok(value) => value,
-        Err(err) => {
-            // Attempt to rollback any allocated resources in the background
-            tokio::spawn(async move {
-                rollback_create_folder(&opensearch, create_state).await;
-            });
-
-            return Err(anyhow::Error::from(err).into());
-        }
-    };
+    // Perform Folder creation
+    let folder = safe_create_folder(&db, search, &events, create)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to create link");
+            HttpFolderError::CreateError(cause)
+        })?;
 
     Ok((
         StatusCode::CREATED,
@@ -98,43 +104,104 @@ pub async fn create(
     ))
 }
 
-/// GET /box/:scope/folder/:folder_id
+/// Get folder by ID
 ///
-/// Gets a specific folder within a document box, resolves the folder
-/// children including them in the response
+/// Requests a specific folder by ID. Will return the folder itself
+/// as well as the first resolved set of children for the folder
+#[utoipa::path(
+    get,
+    tag = FOLDER_TAG,
+    path = "/box/{scope}/folder/{folder_id}",
+    responses(
+        (status = 200, description = "Folder obtained successfully", body = FolderResponse),
+        (status = 404, description = "Folder not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the folder resides within"),
+        ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, folder_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
 ) -> HttpResult<FolderResponse> {
     let folder = Folder::find_by_id_with_extra(&db, &scope, folder_id)
-        .await?
+        .await
+        // Failed to query folder
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
+        // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
     let children = ResolvedFolderWithExtra::resolve(&db, folder.id).await?;
-
     Ok(Json(FolderResponse { folder, children }))
 }
-/// GET /box/:scope/folder/:folder_id/edit-history
+
+/// Get folder edit history
 ///
-/// Gets the edit history for a specific folder
+/// Request the edit history for the provided folder
+#[utoipa::path(
+    get,
+    tag = FOLDER_TAG,
+    path = "/box/{scope}/folder/{folder_id}/edit-history",
+    responses(
+        (status = 200, description = "Obtained edit history", body = [EditHistory]),
+        (status = 404, description = "Folder not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the folder resides within"),
+        ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, folder_id))]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
 ) -> HttpResult<Vec<EditHistory>> {
     _ = Folder::find_by_id_with_extra(&db, &scope, folder_id)
-        .await?
+        .await
+        // Failed to query folder
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
+        // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
     let edit_history = EditHistory::all_by_folder(&db, folder_id)
         .await
-        .context("failed to get edit history")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder edit history");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(Json(edit_history))
 }
 
-/// PUT /box/:scope/folder/:folder_id
+/// Update folder
 ///
 /// Updates a folder, can be a name change, a folder move, or both
+#[utoipa::path(
+    put,
+    tag = FOLDER_TAG,
+    path = "/box/{scope}/folder/{folder_id}",
+    responses(
+        (status = 200, description = "Updated folder successfully"),
+        (status = 400, description = "Attempted to move a root folder or a folder into itself", body = HttpErrorResponse),
+        (status = 404, description = "Folder not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the folder resides within"),
+        ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, folder_id, req))]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -144,7 +211,12 @@ pub async fn update(
 ) -> HttpStatusResult {
     let mut folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
-        .context("failed to query file")?
+        // Failed to query folder
+        .map_err(|cause| {
+            tracing::error!(?scope, ?folder_id, ?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
+        // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
     // Cannot modify the root folder, this is not allowed
@@ -201,9 +273,26 @@ pub async fn update(
     Ok(StatusCode::OK)
 }
 
-/// DELETE /box/:scope/folder/:folder_id
+/// Delete a folder by ID
 ///
-/// Deletes a document box folder and all its contents
+/// Deletes a document box folder and all its contents. This will
+/// traverse the folder contents as a stack deleting all files and
+/// folders within the folder before deleting itself
+#[utoipa::path(
+    delete,
+    tag = FOLDER_TAG,
+    path = "/box/{scope}/folder/{folder_id}",
+    responses(
+        (status = 204, description = "Deleted folder successfully"),
+        (status = 404, description = "Folder not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the folder resides within"),
+        ("folder_id" = Uuid, Path, description = "ID of the folder to delete"),
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, folder_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantStorage(s3): TenantStorage,
@@ -213,12 +302,20 @@ pub async fn delete(
 ) -> HttpStatusResult {
     let folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
-        .context("failed to query file")?
+        // Failed to query folder
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
+        // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
     delete_folder(&db, &s3, &opensearch, &events, folder)
         .await
-        .context("failed to delete folder")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to delete folder");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(StatusCode::NO_CONTENT)
 }

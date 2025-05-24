@@ -47,14 +47,6 @@ pub enum CreateFolderError {
     CommitTransaction(DbErr),
 }
 
-/// State structure to keep track of resources created
-/// as a side effect from creating a folder
-#[derive(Default)]
-pub struct CreateFolderState {
-    /// Search index files
-    pub search_index_files: Vec<Uuid>,
-}
-
 pub struct CreateFolderData {
     /// Folder create the folder within
     pub folder: Folder,
@@ -66,7 +58,31 @@ pub struct CreateFolderData {
     pub created_by: Option<UserId>,
 }
 
-pub async fn create_folder(
+/// State structure to keep track of resources created
+/// as a side effect from creating a folder
+#[derive(Default)]
+struct CreateFolderState {
+    /// Search index files
+    pub search_index_files: Vec<Uuid>,
+}
+
+pub async fn safe_create_folder(
+    db: &DbPool,
+    search: TenantSearchIndex,
+    events: &TenantEventPublisher,
+    create: CreateFolderData,
+) -> Result<Folder, CreateFolderError> {
+    let mut create_state = CreateFolderState::default();
+
+    create_folder(db, &search, events, create, &mut create_state)
+        .await
+        .inspect_err(|_| {
+            // Attempt to rollback any allocated resources in the background
+            tokio::spawn(rollback_create_folder(search, create_state));
+        })
+}
+
+async fn create_folder(
     db: &DbPool,
     search: &TenantSearchIndex,
     events: &TenantEventPublisher,
@@ -127,7 +143,7 @@ pub async fn create_folder(
     Ok(folder)
 }
 
-pub async fn rollback_create_folder(search: &TenantSearchIndex, create_state: CreateFolderState) {
+async fn rollback_create_folder(search: TenantSearchIndex, create_state: CreateFolderState) {
     // Revert file index data
     for id in create_state.search_index_files {
         if let Err(err) = search.delete_data(id).await {

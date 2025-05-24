@@ -1,5 +1,6 @@
 use crate::error::HttpError;
 use axum::http::StatusCode;
+use docbox_core::services::folders::CreateFolderError;
 use docbox_database::models::folder::{FolderId, FolderWithExtra, ResolvedFolderWithExtra};
 use garde::Validate;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,10 @@ pub enum HttpFolderError {
     #[error("unknown folder")]
     UnknownFolder,
 
+    /// Failed to create the folder
+    #[error(transparent)]
+    CreateError(CreateFolderError),
+
     #[error("unknown target folder")]
     UnknownTargetFolder,
 
@@ -68,6 +73,7 @@ impl HttpError for HttpFolderError {
             HttpFolderError::CannotModifyRoot | HttpFolderError::CannotMoveIntoSelf => {
                 StatusCode::BAD_REQUEST
             }
+            HttpFolderError::CreateError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

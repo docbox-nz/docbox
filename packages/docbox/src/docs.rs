@@ -3,12 +3,14 @@ use utoipa::OpenApi;
 use crate::routes::{
     link::{self, LINK_TAG},
     task::{self, TASK_TAG},
+    folder::{self, FOLDER_TAG}
 };
 
 #[derive(OpenApi)]
 #[openapi(
     tags(
         (name = LINK_TAG, description = "Link related APIs"),
+        (name = FOLDER_TAG, description = "Folder related APIs"),
         (name = TASK_TAG, description = "Background task related APIs")
     ),
     paths(
@@ -21,6 +23,12 @@ use crate::routes::{
         link::get_edit_history,
         link::update,
         link::delete,
+        // Folder routes
+        folder::create,
+        folder::get,
+        folder::get_edit_history,
+        folder::update,
+        folder::delete,
         // Task routes
         task::get
     )
