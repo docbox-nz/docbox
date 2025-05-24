@@ -1,10 +1,9 @@
-use crate::services::{generated::QueuedUpload, thumbnail::generate_image_preview};
+use super::{thumbnail::generate_image_preview, ProcessingError, ProcessingOutput};
+use crate::services::generated::QueuedUpload;
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 use image::{DynamicImage, ImageFormat, ImageReader};
 use std::io::Cursor;
-
-use super::{ProcessingError, ProcessingOutput};
 
 /// Image processing is CPU intensive, this async variant moves the image processing
 /// to a separate thread where blocking is acceptable to prevent blocking other

@@ -1,7 +1,8 @@
+use super::thumbnail::generate_pdf_images_async;
 use crate::{
     processing::{ProcessingError, ProcessingIndexMetadata, ProcessingOutput},
     search::models::DocumentPage,
-    services::{generated::QueuedUpload, thumbnail::generate_pdf_images_async},
+    services::generated::QueuedUpload,
 };
 use docbox_database::models::generated_file::GeneratedFileType;
 use futures::TryFutureExt;
