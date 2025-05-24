@@ -1,13 +1,13 @@
 use utoipa::OpenApi;
 
 use crate::routes::{
-    link::{self, LINK_TAG},
-    task::{self, TASK_TAG},
-    folder::{self, FOLDER_TAG},
+    admin::{self, ADMIN_TAG},
     document_box::{self, DOCUMENT_BOX_TAG},
     file::{self, FILE_TAG},
+    folder::{self, FOLDER_TAG},
+    link::{self, LINK_TAG},
+    task::{self, TASK_TAG},
     utils::{self, UTILS_TAG},
-    admin::{self, ADMIN_TAG},
 };
 
 #[derive(OpenApi)]
@@ -55,7 +55,7 @@ use crate::routes::{
         folder::update,
         folder::delete,
         // Link routes
-        link::create, 
+        link::create,
         link::get,
         link::get_metadata,
         link::get_favicon,

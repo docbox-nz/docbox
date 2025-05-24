@@ -47,7 +47,7 @@ pub const DOCUMENT_BOX_TAG: &str = "Document Box";
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        TenantParams, 
+        TenantParams,
         UserParams
     )
 )]
@@ -110,7 +110,7 @@ pub async fn create(
         (status = 200, description = "Document box obtained successfully", body = DocumentBoxResponse),
         (status = 404, description = "Document box not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
-    ), 
+    ),
     params(
         ("scope" = String, Path, description = "Scope of the document box"),
         TenantParams
@@ -123,7 +123,7 @@ pub async fn get(
 ) -> HttpResult<DocumentBoxResponse> {
     let document_box = DocumentBox::find_by_scope(&db, &scope)
         .await
-          .map_err(|cause| {
+        .map_err(|cause| {
             tracing::error!(?cause, "failed to query document box");
             HttpCommonError::ServerError
         })?
@@ -182,7 +182,7 @@ pub async fn stats(
 ) -> HttpResult<DocumentBoxStats> {
     // Assert that the document box exists
     let _document_box = DocumentBox::find_by_scope(&db, &scope)
-        .await 
+        .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to query document box");
             HttpCommonError::ServerError
@@ -190,7 +190,7 @@ pub async fn stats(
         .ok_or(HttpDocumentBoxError::UnknownDocumentBox)?;
 
     let root = Folder::find_root_with_extra(&db, &scope)
-        .await  
+        .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to query folder");
             HttpCommonError::ServerError
@@ -292,21 +292,18 @@ pub async fn search(
             let folder = Folder::find_by_id(&db, &scope, folder_id)
                 .await
                 .map_err(|cause| {
-            tracing::error!(?cause, "failed to query folder");
-            HttpCommonError::ServerError
-        })?
-          .ok_or_else(|| {
-            tracing::error!( "failed to find folder");
-            HttpCommonError::ServerError
-        })?;
+                    tracing::error!(?cause, "failed to query folder");
+                    HttpCommonError::ServerError
+                })?
+                .ok_or_else(|| {
+                    tracing::error!("failed to find folder");
+                    HttpCommonError::ServerError
+                })?;
 
-            let folder_children = folder
-                .tree_all_children(&db)
-                .await
-                  .map_err(|cause| {
-            tracing::error!(?cause, "failed to query folder children");
-            HttpCommonError::ServerError
-        })?;
+            let folder_children = folder.tree_all_children(&db).await.map_err(|cause| {
+                tracing::error!(?cause, "failed to query folder children");
+                HttpCommonError::ServerError
+            })?;
 
             Some(folder_children)
         }
@@ -317,7 +314,8 @@ pub async fn search(
 
     let results = opensearch
         .search_index(&[scope], req, search_folder_ids)
-        .await  .map_err(|cause| {
+        .await
+        .map_err(|cause| {
             tracing::error!(?cause, "failed to query search index");
             HttpCommonError::ServerError
         })?;
