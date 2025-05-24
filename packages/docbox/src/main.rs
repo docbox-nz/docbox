@@ -24,7 +24,9 @@ use std::{
 };
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
-use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
+use tracing_subscriber::{
+    fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
+};
 
 mod docs;
 mod error;
@@ -42,14 +44,20 @@ const SERVER_ADDRESS_ENV: &str = "SERVER_ADDRESS";
 const DEFAULT_SERVER_ADDRESS: SocketAddr =
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8080));
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     _ = dotenvy::dotenv();
 
-    // Start configuring a `fmt` subscriber
-    let subscriber = tracing_subscriber::fmt()
-        // Use the logging options from env variables
-        .with_env_filter(EnvFilter::from_default_env())
+    // Use the logging options from env variables
+    let filter = EnvFilter::from_default_env()
+        // Increase logging requirements for noisy dependencies
+        .add_directive("aws_sdk_secretsmanager=info".parse()?)
+        .add_directive("aws_runtime=info".parse()?)
+        .add_directive("aws_smithy_runtime=info".parse()?)
+        .add_directive("hyper_util=info".parse()?)
+        .add_directive("aws_sdk_sqs=info".parse()?)
+        .add_directive("h2=info".parse()?);
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
         // Include starting and stopping of spans
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         // Display source code file paths
@@ -57,13 +65,44 @@ async fn main() -> anyhow::Result<()> {
         // Display source code line numbers
         .with_line_number(true)
         // Don't display the event's target (module path)
-        .with_target(false)
-        // Build the subscriber
-        .finish();
+        .with_target(false);
 
-    // use that subscriber to process traces emitted after this point
-    tracing::subscriber::set_global_default(subscriber)?;
+    let _sentry_guard = match std::env::var("SENTRY_DSN") {
+        // Initialize logging with sentry support
+        Ok(dsn) => {
+            let options = sentry::ClientOptions {
+                release: sentry::release_name!(),
+                ..Default::default()
+            };
+            let sentry = sentry::init((dsn, options));
 
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(fmt_layer)
+                .with(sentry_tracing::layer())
+                .init();
+
+            Some(sentry)
+        }
+        // Initialize logging without sentry support
+        Err(_) => {
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(fmt_layer)
+                .init();
+
+            None
+        }
+    };
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed building the Runtime")
+        .block_on(server())
+}
+
+async fn server() -> anyhow::Result<()> {
     // Create the converter
     let converter = LibreOfficeConverter::init()?;
 
