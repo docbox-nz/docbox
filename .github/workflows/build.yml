@@ -30,8 +30,8 @@ jobs:
           override: true
 
       # Install musl-gcc
-      - name: Install musl-gcc
-        run: apt-get install musl-tools
+      - name: Install musl build tools
+        run: sudo apt update && sudo apt install musl-tools -y
 
       # Build the binary
       - name: Build for ${{ matrix.target }}
