@@ -2,12 +2,11 @@
 
 use std::sync::Arc;
 
-use crate::error::DynHttpError;
-use anyhow::{anyhow, Context};
+use crate::error::{DynHttpError, HttpCommonError, HttpError};
 use axum::{
     async_trait,
     extract::{FromRequestParts, Request},
-    http::{request::Parts, HeaderMap},
+    http::{request::Parts, HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
     Extension,
@@ -22,6 +21,7 @@ use docbox_database::{
     connect_root_database, connect_tenant_database, models::tenant::Tenant, DatabasePoolCache,
     DbPool,
 };
+use thiserror::Error;
 use utoipa::IntoParams;
 use uuid::Uuid;
 
@@ -52,13 +52,7 @@ pub async fn tenant_auth_middleware(
     next: Next,
 ) -> Result<Response, DynHttpError> {
     // Extract the request tenant
-    let tenant = match extract_tenant(&headers, &db_cache).await {
-        Ok(value) => value,
-        // Error response
-        Err(err) => {
-            return Err(DynHttpError::from(err));
-        }
-    };
+    let tenant = extract_tenant(&headers, &db_cache).await?;
 
     // Add the tenant as an extension
     request.extensions_mut().insert(tenant);
@@ -67,7 +61,7 @@ pub async fn tenant_auth_middleware(
     Ok(next.run(request).await)
 }
 
-pub fn get_tenant_env(headers: &HeaderMap) -> anyhow::Result<String> {
+pub fn get_tenant_env(headers: &HeaderMap) -> Result<String, ExtractTenantError> {
     #[cfg(feature = "mock-browser")]
     {
         return Ok("Development".to_string());
@@ -76,11 +70,31 @@ pub fn get_tenant_env(headers: &HeaderMap) -> anyhow::Result<String> {
     match headers.get(TENANT_ENV_HEADER) {
         Some(value) => value
             .to_str()
-            .context("x-tenant-env was not a valid utf8 string")
+            .map_err(|_| ExtractTenantError::InvalidTenantEnv)
             .map(|value| value.to_string()),
 
         // Tenant not provided
-        None => Err(anyhow!("missing {TENANT_ENV_HEADER} header")),
+        None => Err(ExtractTenantError::MissingTenantEnv),
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ExtractTenantError {
+    #[error("tenant id is required")]
+    MissingTenantId,
+    #[error("tenant id must be a valid uuid")]
+    InvalidTenantId,
+    #[error("tenant env is required")]
+    MissingTenantEnv,
+    #[error("tenant env must be a valid uuid")]
+    InvalidTenantEnv,
+    #[error("tenant not found")]
+    TenantNotFound,
+}
+
+impl HttpError for ExtractTenantError {
+    fn status(&self) -> axum::http::StatusCode {
+        StatusCode::BAD_REQUEST
     }
 }
 
@@ -88,7 +102,7 @@ pub fn get_tenant_env(headers: &HeaderMap) -> anyhow::Result<String> {
 pub async fn extract_tenant(
     headers: &HeaderMap,
     db_cache: &DatabasePoolCache<AppSecretManager>,
-) -> anyhow::Result<Tenant> {
+) -> Result<Tenant, DynHttpError> {
     #[cfg(feature = "mock-browser")]
     let tenant_id = uuid::uuid!("e3bab7bd-07a5-4b81-be38-e4790e80c0d1");
     #[cfg(feature = "mock-browser")]
@@ -99,26 +113,32 @@ pub async fn extract_tenant(
         Some(value) => {
             let value_str = value
                 .to_str()
-                .context("x-tenant-id was not a valid utf8 string")?;
+                .map_err(|_| ExtractTenantError::InvalidTenantId)?;
 
             value_str
                 .parse()
-                .context("tenant id must be a valid uuid")?
+                .map_err(|_| ExtractTenantError::InvalidTenantId)?
         }
 
         // Tenant not provided
-        None => return Err(anyhow!("missing {TENANT_ID_HEADER} header")),
+        None => return Err(ExtractTenantError::MissingTenantId.into()),
     };
 
     #[cfg(not(feature = "mock-browser"))]
     let env = get_tenant_env(headers)?;
 
-    let db = connect_root_database(db_cache).await?;
+    let db = connect_root_database(db_cache).await.map_err(|cause| {
+        tracing::error!(?cause, "failed to connect to root database");
+        HttpCommonError::ServerError
+    })?;
 
     let tenant = Tenant::find_by_id(&db, tenant_id, &env)
         .await
-        .context("failed to request tenant")?
-        .context("tenant does not exist")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to connect to root database");
+            HttpCommonError::ServerError
+        })?
+        .ok_or(ExtractTenantError::TenantNotFound)?;
 
     Ok(tenant)
 }
@@ -135,19 +155,25 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // Extract current tenant
-        let tenant: &Tenant = parts
-            .extensions
-            .get()
-            .context("tenant not available within this scope")?;
+        let tenant: &Tenant = parts.extensions.get().ok_or_else(|| {
+            tracing::error!("tenant not available within this scope");
+            HttpCommonError::ServerError
+        })?;
 
         // Extract database cache
-        let db_cache: &Arc<DatabasePoolCache<AppSecretManager>> = parts
-            .extensions
-            .get()
-            .context("missing tenant database cache")?;
+        let db_cache: &Arc<DatabasePoolCache<AppSecretManager>> =
+            parts.extensions.get().ok_or_else(|| {
+                tracing::error!("database pool caching is missing");
+                HttpCommonError::ServerError
+            })?;
 
         // Create the database connection pool
-        let db = connect_tenant_database(db_cache, tenant).await?;
+        let db = connect_tenant_database(db_cache, tenant)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to connect to root database");
+                HttpCommonError::ServerError
+            })?;
 
         Ok(TenantDb(db))
     }
@@ -165,16 +191,16 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // Extract current tenant
-        let tenant: &Tenant = parts
-            .extensions
-            .get()
-            .context("tenant not available within this scope")?;
+        let tenant: &Tenant = parts.extensions.get().ok_or_else(|| {
+            tracing::error!("tenant not available within this scope");
+            HttpCommonError::ServerError
+        })?;
 
         // Extract search index factory
-        let factory: &SearchIndexFactory = parts
-            .extensions
-            .get()
-            .context("search index factory missing")?;
+        let factory: &SearchIndexFactory = parts.extensions.get().ok_or_else(|| {
+            tracing::error!("search index factory is missing");
+            HttpCommonError::ServerError
+        })?;
 
         // Create search index
         let search = factory.create_search_index(tenant);
@@ -195,13 +221,16 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // Extract current tenant
-        let tenant: &Tenant = parts
-            .extensions
-            .get()
-            .context("tenant not available within this scope")?;
+        let tenant: &Tenant = parts.extensions.get().ok_or_else(|| {
+            tracing::error!("tenant not available within this scope");
+            HttpCommonError::ServerError
+        })?;
 
         // Extract open search access
-        let factory: &StorageLayerFactory = parts.extensions.get().context("s3 client missing")?;
+        let factory: &StorageLayerFactory = parts.extensions.get().ok_or_else(|| {
+            tracing::error!("storage layer is missing");
+            HttpCommonError::ServerError
+        })?;
 
         // Create tenant storage layer
         let storage = factory.create_storage_layer(tenant);
@@ -222,14 +251,16 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // Extract current tenant
-        let tenant: &Tenant = parts
-            .extensions
-            .get()
-            .context("tenant not available within this scope")?;
+        let tenant: &Tenant = parts.extensions.get().ok_or_else(|| {
+            tracing::error!("tenant not available within this scope");
+            HttpCommonError::ServerError
+        })?;
 
         // Get the event publisher factor
-        let events: &EventPublisherFactory =
-            parts.extensions.get().context("sqs client missing")?;
+        let events: &EventPublisherFactory = parts.extensions.get().ok_or_else(|| {
+            tracing::error!("event publisher layer is missing");
+            HttpCommonError::ServerError
+        })?;
 
         Ok(TenantEvents(events.create_event_publisher(tenant)))
     }

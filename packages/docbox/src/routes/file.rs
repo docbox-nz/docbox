@@ -1,7 +1,7 @@
 //! File related endpoints
 
 use crate::{
-    error::{DynHttpError, HttpErrorResponse, HttpResult, HttpStatusResult},
+    error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
         action_user::{ActionUser, UserParams},
         tenant::{TenantDb, TenantEvents, TenantParams, TenantSearch, TenantStorage},
@@ -15,7 +15,6 @@ use crate::{
         folder::HttpFolderError,
     },
 };
-use anyhow::Context;
 use axum::{
     body::Body,
     extract::{Path, Query},
@@ -99,13 +98,19 @@ pub async fn upload(
 ) -> HttpResult<FileUploadResponse> {
     let folder = Folder::find_by_id(&db, &scope, req.folder_id)
         .await
-        .context("unable to query folder")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFolderError::UnknownTargetFolder)?;
 
     if let Some(fixed_id) = req.fixed_id {
         if File::find(&db, &scope, fixed_id)
             .await
-            .context("failed to check duplicate files")?
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to check for duplicate files");
+                HttpCommonError::ServerError
+            })?
             .is_some()
         {
             return Err(DynHttpError::from(HttpFileError::FileIdInUse));
@@ -116,9 +121,9 @@ pub async fn upload(
         .file
         .metadata
         .content_type
-        .context("request file missing content type")?;
+        .ok_or(HttpFileError::MissingMimeType)?;
 
-    let mime = Mime::from_str(&content_type).context("failed to parse content type")?;
+    let mime = Mime::from_str(&content_type).map_err(|_| HttpFileError::InvalidMimeType)?;
 
     // Parse task processing config
     let processing_config: Option<ProcessingConfig> = match &req.processing_config {
@@ -151,7 +156,12 @@ pub async fn upload(
 
     // Handle synchronous request waiting for the task to complete before responding
     if !req.asynchronous.unwrap_or_default() {
-        let data = safe_upload_file(db, opensearch, s3, events, processing, upload).await?;
+        let data = safe_upload_file(db, opensearch, s3, events, processing, upload)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to upload file");
+                HttpCommonError::ServerError
+            })?;
         let result = map_uploaded_file(data, &created_by);
         return Ok(Json(FileUploadResponse::Sync(Box::new(result))));
     }
@@ -160,10 +170,19 @@ pub async fn upload(
     let (task_id, created_at) = background_task(db.clone(), scope.clone(), async move {
         let result = safe_upload_file(db, opensearch, s3, events, processing, upload)
             .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to upload file");
+                DynHttpError::from(HttpCommonError::ServerError)
+            })
             // Map the response into the desired format
             .map(|data| map_uploaded_file(data, &created_by))
             // Serialize the response for storage
-            .and_then(|value| serde_json::to_value(&value).context("failed to serialize output"));
+            .and_then(|value| {
+                serde_json::to_value(&value).map_err(|cause| {
+                    tracing::error!(?cause, "failed to serialize upload task outcome");
+                    DynHttpError::from(HttpCommonError::ServerError)
+                })
+            });
 
         match result {
             Ok(value) => (TaskStatus::Completed, value),
@@ -173,7 +192,11 @@ pub async fn upload(
             ),
         }
     })
-    .await?;
+    .await
+    .map_err(|cause| {
+        tracing::error!(?cause, "failed to create background task");
+        HttpCommonError::ServerError
+    })?;
 
     Ok(Json(FileUploadResponse::Async(UploadTaskResponse {
         task_id,
@@ -247,7 +270,10 @@ pub async fn create_presigned(
 ) -> Result<(StatusCode, Json<PresignedUploadResponse>), DynHttpError> {
     let folder = Folder::find_by_id(&db, &scope, req.folder_id)
         .await
-        .context("unable to query folder")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFolderError::UnknownTargetFolder)?;
 
     // Update stored editing user data
@@ -267,7 +293,11 @@ pub async fn create_presigned(
             processing_config: req.processing_config,
         },
     )
-    .await?;
+    .await
+    .map_err(|cause| {
+        tracing::error!(?cause, "failed to create presigned upload");
+        HttpCommonError::ServerError
+    })?;
 
     Ok((
         StatusCode::CREATED,
@@ -308,7 +338,10 @@ pub async fn get_presigned(
 ) -> HttpResult<PresignedStatusResponse> {
     let task = PresignedUploadTask::find(&db, &scope, task_id)
         .await
-        .context("unable to query presigned upload")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query presigned upload");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::UnknownTask)?;
 
     let file_id = match task.status {
@@ -321,12 +354,18 @@ pub async fn get_presigned(
 
     let file = File::find_with_extra(&db, &scope, file_id)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     let generated = GeneratedFile::find_all(&db, file_id)
         .await
-        .context("query generated files")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query generated files");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(Json(PresignedStatusResponse::Complete { file, generated }))
 }
@@ -358,12 +397,18 @@ pub async fn get(
 ) -> HttpResult<FileResponse> {
     let file = File::find_with_extra(&db, &scope, file_id)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     let generated = GeneratedFile::find_all(&db, file_id)
         .await
-        .context("query generated files")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query generated files");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(Json(FileResponse { file, generated }))
 }
@@ -396,12 +441,18 @@ pub async fn get_children(
     // Request the file first to ensure scoping rules
     _ = File::find_with_extra(&db, &scope, file_id)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     let files = File::find_by_parent_file_with_extra(&db, file_id)
         .await
-        .context("failed to query file")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file children");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(Json(files))
 }
@@ -432,12 +483,18 @@ pub async fn get_edit_history(
 ) -> HttpResult<Vec<EditHistory>> {
     _ = File::find(&db, &scope, file_id)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     let edit_history = EditHistory::all_by_file(&db, file_id)
         .await
-        .context("failed to get file history")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file history");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(Json(edit_history))
 }
@@ -472,10 +529,16 @@ pub async fn update(
 ) -> HttpStatusResult {
     let mut file = File::find(&db, &scope, file_id)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::UnknownFile)?;
 
-    let mut db = db.begin().await.context("failed to start transaction")?;
+    let mut db = db.begin().await.map_err(|cause| {
+        tracing::error!(?cause, "failed to begin transaction");
+        HttpCommonError::ServerError
+    })?;
 
     // Update stored editing user data
     let user = action_user.store_user(db.deref_mut()).await?;
@@ -486,14 +549,27 @@ pub async fn update(
         // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
         let target_folder = Folder::find_by_id(db.deref_mut(), &scope, target_id)
             .await
-            .context("unknown target folder")?
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to query target folder");
+                HttpCommonError::ServerError
+            })?
             .ok_or(HttpFolderError::UnknownTargetFolder)?;
 
-        file = move_file(&mut db, user_id.clone(), file, target_folder).await?;
+        file = move_file(&mut db, user_id.clone(), file, target_folder)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to move file");
+                HttpCommonError::ServerError
+            })?;
     };
 
     if let Some(new_name) = req.name {
-        file = update_file_name(&mut db, user_id, file, new_name).await?;
+        file = update_file_name(&mut db, user_id, file, new_name)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to update file name");
+                HttpCommonError::ServerError
+            })?;
     }
 
     // Update search index data
@@ -513,9 +589,15 @@ pub async fn update(
             },
         )
         .await
-        .context("failed to update search index for new file name")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to update search index data");
+            HttpCommonError::ServerError
+        })?;
 
-    db.commit().await.context("failed to commit transaction")?;
+    db.commit().await.map_err(|cause| {
+        tracing::error!(?cause, "failed to commit transaction");
+        HttpCommonError::ServerError
+    })?;
 
     Ok(StatusCode::OK)
 }
@@ -549,13 +631,16 @@ pub async fn get_raw(
 ) -> Result<Response<Body>, DynHttpError> {
     let file = File::find(&db, &scope, file_id)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::UnknownFile)?;
 
-    let byte_stream = s3
-        .get_file(&file.file_key)
-        .await
-        .context("failed to get file from s3")?;
+    let byte_stream = s3.get_file(&file.file_key).await.map_err(|cause| {
+        tracing::error!(?cause, "failed to get file from S3");
+        HttpCommonError::ServerError
+    })?;
 
     let body = axum::body::Body::from_stream(byte_stream);
 
@@ -571,10 +656,9 @@ pub async fn get_raw(
         .header(header::CONTENT_TYPE, file.mime)
         .header(
             header::CONTENT_DISPOSITION,
-            HeaderValue::from_str(&disposition).context("failed to create content disposition")?,
+            HeaderValue::from_str(&disposition)?,
         )
-        .body(body)
-        .context("failed to create response")?)
+        .body(body)?)
 }
 
 /// Delete file by ID
@@ -606,12 +690,18 @@ pub async fn delete(
 ) -> HttpStatusResult {
     let file = File::find(&db, &scope, file_id)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     delete_file(&db, &storage, &opensearch, &events, file, scope)
         .await
-        .context("failed to delete file")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to delete file");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -645,7 +735,10 @@ pub async fn get_generated(
 ) -> HttpResult<GeneratedFile> {
     let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query generated file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::NoMatchingGenerated)?;
 
     Ok(Json(file))
@@ -680,13 +773,16 @@ pub async fn get_generated_raw(
 ) -> Result<Response<Body>, DynHttpError> {
     let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
         .await
-        .context("failed to query file")?
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query generated file");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpFileError::NoMatchingGenerated)?;
 
-    let byte_stream = s3
-        .get_file(&file.file_key)
-        .await
-        .context("failed to get file from s3")?;
+    let byte_stream = s3.get_file(&file.file_key).await.map_err(|cause| {
+        tracing::error!(?cause, "failed to file from S3");
+        HttpCommonError::ServerError
+    })?;
 
     let body = axum::body::Body::from_stream(byte_stream);
 
@@ -694,9 +790,7 @@ pub async fn get_generated_raw(
         .header(header::CONTENT_TYPE, file.mime)
         .header(
             header::CONTENT_DISPOSITION,
-            HeaderValue::from_str("inline;filename=\"preview.pdf\"")
-                .context("failed to create content disposition")?,
+            HeaderValue::from_str("inline;filename=\"preview.pdf\"")?,
         )
-        .body(body)
-        .context("failed to create response")?)
+        .body(body)?)
 }

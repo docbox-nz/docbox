@@ -1,9 +1,13 @@
 //! Extractor for getting the user details from the headers set by the API
 
-use crate::error::{DynHttpError, HttpCommonError};
-use anyhow::Context;
-use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use crate::error::{DynHttpError, HttpCommonError, HttpError};
+use axum::{
+    async_trait,
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode},
+};
 use docbox_database::{models::user::User, DbExecutor};
+use thiserror::Error;
 use utoipa::IntoParams;
 
 pub struct ActionUser(pub Option<ActionUserData>);
@@ -54,6 +58,16 @@ pub struct UserParams {
     pub user_image_id: Option<String>,
 }
 
+#[derive(Debug, Error)]
+#[error("user id was not a valid utf8 string")]
+struct InvalidUserId;
+
+impl HttpError for InvalidUserId {
+    fn status(&self) -> axum::http::StatusCode {
+        StatusCode::BAD_REQUEST
+    }
+}
+
 #[async_trait]
 impl<S> FromRequestParts<S> for ActionUser
 where
@@ -68,10 +82,7 @@ where
 
         let id = match parts.headers.get(USER_ID_HEADER) {
             Some(value) => {
-                let value_str = value
-                    .to_str()
-                    .context("user id was not a valid utf8 string")?;
-
+                let value_str = value.to_str().map_err(|_| InvalidUserId)?;
                 value_str.to_string()
             }
 

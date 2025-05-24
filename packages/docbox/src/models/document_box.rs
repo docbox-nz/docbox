@@ -58,8 +58,6 @@ pub enum HttpDocumentBoxError {
 }
 
 impl HttpError for HttpDocumentBoxError {
-    fn log(&self) {}
-
     fn status(&self) -> axum::http::StatusCode {
         match self {
             HttpDocumentBoxError::ScopeAlreadyExists => StatusCode::CONFLICT,

@@ -60,7 +60,13 @@ pub async fn search_tenant(
         }));
     }
 
-    let results = search.search_index(&req.scopes, req.request, None).await?;
+    let results = search
+        .search_index(&req.scopes, req.request, None)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to search index");
+            HttpCommonError::ServerError
+        })?;
 
     let mut resolved: Vec<(
         FlattenedItemResult,

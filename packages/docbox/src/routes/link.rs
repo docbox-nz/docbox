@@ -1,18 +1,5 @@
 //! Link related endpoints
 
-use std::{ops::DerefMut, sync::Arc};
-
-use anyhow::Context;
-use axum::http::header;
-use axum::{
-    body::Body,
-    extract::Path,
-    http::{Response, StatusCode},
-    Extension, Json,
-};
-use axum_valid::Garde;
-use docbox_core::search::models::UpdateSearchIndexData;
-
 use crate::error::{HttpCommonError, HttpErrorResponse};
 use crate::middleware::action_user::UserParams;
 use crate::middleware::tenant::TenantParams;
@@ -27,6 +14,15 @@ use crate::{
         link::{CreateLink, HttpLinkError, LinkMetadataResponse, UpdateLinkRequest},
     },
 };
+use axum::http::header;
+use axum::{
+    body::Body,
+    extract::Path,
+    http::{Response, StatusCode},
+    Extension, Json,
+};
+use axum_valid::Garde;
+use docbox_core::search::models::UpdateSearchIndexData;
 use docbox_core::services::links::{
     delete_link, move_link, safe_create_link, update_link_name, update_link_value, CreateLinkData,
 };
@@ -37,6 +33,7 @@ use docbox_database::models::{
     link::{CreatedByUser, LastModifiedByUser, Link, LinkId, LinkWithExtra},
 };
 use docbox_web_scraper::WebsiteMetaService;
+use std::{ops::DerefMut, sync::Arc};
 
 pub const LINK_TAG: &str = "Link";
 
@@ -190,7 +187,10 @@ pub async fn get_metadata(
     let resolved = website_service
         .resolve_website(&link.value)
         .await
-        .map_err(HttpLinkError::FailedResolve)?;
+        .map_err(|cause| {
+            tracing::warn!(?cause, "failed to resolve link site metadata");
+            HttpLinkError::FailedResolve
+        })?;
 
     Ok(Json(LinkMetadataResponse {
         title: resolved.title,
@@ -237,14 +237,19 @@ pub async fn get_favicon(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let resolved = website_service.resolve_website(&link.value).await?;
+    let resolved = website_service
+        .resolve_website(&link.value)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to resolve website");
+            HttpCommonError::ServerError
+        })?;
     let favicon = resolved.favicon.ok_or(HttpLinkError::NoFavicon)?;
     let body = axum::body::Body::from(favicon.bytes);
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, favicon.content_type.to_string())
-        .body(body)
-        .context("failed to create response")?)
+        .body(body)?)
 }
 
 /// Get link social image
@@ -284,14 +289,19 @@ pub async fn get_image(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let resolved = website_service.resolve_website(&link.value).await?;
+    let resolved = website_service
+        .resolve_website(&link.value)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to resolve website");
+            HttpCommonError::ServerError
+        })?;
     let og_image = resolved.og_image.ok_or(HttpLinkError::NoImage)?;
     let body = axum::body::Body::from(og_image.bytes);
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, og_image.content_type.to_string())
-        .body(body)
-        .context("failed to create response")?)
+        .body(body)?)
 }
 
 /// Get link edit history
@@ -378,7 +388,10 @@ pub async fn update(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let mut db = db.begin().await.context("failed to start transaction")?;
+    let mut db = db.begin().await.map_err(|cause| {
+        tracing::error!(?cause, "failed to begin transaction");
+        HttpCommonError::ServerError
+    })?;
 
     // Update stored editing user data
     let user = action_user.store_user(db.deref_mut()).await?;
@@ -389,18 +402,36 @@ pub async fn update(
         // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
         let target_folder = Folder::find_by_id(db.deref_mut(), &scope, target_id)
             .await
-            .context("unknown target folder")?
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to query target folder");
+                HttpCommonError::ServerError
+            })?
             .ok_or(HttpFolderError::UnknownTargetFolder)?;
 
-        link = move_link(&mut db, user_id.clone(), link, target_folder).await?;
+        link = move_link(&mut db, user_id.clone(), link, target_folder)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to move link");
+                HttpCommonError::ServerError
+            })?;
     };
 
     if let Some(new_name) = req.name {
-        link = update_link_name(&mut db, user_id.clone(), link, new_name).await?;
+        link = update_link_name(&mut db, user_id.clone(), link, new_name)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to update link name");
+                HttpCommonError::ServerError
+            })?;
     }
 
     if let Some(new_value) = req.value {
-        link = update_link_value(&mut db, user_id, link, new_value).await?;
+        link = update_link_value(&mut db, user_id, link, new_value)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to update link value");
+                HttpCommonError::ServerError
+            })?;
     }
 
     // Update search index data for the new name and value
@@ -419,9 +450,15 @@ pub async fn update(
             },
         )
         .await
-        .context("failed to update search index for updated link")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to update search index");
+            HttpCommonError::ServerError
+        })?;
 
-    db.commit().await.context("failed to commit transaction")?;
+    db.commit().await.map_err(|cause| {
+        tracing::error!(?cause, "failed to commit transaction");
+        HttpCommonError::ServerError
+    })?;
 
     Ok(StatusCode::OK)
 }

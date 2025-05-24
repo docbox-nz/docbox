@@ -1,10 +1,8 @@
 //! Folder related endpoints
 
-use std::ops::DerefMut;
-
-use anyhow::Context;
 use axum::{extract::Path, http::StatusCode, Json};
 use axum_valid::Garde;
+use std::ops::DerefMut;
 
 use crate::{
     error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
@@ -142,7 +140,12 @@ pub async fn get(
         // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
-    let children = ResolvedFolderWithExtra::resolve(&db, folder.id).await?;
+    let children = ResolvedFolderWithExtra::resolve(&db, folder.id)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to resolve folder children");
+            HttpCommonError::ServerError
+        })?;
     Ok(Json(FolderResponse { folder, children }))
 }
 
@@ -234,7 +237,10 @@ pub async fn update(
         return Err(HttpFolderError::CannotModifyRoot.into());
     }
 
-    let mut db = db.begin().await.context("failed to start transaction")?;
+    let mut db = db.begin().await.map_err(|cause| {
+        tracing::error!(?cause, "failed to begin transaction");
+        HttpCommonError::ServerError
+    })?;
 
     // Update stored editing user data
     let user = action_user.store_user(db.deref_mut()).await?;
@@ -250,14 +256,27 @@ pub async fn update(
         // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
         let target_folder = Folder::find_by_id(db.deref_mut(), &scope, target_id)
             .await
-            .context("unknown target folder")?
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to query folder");
+                HttpCommonError::ServerError
+            })?
             .ok_or(HttpFolderError::UnknownTargetFolder)?;
 
-        folder = move_folder(&mut db, user_id.clone(), folder, target_folder).await?;
+        folder = move_folder(&mut db, user_id.clone(), folder, target_folder)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to move folder");
+                HttpCommonError::ServerError
+            })?;
     };
 
     if let Some(new_name) = req.name {
-        folder = update_folder_name(&mut db, user_id, folder, new_name).await?;
+        folder = update_folder_name(&mut db, user_id, folder, new_name)
+            .await
+            .map_err(|cause| {
+                tracing::error!(?cause, "failed to update folder name");
+                HttpCommonError::ServerError
+            })?;
     }
 
     // Update search index data
@@ -276,9 +295,15 @@ pub async fn update(
             },
         )
         .await
-        .context("failed to update search index for new file name")?;
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to update search index data");
+            HttpCommonError::ServerError
+        })?;
 
-    db.commit().await.context("failed to commit transaction")?;
+    db.commit().await.map_err(|cause| {
+        tracing::error!(?cause, "failed to commit transaction");
+        HttpCommonError::ServerError
+    })?;
 
     Ok(StatusCode::OK)
 }

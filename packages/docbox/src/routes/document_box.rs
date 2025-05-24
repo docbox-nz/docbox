@@ -10,7 +10,6 @@ use crate::{
         CreateDocumentBoxRequest, DocumentBoxResponse, DocumentBoxStats, HttpDocumentBoxError,
     },
 };
-use anyhow::Context;
 use axum::{extract::Path, http::StatusCode, Json};
 use axum_valid::Garde;
 use docbox_core::{
@@ -123,11 +122,19 @@ pub async fn get(
     Path(scope): Path<DocumentBoxScope>,
 ) -> HttpResult<DocumentBoxResponse> {
     let document_box = DocumentBox::find_by_scope(&db, &scope)
-        .await?
+        .await
+          .map_err(|cause| {
+            tracing::error!(?cause, "failed to query document box");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpDocumentBoxError::UnknownDocumentBox)?;
 
     let root = Folder::find_root_with_extra(&db, &scope)
-        .await?
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
         .ok_or_else(|| {
             tracing::error!("document box missing root");
             HttpCommonError::ServerError
@@ -175,11 +182,19 @@ pub async fn stats(
 ) -> HttpResult<DocumentBoxStats> {
     // Assert that the document box exists
     let _document_box = DocumentBox::find_by_scope(&db, &scope)
-        .await?
+        .await 
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query document box");
+            HttpCommonError::ServerError
+        })?
         .ok_or(HttpDocumentBoxError::UnknownDocumentBox)?;
 
     let root = Folder::find_root_with_extra(&db, &scope)
-        .await?
+        .await  
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
         .ok_or_else(|| {
             tracing::error!("document box missing root");
             HttpCommonError::ServerError
@@ -276,13 +291,22 @@ pub async fn search(
         Some(folder_id) => {
             let folder = Folder::find_by_id(&db, &scope, folder_id)
                 .await
-                .context("failed to query search folder")?
-                .context("unable to find search folder")?;
+                .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
+          .ok_or_else(|| {
+            tracing::error!( "failed to find folder");
+            HttpCommonError::ServerError
+        })?;
 
             let folder_children = folder
                 .tree_all_children(&db)
                 .await
-                .context("failed to query search folder children")?;
+                  .map_err(|cause| {
+            tracing::error!(?cause, "failed to query folder children");
+            HttpCommonError::ServerError
+        })?;
 
             Some(folder_children)
         }
@@ -293,7 +317,10 @@ pub async fn search(
 
     let results = opensearch
         .search_index(&[scope], req, search_folder_ids)
-        .await?;
+        .await  .map_err(|cause| {
+            tracing::error!(?cause, "failed to query search index");
+            HttpCommonError::ServerError
+        })?;
 
     let mut resolved: Vec<(
         FlattenedItemResult,

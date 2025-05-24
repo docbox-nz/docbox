@@ -1,9 +1,8 @@
 use axum::{
-    http::StatusCode,
+    http::{header::InvalidHeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
-use docbox_database::DbErr;
 use serde::Serialize;
 use std::{
     error::Error,
@@ -43,9 +42,6 @@ impl Error for DynHttpError {}
 /// Handles converting the error into a response (Also logs the error before conversion)
 impl IntoResponse for DynHttpError {
     fn into_response(self) -> Response {
-        // Log the underlying error
-        self.inner.log();
-
         // Create the response body
         let body = Json(HttpErrorResponse {
             reason: self.inner.reason(),
@@ -59,12 +55,6 @@ impl IntoResponse for DynHttpError {
 /// Trait implemented by errors that can be converted into [HttpError]s
 /// and used as error responses
 pub trait HttpError: Error + Send + Sync + 'static {
-    /// Handles how the error is logged, default implementation logs
-    /// the [Display] and [Debug] variants
-    fn log(&self) {
-        error!("{self}: {self:?}");
-    }
-
     /// Provides the HTTP [StatusCode] to use when creating this error response
     fn status(&self) -> StatusCode {
         StatusCode::INTERNAL_SERVER_ERROR
@@ -82,58 +72,6 @@ pub trait HttpError: Error + Send + Sync + 'static {
     }
 }
 
-/// Wrapper around [anyhow::Error] allowing it to be used as a [HttpError]
-#[derive(Debug, Error)]
-#[error(transparent)]
-pub struct AnyhowHttpError(anyhow::Error);
-
-impl HttpError for AnyhowHttpError {
-    fn log(&self) {
-        // Anyhow errors contain a stacktrace so only the debug variant is used
-        error!("{:#?}", self.0);
-    }
-
-    fn reason(&self) -> String {
-        // Anyhow errors use a generic message
-        format!("{}", self.0)
-    }
-}
-
-/// Allow conversion from anyhow errors into [DynHttpError] by wrapping
-/// them with [AnyhowHttpError]
-impl From<anyhow::Error> for DynHttpError {
-    fn from(value: anyhow::Error) -> Self {
-        DynHttpError {
-            inner: Box::new(AnyhowHttpError(value)),
-        }
-    }
-}
-
-/// Wrapper around [DbErr] allowing it to be used as a [HttpError]
-#[derive(Debug, Error)]
-#[error("internal server error")]
-pub struct DbHttpError(DbErr);
-
-impl HttpError for DbHttpError {
-    fn log(&self) {
-        let cause = &self.0;
-        error!(?cause, "db error in http response");
-    }
-
-    fn reason(&self) -> String {
-        // Db errors use a generic message
-        "internal server error".to_string()
-    }
-}
-
-impl From<DbErr> for DynHttpError {
-    fn from(value: DbErr) -> Self {
-        DynHttpError {
-            inner: Box::new(DbHttpError(value)),
-        }
-    }
-}
-
 /// Allow conversion from implementors of [HttpError] into a [DynHttpError]
 impl<E> From<E> for DynHttpError
 where
@@ -143,6 +81,18 @@ where
         DynHttpError {
             inner: Box::new(value),
         }
+    }
+}
+
+impl HttpError for axum::http::Error {
+    fn status(&self) -> StatusCode {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
+}
+
+impl HttpError for InvalidHeaderValue {
+    fn status(&self) -> StatusCode {
+        StatusCode::INTERNAL_SERVER_ERROR
     }
 }
 
@@ -160,8 +110,6 @@ pub enum HttpCommonError {
 }
 
 impl HttpError for HttpCommonError {
-    fn log(&self) {}
-
     fn status(&self) -> axum::http::StatusCode {
         match self {
             HttpCommonError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,

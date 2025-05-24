@@ -184,6 +184,12 @@ pub enum HttpFileError {
     #[error("fixed file id already in use")]
     FileIdInUse,
 
+    #[error("request file missing mime content type")]
+    MissingMimeType,
+
+    #[error("request file mime content type is invalid")]
+    InvalidMimeType,
+
     #[error("no matching generated file")]
     NoMatchingGenerated,
 
@@ -193,15 +199,15 @@ pub enum HttpFileError {
 }
 
 impl HttpError for HttpFileError {
-    fn log(&self) {}
-
     fn status(&self) -> axum::http::StatusCode {
         match self {
             HttpFileError::FileIdInUse => StatusCode::CONFLICT,
             HttpFileError::UnknownFile
             | HttpFileError::NoMatchingGenerated
             | HttpFileError::UnknownTask => StatusCode::NOT_FOUND,
-            HttpFileError::UnsupportedFileType => StatusCode::BAD_REQUEST,
+            HttpFileError::UnsupportedFileType
+            | HttpFileError::MissingMimeType
+            | HttpFileError::InvalidMimeType => StatusCode::BAD_REQUEST,
         }
     }
 }

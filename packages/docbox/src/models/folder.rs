@@ -65,8 +65,6 @@ pub enum HttpFolderError {
 }
 
 impl HttpError for HttpFolderError {
-    fn log(&self) {}
-
     fn status(&self) -> axum::http::StatusCode {
         match self {
             HttpFolderError::UnknownFolder | HttpFolderError::UnknownTargetFolder => {

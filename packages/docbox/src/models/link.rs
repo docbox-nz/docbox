@@ -67,7 +67,7 @@ pub enum HttpLinkError {
     // Failed resolving of metadata is treated as a 404 as we were
     // unable to find the website data
     #[error("failed to resolve metadata")]
-    FailedResolve(anyhow::Error),
+    FailedResolve,
 
     #[error("website favicon not present")]
     NoFavicon,
@@ -77,18 +77,12 @@ pub enum HttpLinkError {
 }
 
 impl HttpError for HttpLinkError {
-    fn log(&self) {
-        if let Self::FailedResolve(cause) = self {
-            tracing::warn!(?cause, "failed to resolve link site metadata");
-        }
-    }
-
     fn status(&self) -> axum::http::StatusCode {
         match self {
             HttpLinkError::UnknownLink
             | HttpLinkError::NoFavicon
             | HttpLinkError::NoImage
-            | HttpLinkError::FailedResolve(_) => StatusCode::NOT_FOUND,
+            | HttpLinkError::FailedResolve => StatusCode::NOT_FOUND,
             HttpLinkError::CreateError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

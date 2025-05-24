@@ -9,8 +9,6 @@ pub enum HttpTaskError {
 }
 
 impl HttpError for HttpTaskError {
-    fn log(&self) {}
-
     fn status(&self) -> axum::http::StatusCode {
         match self {
             HttpTaskError::UnknownTask => StatusCode::NOT_FOUND,
