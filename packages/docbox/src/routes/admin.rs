@@ -2,15 +2,9 @@
 
 use crate::{
     error::{HttpResult, HttpStatusResult},
-    middleware::tenant::{get_tenant_env, TenantDb, TenantSearch},
-    models::admin::{HttpTenantError, TenantResponse},
+    middleware::tenant::{TenantDb, TenantSearch},
 };
-use anyhow::Context;
-use axum::{
-    extract::Path,
-    http::{HeaderMap, StatusCode},
-    Extension, Json,
-};
+use axum::{http::StatusCode, Extension, Json};
 use axum_valid::Garde;
 use docbox_core::{
     search::{
@@ -25,121 +19,11 @@ use docbox_core::{
     storage::StorageLayerFactory,
 };
 use docbox_database::{
-    connect_root_database, connect_tenant_database,
-    models::{
-        document_box::{DocumentBox, WithScope},
-        folder::FolderPathSegment,
-        tenant::{Tenant, TenantId},
-    },
+    models::{document_box::WithScope, folder::FolderPathSegment},
     DatabasePoolCache,
 };
 use std::sync::Arc;
 use tracing::error;
-
-/// GET /admin/tenant/:tenant-id
-///
-/// Gets a tenant by ID responding with all the document
-/// boxes in the container
-pub async fn get_tenant(
-    headers: HeaderMap,
-    Path(tenant_id): Path<TenantId>,
-    Extension(db_cache): Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
-) -> HttpResult<TenantResponse> {
-    let env = get_tenant_env(&headers)?;
-
-    let tenant = {
-        // Connect to the tenant database
-        let db = connect_root_database(&db_cache).await?;
-
-        // Request the tenant
-        Tenant::find_by_id(&db, tenant_id, &env)
-            .await
-            .context("failed to request tenant")?
-            .ok_or(HttpTenantError::UnknownTenant)?
-    };
-
-    let db = connect_tenant_database(&db_cache, &tenant).await?;
-
-    let document_boxes = DocumentBox::all(&db)
-        .await
-        .context("failed to query tenant document boxes")?;
-
-    Ok(Json(TenantResponse {
-        tenant,
-        document_boxes,
-    }))
-}
-
-/// DELETE /admin/tenant/:tenant-id
-///
-/// Deletes a tenant by ID, will delete all contained document boxes and files
-///
-/// Could take some time, ensure to make sure you disable request timeouts
-/// when using this.
-pub async fn delete_tenant(
-    headers: HeaderMap,
-    Path(tenant_id): Path<TenantId>,
-    Extension(db_cache): Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
-    // Extension(opensearch): Extension<OpenSearch>,
-    // Extension(s3): Extension<S3Client>,
-) -> HttpStatusResult {
-    let env = get_tenant_env(&headers)?;
-    let db = connect_root_database(&db_cache).await?;
-
-    let tenant = Tenant::find_by_id(&db, tenant_id, &env)
-        .await
-        .context("failed to request tenant")?
-        .ok_or(HttpTenantError::UnknownTenant)?;
-
-    // let tenant_db = connect_tenant_database(&db_cache, &tenant).await?;
-
-    // let document_boxes = DocumentBox::all(&tenant_db)
-    //     .await
-    //     .context("failed to query tenant document boxes")?;
-
-    // let tenant_bucket = TenantBucket::from_tenant(&tenant);
-    // let tenant_index = TenantSearchIndex::from_tenant(&tenant);
-    // let opensearch = TenantOpenSearch::new(opensearch, tenant_index);
-    // let s3 = TenantS3Client::new(s3, tenant_bucket);
-
-    // // Delete all document boxes in the tenant
-    // for document_box in document_boxes {
-    //     let root = Folder::find_root(&tenant_db, &document_box.scope).await?;
-
-    //     if let Some(root) = root {
-    //         // Delete root folder
-    //         delete_folder(&tenant_db, &s3, &opensearch, root)
-    //             .await
-    //             .context("failed to delete bucket root folder")?;
-    //     }
-
-    //     // Delete document box
-    //     document_box
-    //         .delete(&tenant_db)
-    //         .await
-    //         .context("failed to delete document box")?;
-    // }
-
-    // s3.delete_bucket()
-    //     .await
-    //     .context("failed to delete s3 bucket")?;
-
-    // opensearch
-    //     .delete_index()
-    //     .await
-    //     .context("failed to delete search index")?;
-
-    // delete_tenant_tables(&tenant_db)
-    //     .await
-    //     .context("failed to delete tenant tables")?;
-
-    tenant
-        .delete(&db)
-        .await
-        .context("failed to delete tenant")?;
-
-    Ok(StatusCode::NO_CONTENT)
-}
 
 /// POST /admin/search
 ///

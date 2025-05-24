@@ -22,13 +22,6 @@ pub fn router() -> Router {
 /// Routes for /admin/
 pub fn admin_router() -> Router {
     Router::new()
-        .nest(
-            "/tenant",
-            Router::new().route(
-                "/:tenant_id",
-                get(admin::get_tenant).delete(admin::delete_tenant),
-            ),
-        )
         .route("/flush-db-cache", post(admin::flush_database_pool_cache))
         .route(
             "/search",

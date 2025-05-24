@@ -7,6 +7,8 @@ use uuid::Uuid;
 
 mod create_root;
 mod create_tenant;
+mod delete_tenant;
+mod get_tenant;
 mod migrate;
 
 #[derive(Parser)]
@@ -26,6 +28,26 @@ pub enum Commands {
         /// File containing the tenant configuration details
         #[arg(short, long)]
         file: PathBuf,
+    },
+
+    /// Delete a tenant
+    DeleteTenant {
+        // Environment to target
+        #[arg(short, long)]
+        env: String,
+        /// Specific tenant to delete
+        #[arg(short, long)]
+        tenant_id: Uuid,
+    },
+
+    /// Get a tenant
+    GetTenant {
+        // Environment to target
+        #[arg(short, long)]
+        env: String,
+        /// Specific tenant to delete
+        #[arg(short, long)]
+        tenant_id: Uuid,
     },
 
     /// Run a migration
@@ -93,6 +115,14 @@ async fn main() -> eyre::Result<()> {
         }
         Commands::CreateTenant { file } => {
             create_tenant::create_tenant(file).await?;
+            Ok(())
+        }
+        Commands::DeleteTenant { env, tenant_id } => {
+            delete_tenant::delete_tenant(env, tenant_id).await?;
+            Ok(())
+        }
+        Commands::GetTenant { env, tenant_id } => {
+            get_tenant::get_tenant(env, tenant_id).await?;
             Ok(())
         }
         Commands::Migrate {
