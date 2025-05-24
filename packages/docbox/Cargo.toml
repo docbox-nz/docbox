@@ -65,5 +65,14 @@ utoipa = { workspace = true, features = [
     "axum_extras",
 ] }
 
-sentry = { version = "0.38.1", features = ["tracing"] }
+sentry = { version = "0.38.1", default-features = false, features = [
+    "backtrace",
+    "contexts",
+    "debug-images",
+    "panic",
+    "release-health",
+    "tracing",
+    "reqwest",
+    "rustls",
+] }
 sentry-tracing = "0.38.1"
