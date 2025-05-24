@@ -2,10 +2,11 @@ use crate::{DbExecutor, DbResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
+use utoipa::ToSchema;
 
 pub type DocumentBoxScope = String;
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
 pub struct DocumentBox {
     /// Scope for the document box
     pub scope: DocumentBoxScope,
@@ -13,7 +14,7 @@ pub struct DocumentBox {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WithScope<T> {
     #[serde(flatten)]
     pub data: T,

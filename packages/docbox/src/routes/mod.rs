@@ -11,12 +11,13 @@ pub mod file;
 pub mod folder;
 pub mod link;
 pub mod task;
+pub mod utils;
 
 pub fn router() -> Router {
     Router::new()
         .nest("/admin", admin_router())
         .nest("/box", document_box_router())
-        .route("/options", get(document_box::get_options))
+        .route("/options", get(utils::get_options))
 }
 
 /// Routes for /admin/

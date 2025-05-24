@@ -14,6 +14,7 @@ use docbox_database::models::{
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::utils::serialize::WrappedMime;
@@ -106,7 +107,7 @@ pub struct FlattenedItemResult {
     pub content_match: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PageResult {
     pub page: u64,
     pub matches: Vec<String>,
@@ -114,10 +115,11 @@ pub struct PageResult {
 
 /// Extended search request to search within multiple document
 /// boxes
-#[derive(Default, Debug, Validate, Deserialize)]
+#[derive(Default, Debug, Validate, Deserialize, Serialize, ToSchema)]
 #[serde(default)]
 pub struct AdminSearchRequest {
     #[garde(skip)]
+    #[schema(value_type = Vec<String>)]
     pub scopes: Vec<DocumentBoxScope>,
 
     #[serde(flatten)]
@@ -126,7 +128,7 @@ pub struct AdminSearchRequest {
 }
 
 /// Request to search within a document box
-#[derive(Default, Debug, Validate, Deserialize)]
+#[derive(Default, Debug, Validate, Deserialize, Serialize, ToSchema)]
 #[serde(default)]
 pub struct SearchRequest {
     /// The search query
@@ -139,6 +141,7 @@ pub struct SearchRequest {
 
     /// Search only include a specific mime type
     #[garde(skip)]
+    #[schema(value_type = Option<String>)]
     pub mime: Option<WrappedMime>,
 
     /// Whether to include document names
@@ -173,6 +176,7 @@ pub struct SearchRequest {
     /// Enforce search to a specific folder, empty for all
     /// folders
     #[garde(skip)]
+    #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
 
     /// Enforce search to a specific file,link,folder
@@ -196,7 +200,7 @@ pub struct SearchRequest {
     pub pages_offset: Option<u64>,
 }
 
-#[derive(Default, Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize, Serialize, ToSchema)]
 pub struct SearchRange {
     pub start: Option<DateTime<Utc>>,
     pub end: Option<DateTime<Utc>>,
@@ -229,7 +233,7 @@ impl Validate for SearchRange {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(tag = "type")]
 pub enum SearchResultData {
     File(FileWithExtra),
@@ -237,7 +241,7 @@ pub enum SearchResultData {
     Link(LinkWithExtra),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SearchResultResponse {
     pub total_hits: u64,
     pub results: Vec<SearchResultItem>,
@@ -249,7 +253,7 @@ pub struct AdminSearchResultResponse {
     pub results: Vec<WithScope<SearchResultItem>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SearchResultItem {
     /// The result score
     pub score: f32,

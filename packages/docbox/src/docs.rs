@@ -3,17 +3,25 @@ use utoipa::OpenApi;
 use crate::routes::{
     link::{self, LINK_TAG},
     task::{self, TASK_TAG},
-    folder::{self, FOLDER_TAG}
+    folder::{self, FOLDER_TAG},
+    document_box::{self, DOCUMENT_BOX_TAG}
 };
 
 #[derive(OpenApi)]
 #[openapi(
     tags(
+        (name = DOCUMENT_BOX_TAG, description = "Document box related APIs"),
         (name = LINK_TAG, description = "Link related APIs"),
         (name = FOLDER_TAG, description = "Folder related APIs"),
         (name = TASK_TAG, description = "Background task related APIs")
     ),
     paths(
+        // Document box routes
+        document_box::create,
+        document_box::get,
+        document_box::stats,
+        document_box::delete,
+        document_box::search,
         // Link routes
         link::create, 
         link::get,

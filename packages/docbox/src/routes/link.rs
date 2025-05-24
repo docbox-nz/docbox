@@ -68,12 +68,7 @@ pub async fn create(
         .await
         // Failed to query destination folder
         .map_err(|cause| {
-            tracing::error!(
-                ?scope,
-                ?folder_id,
-                ?cause,
-                "failed to query link destination folder"
-            );
+            tracing::error!(?cause, "failed to query link destination folder");
             HttpCommonError::ServerError
         })?
         // Destination folder was not found
@@ -139,7 +134,7 @@ pub async fn get(
         .await
         // Failed to query link
         .map_err(|cause| {
-            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            tracing::error!(?cause, "failed to query link");
             HttpCommonError::ServerError
         })?
         // Link not found
@@ -177,7 +172,7 @@ pub async fn get_metadata(
         .await
         // Failed to query link
         .map_err(|cause| {
-            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            tracing::error!(?cause, "failed to query link");
             HttpCommonError::ServerError
         })?
         // Link not found
@@ -225,7 +220,7 @@ pub async fn get_favicon(
         .await
         // Failed to query link
         .map_err(|cause| {
-            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            tracing::error!(?cause, "failed to query link");
             HttpCommonError::ServerError
         })?
         // Link not found
@@ -270,7 +265,7 @@ pub async fn get_image(
         .await
         // Failed to query link
         .map_err(|cause| {
-            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            tracing::error!(?cause, "failed to query link");
             HttpCommonError::ServerError
         })?
         // Link not found

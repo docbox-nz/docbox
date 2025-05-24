@@ -1,24 +1,19 @@
 //! Document box related endpoints
 
-use std::ops::DerefMut;
-
 use crate::{
-    error::{DynHttpError, HttpResult, HttpStatusResult},
+    error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
         action_user::ActionUser,
-        tenant::{TenantDb, TenantEvents, TenantStorage, TenantSearch},
+        tenant::{TenantDb, TenantEvents, TenantSearch, TenantStorage},
     },
     models::document_box::{
-        CreateDocumentBox, DocumentBoxError, DocumentBoxOptions, DocumentBoxResponse,
-        DocumentBoxStats,
+        CreateDocumentBoxRequest, DocumentBoxResponse, DocumentBoxStats, HttpDocumentBoxError,
     },
-    MAX_FILE_SIZE,
 };
 use anyhow::Context;
 use axum::{extract::Path, http::StatusCode, Json};
 use axum_valid::Garde;
 use docbox_core::{
-    events::TenantEventMessage,
     search::{
         models::{
             FlattenedItemResult, SearchRequest, SearchResultData, SearchResultItem,
@@ -26,67 +21,59 @@ use docbox_core::{
         },
         os::resolve_search_result,
     },
-    services::folders::delete_folder,
-    utils::validation::ALLOWED_MIME_TYPES,
+    services::document_box::{
+        create_document_box, delete_document_box, CreateDocumentBox, CreateDocumentBoxError,
+        DeleteDocumentBoxError,
+    },
 };
 use docbox_database::models::{
     document_box::{DocumentBox, DocumentBoxScope},
-    folder::{
-        self, CreateFolder, Folder, FolderPathSegment, FolderWithExtra, ResolvedFolderWithExtra,
-    },
+    folder::{self, Folder, FolderPathSegment, FolderWithExtra, ResolvedFolderWithExtra},
 };
 use tracing::{debug, error};
 
-/// POST /box
+pub const DOCUMENT_BOX_TAG: &str = "document_box";
+
+/// Create document box
 ///
-/// Creates a new tenant within the doc-box and creates the tables
-/// for the tenant
+/// Creates a new document box using the requested scope
+#[utoipa::path(
+    post,
+    tag = DOCUMENT_BOX_TAG,
+    path = "/box",
+    responses(
+        (status = 201, description = "Document box created successfully", body = DocumentBoxResponse),
+        (status = 409, description = "Scope already exists", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    )
+)]
+#[tracing::instrument(skip_all, fields(req))]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
     TenantEvents(events): TenantEvents,
-    Garde(Json(req)): Garde<Json<CreateDocumentBox>>,
+    Garde(Json(req)): Garde<Json<CreateDocumentBoxRequest>>,
 ) -> Result<(StatusCode, Json<DocumentBoxResponse>), DynHttpError> {
     // Update stored editing user data
     let created_by = action_user.store_user(&db).await?;
 
-    // Enter a database transaction
-    let mut transaction = db.begin().await.context("failed to create transaction")?;
+    let create = CreateDocumentBox {
+        scope: req.scope,
+        created_by: created_by.as_ref().map(|value| value.id.to_string()),
+    };
 
-    // Create the document box
-    let document_box: DocumentBox = DocumentBox::create(transaction.deref_mut(), req.scope.clone())
-        .await
-        .map_err(|err| {
-            if let Some(db_err) = err.as_database_error() {
-                // Handle attempts at a duplicate scope creation
-                if db_err.is_unique_violation() {
-                    return DynHttpError::from(DocumentBoxError::ScopeAlreadyExists);
+    let (document_box, root) =
+        create_document_box(&db, &events, create)
+            .await
+            .map_err(|cause| match cause {
+                CreateDocumentBoxError::ScopeAlreadyExists => {
+                    DynHttpError::from(HttpDocumentBoxError::ScopeAlreadyExists)
                 }
-            }
-
-            DynHttpError::from(err)
-        })?;
-
-    // Create the root folder
-    let root: Folder = Folder::create(
-        transaction.deref_mut(),
-        CreateFolder {
-            name: "Root".to_string(),
-            document_box: document_box.scope.clone(),
-            folder_id: None,
-            created_by: created_by.as_ref().map(|value| value.id.to_string()),
-        },
-    )
-    .await
-    .context("failed to create root folder")?;
-
-    transaction
-        .commit()
-        .await
-        .context("failed to commit transaction")?;
-
-    // Publish an event
-    events.publish_event(TenantEventMessage::DocumentBoxCreated(document_box.clone()));
+                cause => {
+                    tracing::error!(?cause, "failed to create document box");
+                    DynHttpError::from(HttpCommonError::ServerError)
+                }
+            })?;
 
     Ok((
         StatusCode::CREATED,
@@ -106,33 +93,42 @@ pub async fn create(
     ))
 }
 
-/// GET /options
-///
-/// Requests the document box options and settings
-pub async fn get_options() -> HttpResult<DocumentBoxOptions> {
-    Ok(Json(DocumentBoxOptions {
-        allowed_mime_types: ALLOWED_MIME_TYPES,
-        max_file_size: MAX_FILE_SIZE,
-    }))
-}
-
-/// GET /box/:scope
+/// Get document box by scope
 ///
 /// Gets a specific document box and the root folder for the box
 /// along with the resolved root folder children
+#[utoipa::path(
+    get,
+    tag = DOCUMENT_BOX_TAG,
+    path = "/box/{scope}",
+    responses(
+        (status = 200, description = "Document box obtained successfully", body = DocumentBoxResponse),
+        (status = 404, description = "Document box not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path(scope): Path<DocumentBoxScope>,
 ) -> HttpResult<DocumentBoxResponse> {
     let document_box = DocumentBox::find_by_scope(&db, &scope)
         .await?
-        .ok_or(DocumentBoxError::UnknownDocumentBox)?;
+        .ok_or(HttpDocumentBoxError::UnknownDocumentBox)?;
 
     let root = Folder::find_root_with_extra(&db, &scope)
         .await?
-        .ok_or(DocumentBoxError::MissingDocumentBoxRoot)?;
+        .ok_or_else(|| {
+            tracing::error!("document box missing root");
+            HttpCommonError::ServerError
+        })?;
 
-    let children = ResolvedFolderWithExtra::resolve(&db, root.id).await?;
+    let children = ResolvedFolderWithExtra::resolve(&db, root.id)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query document box root folder");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(Json(DocumentBoxResponse {
         document_box,
@@ -141,25 +137,45 @@ pub async fn get(
     }))
 }
 
-/// GET /box/:scope/stats
+/// Get document box stats by scope
 ///
-/// Gets a specific document box and the root folder for the box
-/// along with the resolved root folder children
+/// Requests stats about a document box using its scope. Provides stats such as:
+/// - Total files
+/// - Total links
+/// - Total folders
+#[utoipa::path(
+    get,
+    tag = DOCUMENT_BOX_TAG,
+    path = "/box/{scope}/stats",
+    responses(
+        (status = 200, description = "Document box stats obtained successfully", body = DocumentBoxStats),
+        (status = 404, description = "Document box not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope))]
 pub async fn stats(
     TenantDb(db): TenantDb,
     Path(scope): Path<DocumentBoxScope>,
 ) -> HttpResult<DocumentBoxStats> {
+    // Assert that the document box exists
     let _document_box = DocumentBox::find_by_scope(&db, &scope)
         .await?
-        .ok_or(DocumentBoxError::UnknownDocumentBox)?;
+        .ok_or(HttpDocumentBoxError::UnknownDocumentBox)?;
 
     let root = Folder::find_root_with_extra(&db, &scope)
         .await?
-        .ok_or(DocumentBoxError::MissingDocumentBoxRoot)?;
+        .ok_or_else(|| {
+            tracing::error!("document box missing root");
+            HttpCommonError::ServerError
+        })?;
 
-    let children = Folder::count_children(&db, root.id).await?;
-
-    debug!(?children, "loaded folder children stats");
+    let children = Folder::count_children(&db, root.id)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query document box children count");
+            HttpCommonError::ServerError
+        })?;
 
     Ok(Json(DocumentBoxStats {
         total_files: children.file_count,
@@ -168,44 +184,43 @@ pub async fn stats(
     }))
 }
 
-/// DELETE /box/:scope
+/// Delete document box by scope
 ///
-/// Deletes a specific document box and all its contents
+/// Deletes a specific document box by scope and all its contents
 ///
 /// Access control for this should probably be restricted
 /// on other end to prevent users from deleting an entire
 /// bucket?
+#[utoipa::path(
+    delete,
+    tag = DOCUMENT_BOX_TAG,
+    path = "/box/{scope}",
+    responses(
+        (status = 204, description = "Document box deleted successfully"),
+        (status = 404, description = "Document box not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope))]
 pub async fn delete(
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
-    TenantStorage(s3): TenantStorage,
+    TenantSearch(search): TenantSearch,
+    TenantStorage(storage): TenantStorage,
     TenantEvents(events): TenantEvents,
     Path(scope): Path<DocumentBoxScope>,
 ) -> HttpStatusResult {
-    let document_box = DocumentBox::find_by_scope(&db, &scope)
-        .await?
-        .ok_or(DocumentBoxError::UnknownDocumentBox)?;
+    delete_document_box(&db, &search, &storage, &events, scope)
+        .await
+        .map_err(|cause| match cause {
+            DeleteDocumentBoxError::UnknownScope => {
+                DynHttpError::from(HttpDocumentBoxError::UnknownDocumentBox)
+            }
 
-    let root = Folder::find_root(&db, &scope).await?;
-
-    if let Some(root) = root {
-        // Delete root folder
-        if let Err(cause) = delete_folder(&db, &s3, &opensearch, &events, root).await {
-            tracing::error!(?cause, "failed to delete bucket root folder");
-            return Err(anyhow::Error::msg("failed to delete bucket root folder").into());
-        };
-    }
-
-    // Delete document box
-    if let Err(cause) = document_box.delete(&db).await {
-        tracing::error!(?cause, "failed to delete document box");
-        return Err(anyhow::Error::msg("failed to delete document box").into());
-    }
-
-    opensearch.delete_by_scope(scope).await?;
-
-    // Publish an event
-    events.publish_event(TenantEventMessage::DocumentBoxDeleted(document_box));
+            cause => {
+                tracing::error!(?cause, "failed to delete document box");
+                DynHttpError::from(HttpCommonError::ServerError)
+            }
+        })?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -213,12 +228,25 @@ pub async fn delete(
 /// POST /box/:scope/search
 ///
 /// Search within the document box
+#[utoipa::path(
+    post,
+    tag = DOCUMENT_BOX_TAG,
+    path = "/box/{scope}/search",
+    responses(
+        (status = 200, description = "Searched successfully", body = SearchResultResponse),
+        (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
+        (status = 404, description = "Target folder not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope))]
 pub async fn search(
     TenantDb(db): TenantDb,
     TenantSearch(opensearch): TenantSearch,
     Path(scope): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<SearchRequest>>,
 ) -> HttpResult<SearchResultResponse> {
+    // TODO: Move this logic to the core crate
     let search_folder_ids = match req.folder_id {
         Some(folder_id) => {
             let folder = Folder::find_by_id(&db, &scope, folder_id)
