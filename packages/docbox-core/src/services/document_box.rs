@@ -7,7 +7,6 @@ use docbox_database::{
     },
     DbErr, DbPool,
 };
-use exif::doc;
 use thiserror::Error;
 
 use crate::{

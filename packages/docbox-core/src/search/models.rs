@@ -247,7 +247,7 @@ pub struct SearchResultResponse {
     pub results: Vec<SearchResultItem>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AdminSearchResultResponse {
     pub total_hits: u64,
     pub results: Vec<WithScope<SearchResultItem>>,

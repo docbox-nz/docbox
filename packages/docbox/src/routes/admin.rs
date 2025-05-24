@@ -1,7 +1,7 @@
 //! Admin related access and routes for managing tenants and document boxes
 
 use crate::{
-    error::{HttpResult, HttpStatusResult},
+    error::{HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::tenant::{TenantDb, TenantSearch},
 };
 use axum::{http::StatusCode, Extension, Json};
@@ -25,10 +25,26 @@ use docbox_database::{
 use std::sync::Arc;
 use tracing::error;
 
-/// POST /admin/search
+pub const ADMIN_TAG: &str = "admin";
+
+/// Admin Search
 ///
-/// Gets a tenant by ID responding with all the document
-/// boxes in the container
+/// Performs a search across multiple document box scopes. This
+/// is an administrator route as unlike other routes we cannot
+/// assert through the URL that the user has access to all the
+/// scopes
+#[utoipa::path(
+    post,
+    tag = ADMIN_TAG,
+    path = "/admin/search",
+    responses(
+        (status = 201, description = "Searched successfully", body = AdminSearchResultResponse),
+        (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
+        (status = 409, description = "Scope already exists", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    )
+)]
+#[tracing::instrument(skip_all, fields(req))]
 pub async fn search_tenant(
     TenantDb(db): TenantDb,
     TenantSearch(search): TenantSearch,
@@ -82,9 +98,17 @@ pub async fn search_tenant(
     }))
 }
 
-/// POST /admin/flush-db-cache
+/// Flush database cache
 ///
 /// Empties all the database pool and credentials caches
+#[utoipa::path(
+    post,
+    tag = ADMIN_TAG,
+    path = "/admin/flush-db-cache",
+    responses(
+        (status = 204, description = "Database cache flushed"),
+    )
+)]
 pub async fn flush_database_pool_cache(
     Extension(db_cache): Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
 ) -> HttpStatusResult {
@@ -92,13 +116,28 @@ pub async fn flush_database_pool_cache(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// POST /admin/purge-expired-presigned-tasks
+/// Purge Presigned Tasks
 ///
 /// Purges all expired presigned tasks
+#[utoipa::path(
+    post,
+    tag = ADMIN_TAG,
+    path = "/admin/purge-expired-presigned-tasks",
+    responses(
+        (status = 204, description = "Database cache flushed"),
+        (status = 500, description = "Failed to purge presigned cache", body = HttpErrorResponse),
+    )
+)]
 pub async fn http_purge_expired_presigned_tasks(
     Extension(db_cache): Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
     Extension(storage_factory): Extension<StorageLayerFactory>,
 ) -> HttpStatusResult {
-    purge_expired_presigned_tasks(db_cache, storage_factory).await?;
+    purge_expired_presigned_tasks(db_cache, storage_factory)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to purge expired presigned tasks");
+            HttpCommonError::ServerError
+        })?;
+
     Ok(StatusCode::NO_CONTENT)
 }

@@ -3,7 +3,7 @@ use docbox_core::utils::validation::ALLOWED_MIME_TYPES;
 
 use crate::{models::document_box::DocumentBoxOptions, MAX_FILE_SIZE};
 
-const UTILS_TAG: &str = "utils";
+pub const UTILS_TAG: &str = "utils";
 
 /// Get options
 ///

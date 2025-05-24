@@ -4,7 +4,9 @@ use crate::routes::{
     link::{self, LINK_TAG},
     task::{self, TASK_TAG},
     folder::{self, FOLDER_TAG},
-    document_box::{self, DOCUMENT_BOX_TAG}
+    document_box::{self, DOCUMENT_BOX_TAG},
+    utils::{self, UTILS_TAG},
+    admin::{self, ADMIN_TAG},
 };
 
 #[derive(OpenApi)]
@@ -13,15 +15,27 @@ use crate::routes::{
         (name = DOCUMENT_BOX_TAG, description = "Document box related APIs"),
         (name = LINK_TAG, description = "Link related APIs"),
         (name = FOLDER_TAG, description = "Folder related APIs"),
-        (name = TASK_TAG, description = "Background task related APIs")
+        (name = TASK_TAG, description = "Background task related APIs"),
+        (name = ADMIN_TAG, description = "Administrator and higher privilege APIs"),
+        (name = UTILS_TAG, description = "Utility APIs")
     ),
     paths(
+        // Admin routes
+        admin::search_tenant,
+        admin::flush_database_pool_cache,
+        admin::http_purge_expired_presigned_tasks,
         // Document box routes
         document_box::create,
         document_box::get,
         document_box::stats,
         document_box::delete,
         document_box::search,
+        // Folder routes
+        folder::create,
+        folder::get,
+        folder::get_edit_history,
+        folder::update,
+        folder::delete,
         // Link routes
         link::create, 
         link::get,
@@ -31,14 +45,10 @@ use crate::routes::{
         link::get_edit_history,
         link::update,
         link::delete,
-        // Folder routes
-        folder::create,
-        folder::get,
-        folder::get_edit_history,
-        folder::update,
-        folder::delete,
         // Task routes
-        task::get
+        task::get,
+        // Utils routes
+        utils::get_options
     )
 )]
 #[allow(unused)]
