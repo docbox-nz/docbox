@@ -1,9 +1,9 @@
 //! Admin related access and routes for managing tenants and document boxes
 
 use crate::{
-    error::{DynHttpError, HttpResult, HttpStatusResult},
+    error::{HttpResult, HttpStatusResult},
     middleware::tenant::{get_tenant_env, TenantDb, TenantSearch},
-    models::admin::{CreateTenant, CreatedTenant, HttpTenantError, TenantResponse},
+    models::admin::{HttpTenantError, TenantResponse},
 };
 use anyhow::Context;
 use axum::{
@@ -19,13 +19,9 @@ use docbox_core::{
             SearchResultItem,
         },
         os::resolve_search_result,
-        SearchIndexFactory,
     },
     secrets::AppSecretManager,
-    services::{
-        files::presigned::purge_expired_presigned_tasks,
-        tenant::{initialize_tenant, rollback_tenant_error, InitTenantState},
-    },
+    services::files::presigned::purge_expired_presigned_tasks,
     storage::StorageLayerFactory,
 };
 use docbox_database::{
@@ -40,53 +36,6 @@ use docbox_database::{
 use std::sync::Arc;
 use tracing::error;
 
-/// POST /admin/tenant
-///
-/// Creates a new tenant within the doc-box and creates the tables
-/// for the tenant
-pub async fn create_tenant(
-    headers: HeaderMap,
-    Extension(db_cache): Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
-    Extension(search_factory): Extension<SearchIndexFactory>,
-    Extension(storage_factory): Extension<StorageLayerFactory>,
-    Garde(Json(create)): Garde<Json<CreateTenant>>,
-) -> Result<(StatusCode, Json<CreatedTenant>), DynHttpError> {
-    let env = get_tenant_env(&headers)?;
-    let mut init_state = InitTenantState::default();
-
-    let tenant = match initialize_tenant(
-        &db_cache,
-        &search_factory,
-        &storage_factory,
-        docbox_core::services::tenant::CreateTenant {
-            id: create.id,
-            db_name: create.db_name,
-            db_secret_name: create.db_secret_name,
-            s3_name: create.s3_name,
-            os_index_name: create.os_index_name,
-            event_queue_url: create.event_queue_url,
-            origins: create.origins,
-            s3_queue_arn: create.s3_queue_arn,
-        },
-        env,
-        &mut init_state,
-    )
-    .await
-    {
-        Ok(value) => value,
-        Err(err) => {
-            // Attempt to rollback any allocated resources in the background
-            tokio::spawn(async move {
-                rollback_tenant_error(init_state).await;
-            });
-
-            return Err(anyhow::Error::from(err).into());
-        }
-    };
-
-    Ok((StatusCode::CREATED, Json(CreatedTenant { id: tenant.id })))
-}
-
 /// GET /admin/tenant/:tenant-id
 ///
 /// Gets a tenant by ID responding with all the document
@@ -98,14 +47,16 @@ pub async fn get_tenant(
 ) -> HttpResult<TenantResponse> {
     let env = get_tenant_env(&headers)?;
 
-    let db = connect_root_database(&db_cache).await?;
+    let tenant = {
+        // Connect to the tenant database
+        let db = connect_root_database(&db_cache).await?;
 
-    let tenant = Tenant::find_by_id(&db, tenant_id, &env)
-        .await
-        .context("failed to request tenant")?
-        .ok_or(HttpTenantError::UnknownTenant)?;
-
-    drop(db);
+        // Request the tenant
+        Tenant::find_by_id(&db, tenant_id, &env)
+            .await
+            .context("failed to request tenant")?
+            .ok_or(HttpTenantError::UnknownTenant)?
+    };
 
     let db = connect_tenant_database(&db_cache, &tenant).await?;
 

@@ -24,7 +24,7 @@ pub fn admin_router() -> Router {
     Router::new()
         .nest(
             "/tenant",
-            Router::new().route("/", post(admin::create_tenant)).route(
+            Router::new().route(
                 "/:tenant_id",
                 get(admin::get_tenant).delete(admin::delete_tenant),
             ),
