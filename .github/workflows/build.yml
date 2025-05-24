@@ -29,6 +29,10 @@ jobs:
           targets: x86_64-unknown-linux-musl
           override: true
 
+      # Install musl-gcc
+      - name: Install musl-gcc
+        run: apt-get install musl-tools
+
       # Build the binary
       - name: Build for ${{ matrix.target }}
         run: cargo build -p docbox --target x86_64-unknown-linux-musl --release
