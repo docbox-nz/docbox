@@ -55,7 +55,7 @@ pub struct EmailHeader {
     value: String,
 }
 
-/// Optional address and name combination, usually atleast one part
+/// Optional address and name combination, usually at least one part
 /// of this exists, this is used for headers like To, From, ..etc
 #[derive(Debug, Clone, Serialize)]
 pub struct EmailEntity {
@@ -71,7 +71,7 @@ fn map_email_address(address: Option<&Address<'_>>) -> Vec<EmailEntity> {
     };
 
     match address {
-        Address::List(addrs) => addrs
+        Address::List(addresses) => addresses
             .iter()
             .map(|value| EmailEntity {
                 address: value.address().map(|value| value.to_string()),
@@ -118,7 +118,7 @@ pub fn process_email(
 
     let from = from
         .first()
-        // Email must have atleast one sender
+        // Email must have at least one sender
         .ok_or(ProcessingError::MalformedFile)?
         .clone();
 

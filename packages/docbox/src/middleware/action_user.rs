@@ -111,6 +111,6 @@ fn mock_action_user() -> ActionUser {
     ActionUser(Some(ActionUserData {
         id: "06d709f9-6fa2-41e4-89df-e07490500804".to_string(),
         name: Some("Jacob".to_string()),
-        image_id: Some("uploads/jsdcez0yawceh1j2w0j2".to_string()),
+        image_id: Some("uploads/test".to_string()),
     }))
 }

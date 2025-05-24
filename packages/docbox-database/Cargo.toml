@@ -8,7 +8,7 @@ edition = "2021"
 mock-browser = []
 
 [dependencies]
-# Asyncronous runtime & Helpers
+# Asynchronous runtime & Helpers
 tokio = { version = "1", features = ["full"] }
 
 # Error handling
