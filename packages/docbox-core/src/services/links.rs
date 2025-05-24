@@ -47,7 +47,7 @@ pub enum CreateLinkError {
 /// State structure to keep track of resources created
 /// as a side effect from a link
 #[derive(Default)]
-pub struct CreateLinkState {
+struct CreateLinkState {
     /// Search index files
     pub search_index_files: Vec<Uuid>,
 }
@@ -66,7 +66,24 @@ pub struct CreateLinkData {
     pub created_by: Option<UserId>,
 }
 
-pub async fn create_link(
+/// Safely perform [create_link] ensuring that if an error
+/// occurs the changes will be properly rolled back
+pub async fn safe_create_link(
+    db: &DbPool,
+    search: TenantSearchIndex,
+    events: &TenantEventPublisher,
+    create: CreateLinkData,
+) -> Result<Link, CreateLinkError> {
+    let mut create_state = CreateLinkState::default();
+    create_link(db, &search, events, create, &mut create_state)
+        .await
+        .inspect_err(|_| {
+            // Attempt to rollback any allocated resources in the background
+            tokio::spawn(rollback_create_link(search, create_state));
+        })
+}
+
+async fn create_link(
     db: &DbPool,
     search: &TenantSearchIndex,
     events: &TenantEventPublisher,
@@ -125,7 +142,7 @@ pub async fn create_link(
     Ok(link)
 }
 
-pub async fn rollback_create_link(search: &TenantSearchIndex, create_state: CreateLinkState) {
+async fn rollback_create_link(search: TenantSearchIndex, create_state: CreateLinkState) {
     // Revert file index data
     for id in create_state.search_index_files {
         if let Err(err) = search.delete_data(id).await {

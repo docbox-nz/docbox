@@ -4,9 +4,10 @@ use docbox_database::models::folder::{FolderId, FolderWithExtra, ResolvedFolderW
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use utoipa::ToSchema;
 
 /// Request to create a folder
-#[derive(Debug, Validate, Deserialize)]
+#[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct CreateFolderRequest {
     /// Name for the folder
     #[garde(length(min = 1))]
@@ -14,11 +15,12 @@ pub struct CreateFolderRequest {
 
     /// Folder to store folder in
     #[garde(skip)]
+    #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
 }
 
 /// Response for requesting a document box
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FolderResponse {
     /// The folder itself
     pub folder: FolderWithExtra,
@@ -28,7 +30,7 @@ pub struct FolderResponse {
 }
 
 /// Request to rename and or move a folder
-#[derive(Debug, Validate, Deserialize)]
+#[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct UpdateFolderRequest {
     /// Name for the folder
     #[garde(inner(length(min = 1)))]
@@ -36,6 +38,7 @@ pub struct UpdateFolderRequest {
 
     /// New parent folder for the folder
     #[garde(skip)]
+    #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
 }
 

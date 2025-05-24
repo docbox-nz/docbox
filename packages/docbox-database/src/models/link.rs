@@ -7,6 +7,7 @@ use crate::{DbExecutor, DbResult};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::{postgres::PgRow, prelude::FromRow};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub type LinkId = Uuid;
@@ -34,16 +35,16 @@ pub struct LinkWithScope {
     pub scope: String,
 }
 
-#[derive(Debug, Clone, Serialize, FromRow)]
+#[derive(Debug, Clone, Serialize, FromRow, ToSchema)]
 pub struct LinkWithExtra {
     /// Unique identifier for the file
-    pub id: LinkId,
+    pub id: Uuid,
     /// Name of the link
     pub name: String,
     /// value of the link
     pub value: String,
     /// Parent folder ID
-    pub folder_id: FolderId,
+    pub folder_id: Uuid,
     /// When the file was created
     pub created_at: DateTime<Utc>,
     /// User who created the file
@@ -58,7 +59,8 @@ pub struct LinkWithExtra {
 
 /// Wrapper type for extracting a [User] that was joined
 /// from another table where the fields are prefixed with "cb_"
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[schema(as = Option<User>)]
 #[serde(transparent)]
 pub struct CreatedByUser(pub Option<User>);
 
@@ -79,7 +81,8 @@ impl<'r> FromRow<'r, PgRow> for CreatedByUser {
 
 /// Wrapper type for extracting a [User] that was joined
 /// from another table where the fields are prefixed with "lmb_"
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[schema(as = Option<User>)]
 #[serde(transparent)]
 pub struct LastModifiedByUser(pub Option<User>);
 

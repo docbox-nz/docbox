@@ -7,10 +7,10 @@ use axum::{extract::Path, http::StatusCode, Json};
 use axum_valid::Garde;
 
 use crate::{
-    error::{DynHttpError, HttpResult, HttpStatusResult},
+    error::{DynHttpError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
         action_user::ActionUser,
-        tenant::{TenantDb, TenantEvents, TenantStorage, TenantSearch},
+        tenant::{TenantDb, TenantEvents, TenantSearch, TenantStorage},
     },
     models::folder::{CreateFolderRequest, FolderResponse, HttpFolderError, UpdateFolderRequest},
 };
@@ -27,9 +27,24 @@ use docbox_database::models::{
     folder::{self, Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
 };
 
-/// POST /box/:scope/folder
+pub const FOLDER_TAG: &str = "folder";
+
+/// Create folder
 ///
 /// Creates a new folder in the provided document box folder
+#[utoipa::path(
+    post,
+    tag = FOLDER_TAG,
+    path = "/box/{scope}/folder",
+    responses(
+        (status = 201, description = "Folder created successfully", body = FolderResponse),
+        (status = 404, description = "Destination folder not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the folder within"),
+    )
+)]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,

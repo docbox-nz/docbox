@@ -152,3 +152,19 @@ where
 pub struct HttpErrorResponse {
     pub reason: String,
 }
+
+#[derive(Debug, Error)]
+pub enum HttpCommonError {
+    #[error("internal server error")]
+    ServerError,
+}
+
+impl HttpError for HttpCommonError {
+    fn log(&self) {}
+
+    fn status(&self) -> axum::http::StatusCode {
+        match self {
+            HttpCommonError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}

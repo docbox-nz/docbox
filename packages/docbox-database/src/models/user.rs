@@ -1,10 +1,11 @@
 use crate::{DbExecutor, DbResult};
 use serde::Serialize;
 use sqlx::prelude::FromRow;
+use utoipa::ToSchema;
 
 pub type UserId = String;
 
-#[derive(Debug, Clone, Serialize, FromRow)]
+#[derive(Debug, Clone, Serialize, FromRow, ToSchema)]
 pub struct User {
     /// Unique ID of the user
     pub id: String,

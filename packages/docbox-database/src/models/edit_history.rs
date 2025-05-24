@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use std::str::FromStr;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{file::FileId, folder::FolderId, user::UserId};
@@ -12,7 +13,9 @@ use crate::{DbErr, DbExecutor, DbResult};
 
 pub type EditHistoryId = Uuid;
 
-#[derive(Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize)]
+#[derive(
+    Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize, ToSchema,
+)]
 pub enum EditHistoryType {
     /// File was moved to a different folder
     MoveToFolder,
@@ -30,13 +33,15 @@ impl TryFrom<String> for EditHistoryType {
 }
 
 /// Metadata associated with an edit history
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(tag = "type")]
 pub enum EditHistoryMetadata {
     MoveToFolder {
         /// Folder moved from
+        #[schema(value_type = Option<Uuid>)]
         original_id: Option<FolderId>,
         /// Folder moved to
+        #[schema(value_type = Uuid)]
         target_id: FolderId,
     },
 
@@ -55,19 +60,23 @@ pub enum EditHistoryMetadata {
     },
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct EditHistory {
     /// Unique identifier for this history entry
+    #[schema(value_type = Uuid)]
     pub id: EditHistoryId,
 
     /// ID of the file that was edited (If a file was edited)
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Uuid>)]
     pub file_id: Option<FileId>,
     /// ID of the file that was edited (If a link was edited)
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Uuid>)]
     pub link_id: Option<LinkId>,
     /// ID of the file that was edited (If a folder was edited)
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
 
     /// User that made the edit
@@ -79,14 +88,16 @@ pub struct EditHistory {
     #[sqlx(rename = "type")]
     #[sqlx(try_from = "String")]
     pub ty: EditHistoryType,
+
     /// Metadata associated with the change
+    #[schema(value_type = EditHistoryMetadata)]
     pub metadata: sqlx::types::Json<EditHistoryMetadata>,
 
     /// When this change was made
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct EditHistoryUser {
     /// Unique ID of the user
     #[sqlx(rename = "user_id")]

@@ -3,14 +3,14 @@
 use anyhow::Context;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 
-use crate::error::DynHttpError;
+use crate::error::{DynHttpError, HttpCommonError};
 use docbox_database::{models::user::User, DbExecutor};
 
 pub struct ActionUser(pub Option<ActionUserData>);
 
 impl ActionUser {
     /// Stores the current user details providing back the user ID to use
-    pub async fn store_user(self, db: impl DbExecutor<'_>) -> anyhow::Result<Option<User>> {
+    pub async fn store_user(self, db: impl DbExecutor<'_>) -> Result<Option<User>, DynHttpError> {
         let user_data = match self.0 {
             Some(value) => value,
             None => return Ok(None),
@@ -20,7 +20,7 @@ impl ActionUser {
             Ok(value) => value,
             Err(cause) => {
                 tracing::error!(?cause, "failed to store user");
-                anyhow::bail!("failed to store user")
+                return Err(HttpCommonError::ServerError.into());
             }
         };
 

@@ -13,6 +13,7 @@ use axum::{
 use axum_valid::Garde;
 use docbox_core::search::models::UpdateSearchIndexData;
 
+use crate::error::{HttpCommonError, HttpErrorResponse};
 use crate::{
     error::{DynHttpError, HttpResult, HttpStatusResult},
     middleware::{
@@ -25,8 +26,7 @@ use crate::{
     },
 };
 use docbox_core::services::links::{
-    create_link, delete_link, move_link, rollback_create_link, update_link_name, update_link_value,
-    CreateLinkData, CreateLinkState,
+    delete_link, move_link, safe_create_link, update_link_name, update_link_value, CreateLinkData,
 };
 use docbox_database::models::{
     document_box::DocumentBoxScope,
@@ -36,27 +36,52 @@ use docbox_database::models::{
 };
 use docbox_web_scraper::WebsiteMetaService;
 
-/// POST /box/:scope/link
+pub const LINK_TAG: &str = "link";
+
+/// Create link
 ///
-/// Creates a new link in the provided document box folder
+/// Creates a new link within the provided document box
+#[utoipa::path(
+    post,
+    tag = LINK_TAG,
+    path = "/box/{scope}/link",
+    responses(
+        (status = 201, description = "Link created successfully", body = LinkWithExtra),
+        (status = 404, description = "Destination folder not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+    )
+)]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     TenantEvents(events): TenantEvents,
     Path(scope): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<CreateLink>>,
 ) -> Result<(StatusCode, Json<LinkWithExtra>), DynHttpError> {
-    let folder = Folder::find_by_id(&db, &scope, req.folder_id)
+    let folder_id = req.folder_id;
+    let folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
-        .context("unable to query folder")?
+        // Failed to query destination folder
+        .map_err(|cause| {
+            tracing::error!(
+                ?scope,
+                ?folder_id,
+                ?cause,
+                "failed to query link destination folder"
+            );
+            HttpCommonError::ServerError
+        })?
+        // Destination folder was not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
     // Update stored editing user data
     let created_by = action_user.store_user(&db).await?;
 
-    let mut create_state = CreateLinkState::default();
-
+    // Make the create query
     let create = CreateLinkData {
         folder,
         name: req.name,
@@ -64,17 +89,13 @@ pub async fn create(
         created_by: created_by.as_ref().map(|value| value.id.to_string()),
     };
 
-    let link = match create_link(&db, &opensearch, &events, create, &mut create_state).await {
-        Ok(value) => value,
-        Err(err) => {
-            // Attempt to rollback any allocated resources in the background
-            tokio::spawn(async move {
-                rollback_create_link(&opensearch, create_state).await;
-            });
-
-            return Err(anyhow::Error::from(err).into());
-        }
-    };
+    // Perform Link creation
+    let link = safe_create_link(&db, search, &events, create)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to create link");
+            HttpLinkError::CreateError(cause)
+        })?;
 
     Ok((
         StatusCode::CREATED,
@@ -91,24 +112,59 @@ pub async fn create(
     ))
 }
 
-/// GET /box/:scope/link/:link_id
+/// Get link by ID
 ///
-/// Gets a link
+/// Request a specific link by ID
+#[utoipa::path(
+    get,
+    tag = LINK_TAG,
+    path = "/box/{scope}/link/{link_id}",
+    responses(
+        (status = 200, description = "Link created successfully", body = LinkWithExtra),
+        (status = 404, description = "Link not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("link_id" = Uuid, Path, description = "ID of the link to request"),
+    )
+)]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpResult<LinkWithExtra> {
     let link = Link::find_with_extra(&db, &scope, link_id)
         .await
-        .context("failed to query link")?
+        // Failed to query link
+        .map_err(|cause| {
+            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            HttpCommonError::ServerError
+        })?
+        // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
     Ok(Json(link))
 }
 
-/// GET /box/:scope/link/:link_id/metadata
+/// Get link website metadata
 ///
-/// Gets a link metadata
+/// Requests metadata for the link. This will make a request
+/// to the site at the link value to extract metadata from
+/// the website itself such as title, and OGP metadata
+#[utoipa::path(
+    get,
+    tag = LINK_TAG,
+    path = "/box/{scope}/link/{link_id}/metadata",
+    responses(
+        (status = 200, description = "Obtained link metadata successfully", body = LinkWithExtra),
+        (status = 404, description = "Link not found or failed to resolve metadata", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("link_id" = Uuid, Path, description = "ID of the link to request"),
+    )
+)]
 pub async fn get_metadata(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -116,7 +172,12 @@ pub async fn get_metadata(
 ) -> HttpResult<LinkMetadataResponse> {
     let link = Link::find_with_extra(&db, &scope, link_id)
         .await
-        .context("failed to query link")?
+        // Failed to query link
+        .map_err(|cause| {
+            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            HttpCommonError::ServerError
+        })?
+        // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
     let resolved = website_service
@@ -133,9 +194,24 @@ pub async fn get_metadata(
     }))
 }
 
-/// GET /box/:scope/link/:link_id/favicon
+/// Get link favicon
 ///
-/// Gets a link website favicon
+/// Obtain the favicon image for the website that
+/// the link points to
+#[utoipa::path(
+    get,
+    tag = LINK_TAG,
+    path = "/box/{scope}/link/{link_id}/favicon",
+    responses(
+        (status = 200, description = "Obtained link favicon", body = LinkWithExtra),
+        (status = 404, description = "Link not found or no favicon was found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("link_id" = Uuid, Path, description = "ID of the link to request"),
+    )
+)]
 pub async fn get_favicon(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -143,7 +219,12 @@ pub async fn get_favicon(
 ) -> Result<Response<Body>, DynHttpError> {
     let link = Link::find_with_extra(&db, &scope, link_id)
         .await
-        .context("failed to query link")?
+        // Failed to query link
+        .map_err(|cause| {
+            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            HttpCommonError::ServerError
+        })?
+        // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
     let resolved = website_service.resolve_website(&link.value).await?;
@@ -156,9 +237,25 @@ pub async fn get_favicon(
         .context("failed to create response")?)
 }
 
-/// GET /box/:scope/link/:link_id/image
+/// Get link social image
 ///
-/// Gets a link website ogp image aka "Social Image"
+/// Obtain the "Social Image" for the website, this resolves the website
+/// metadata and finds the OGP metadata image responding with the image
+/// directly
+#[utoipa::path(
+    get,
+    tag = LINK_TAG,
+    path = "/box/{scope}/link/{link_id}/image",
+    responses(
+        (status = 200, description = "Obtained link social image", body = LinkWithExtra),
+        (status = 404, description = "Link not found or no image was found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("link_id" = Uuid, Path, description = "ID of the link to request"),
+    )
+)]
 pub async fn get_image(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -166,7 +263,12 @@ pub async fn get_image(
 ) -> Result<Response<Body>, DynHttpError> {
     let link = Link::find_with_extra(&db, &scope, link_id)
         .await
-        .context("failed to query link")?
+        // Failed to query link
+        .map_err(|cause| {
+            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            HttpCommonError::ServerError
+        })?
+        // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
     let resolved = website_service.resolve_website(&link.value).await?;
@@ -179,16 +281,36 @@ pub async fn get_image(
         .context("failed to create response")?)
 }
 
-/// GET /box/:scope/link/:link_id/edit-history
+/// Get link edit history
 ///
-/// Gets the edit history for the provided link
+/// Request the edit history for the provided link
+#[utoipa::path(
+    get,
+    tag = LINK_TAG,
+    path = "/box/{scope}/link/{link_id}/edit-history",
+    responses(
+        (status = 200, description = "Obtained edit history", body = [EditHistory]),
+        (status = 404, description = "Link not found or no image was found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("link_id" = Uuid, Path, description = "ID of the link to request"),
+    )
+)]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpResult<Vec<EditHistory>> {
-    _ = Link::find_with_extra(&db, &scope, link_id)
+    // Ensure the link itself exists
+    _ = Link::find(&db, &scope, link_id)
         .await
-        .context("failed to query link")?
+        // Failed to query link
+        .map_err(|cause| {
+            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            HttpCommonError::ServerError
+        })?
+        // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
     let history = EditHistory::all_by_link(&db, link_id)
@@ -198,9 +320,23 @@ pub async fn get_edit_history(
     Ok(Json(history))
 }
 
-/// PUT /box/:scope/link/:link_id
+/// Update link
 ///
 /// Updates a link, can be a name change, value change, a folder move, or all
+#[utoipa::path(
+    put,
+    tag = LINK_TAG,
+    path = "/box/{scope}/link/{link_id}",
+    responses(
+        (status = 200, description = "Updated link successfully"),
+        (status = 404, description = "Link not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("link_id" = Uuid, Path, description = "ID of the link to request"),
+    )
+)]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -210,7 +346,12 @@ pub async fn update(
 ) -> HttpStatusResult {
     let mut link = Link::find(&db, &scope, link_id)
         .await
-        .context("failed to query link")?
+        // Failed to query link
+        .map_err(|cause| {
+            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            HttpCommonError::ServerError
+        })?
+        // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
     let mut db = db.begin().await.context("failed to start transaction")?;
@@ -261,9 +402,23 @@ pub async fn update(
     Ok(StatusCode::OK)
 }
 
-/// DELETE /box/:scope/link/:link_id
+/// Delete a link by ID
 ///
-/// Deletes a link
+/// Deletes a specific link using its ID
+#[utoipa::path(
+    delete,
+    tag = LINK_TAG,
+    path = "/box/{scope}/link/{link_id}",
+    responses(
+        (status = 204, description = "Deleted link successfully"),
+        (status = 404, description = "Link not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("link_id" = Uuid, Path, description = "ID of the link to request"),
+    )
+)]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantSearch(opensearch): TenantSearch,
@@ -272,7 +427,12 @@ pub async fn delete(
 ) -> HttpStatusResult {
     let link = Link::find(&db, &scope, link_id)
         .await
-        .context("failed to query file")?
+        // Failed to query link
+        .map_err(|cause| {
+            tracing::error!(?scope, ?link_id, ?cause, "failed to query link");
+            HttpCommonError::ServerError
+        })?
+        // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
     delete_link(&db, &opensearch, &events, link, scope).await?;

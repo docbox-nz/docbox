@@ -6,9 +6,6 @@ use thiserror::Error;
 pub enum HttpTaskError {
     #[error("unknown task")]
     UnknownTask,
-
-    #[error("internal server error")]
-    Database,
 }
 
 impl HttpError for HttpTaskError {
@@ -17,7 +14,6 @@ impl HttpError for HttpTaskError {
     fn status(&self) -> axum::http::StatusCode {
         match self {
             HttpTaskError::UnknownTask => StatusCode::NOT_FOUND,
-            HttpTaskError::Database => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

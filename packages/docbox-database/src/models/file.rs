@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::{postgres::PgRow, prelude::FromRow};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{
@@ -48,15 +49,17 @@ pub struct FileWithScope {
 }
 
 /// File with the resolved creator and last modified data
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, FromRow, Serialize, ToSchema)]
 pub struct FileWithExtra {
     /// Unique identifier for the file
+    #[schema(value_type = Uuid)]
     pub id: FileId,
     /// Name of the file
     pub name: String,
     /// Mime type of the file content
     pub mime: String,
     /// Parent folder ID
+    #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
     /// Hash of the file bytes stored in S3
     pub hash: String,
@@ -75,12 +78,14 @@ pub struct FileWithExtra {
     #[sqlx(flatten)]
     pub last_modified_by: LastModifiedByUser,
     /// Optional parent file if the file is a child
+    #[schema(value_type = Option<Uuid>)]
     pub parent_id: Option<FileId>,
 }
 
 /// Wrapper type for extracting a [User] that was joined
 /// from another table where the fields are prefixed with "cb_"
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[schema(as = Option<User>)]
 #[serde(transparent)]
 pub struct CreatedByUser(pub Option<User>);
 
@@ -101,7 +106,8 @@ impl<'r> FromRow<'r, PgRow> for CreatedByUser {
 
 /// Wrapper type for extracting a [User] that was joined
 /// from another table where the fields are prefixed with "lmb_"
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[schema(as = Option<User>)]
 #[serde(transparent)]
 pub struct LastModifiedByUser(pub Option<User>);
 

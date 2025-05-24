@@ -3,7 +3,7 @@
 //! Endpoints related to background tasks
 
 use crate::{
-    error::{HttpErrorResponse, HttpResult},
+    error::{HttpCommonError, HttpErrorResponse, HttpResult},
     middleware::tenant::TenantDb,
     models::task::HttpTaskError,
 };
@@ -18,18 +18,19 @@ pub const TASK_TAG: &str = "task";
 /// Get the details about a specific task, used to poll
 /// the current progress of a task
 #[utoipa::path(
-        get,
-        path = "/box/{scope}/task/{task_id}",
-        responses(
-            (status = 200, description = "Task found successfully", body = Task),
-            (status = 404, description = "Task not found", body = HttpErrorResponse),
-            (status = 500, description = "Internal server error", body = HttpErrorResponse)
-        ),
-        params(
-            ("scope" = String, Path, description = "Scope the task is within"),
-            ("task_id" = String, Path, description = "ID of the task to query"),
-        )
-    )]
+    get,
+    tag = TASK_TAG,
+    path = "/box/{scope}/task/{task_id}",
+    responses(
+        (status = 200, description = "Task found successfully", body = Task),
+        (status = 404, description = "Task not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope the task is within"),
+        ("task_id" = String, Path, description = "ID of the task to query"),
+    )
+)]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, TaskId)>,
@@ -39,7 +40,7 @@ pub async fn get(
         // Failed to query the database
         .map_err(|cause| {
             tracing::error!(?scope, ?task_id, ?cause, "failed to query task");
-            HttpTaskError::Database
+            HttpCommonError::ServerError
         })?
         // Task not found
         .ok_or(HttpTaskError::UnknownTask)?;

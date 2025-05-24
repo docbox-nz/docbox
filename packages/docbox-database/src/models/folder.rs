@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::{postgres::PgRow, prelude::FromRow};
 use tokio::try_join;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{
@@ -43,7 +44,7 @@ impl ResolvedFolder {
 
 /// Folder with all the children resolved, children also
 /// resolve the user and last modified data
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, ToSchema)]
 pub struct ResolvedFolderWithExtra {
     /// Path to the resolved folder
     pub path: Vec<FolderPathSegment>,
@@ -74,8 +75,9 @@ impl ResolvedFolderWithExtra {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FolderPathSegment {
+    #[schema(value_type = Uuid)]
     pub id: FolderId,
     pub name: String,
 }
@@ -110,14 +112,16 @@ pub struct Folder {
     pub created_by: Option<UserId>,
 }
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
 pub struct FolderWithExtra {
     /// Unique identifier for the folder
+    #[schema(value_type = Uuid)]
     pub id: FolderId,
     /// Name of the file
     pub name: String,
 
     /// Parent folder ID if the folder is a child
+    #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
 
     /// When the folder was created
@@ -134,7 +138,8 @@ pub struct FolderWithExtra {
 
 /// Wrapper type for extracting a [User] that was joined
 /// from another table where the fields are prefixed with "cb_"
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[schema(as = Option<User>)]
 #[serde(transparent)]
 pub struct CreatedByUser(pub Option<User>);
 
@@ -155,7 +160,8 @@ impl<'r> FromRow<'r, PgRow> for CreatedByUser {
 
 /// Wrapper type for extracting a [User] that was joined
 /// from another table where the fields are prefixed with "lmb_id"
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[schema(as = Option<User>)]
 #[serde(transparent)]
 pub struct LastModifiedByUser(pub Option<User>);
 
