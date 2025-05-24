@@ -15,10 +15,12 @@ pub enum BackgroundEvent {
     PurgeExpiredPresigned,
 }
 
-pub async fn perform_background_tasks(
-    db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
-    storage: StorageLayerFactory,
-) {
+pub struct BackgroundTaskData {
+    pub db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
+    pub storage: StorageLayerFactory,
+}
+
+pub async fn perform_background_tasks(data: BackgroundTaskData) {
     let events = vec![SchedulerQueueEvent {
         event: BackgroundEvent::PurgeExpiredPresigned,
         interval: 60 * 60,
@@ -31,8 +33,8 @@ pub async fn perform_background_tasks(
             BackgroundEvent::PurgeExpiredPresigned => {
                 tracing::debug!("performing background purge for presigned tasks");
                 tokio::spawn(safe_purge_expired_presigned_tasks(
-                    db_cache.clone(),
-                    storage.clone(),
+                    data.db_cache.clone(),
+                    data.storage.clone(),
                 ));
             }
         }

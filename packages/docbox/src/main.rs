@@ -2,9 +2,9 @@ use anyhow::Context;
 use axum::{extract::DefaultBodyLimit, Extension};
 use docbox_core::{
     aws::{aws_config, create_s3_client_dev, S3Client, SecretsManagerClient, SqsClient},
-    background::perform_background_tasks,
+    background::{perform_background_tasks, BackgroundTaskData},
     events::{sqs::SqsEventPublisherFactory, EventPublisherFactory},
-    notifications::{process_notification_queue, AppNotificationQueue},
+    notifications::{process_notification_queue, AppNotificationQueue, NotificationQueueData},
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
     search::{
         os::{create_open_search, OpenSearchIndexFactory},
@@ -110,12 +110,6 @@ async fn main() -> anyhow::Result<()> {
     // Setup opensearch
     let open_search = create_open_search(&aws_config).context("failed to create open search")?;
 
-    // Setup S3 client
-    let s3_client = match cfg!(debug_assertions) {
-        true => create_s3_client_dev(),
-        false => S3Client::new(&aws_config),
-    };
-
     // Create the SQS client
     // Warning: Will panic if the configuration provided is invalid
     let sqs_client = SqsClient::new(&aws_config);
@@ -128,6 +122,11 @@ async fn main() -> anyhow::Result<()> {
     let os_index_factory = OpenSearchIndexFactory::new(open_search);
     let search_index_factory = SearchIndexFactory::new(os_index_factory);
 
+    // Setup storage factory
+    let s3_client = match cfg!(debug_assertions) {
+        true => create_s3_client_dev(),
+        false => S3Client::new(&aws_config),
+    };
     let s3_storage_factory = S3StorageLayerFactory::new(s3_client);
     let storage_factory = StorageLayerFactory::new(s3_storage_factory);
 
@@ -149,18 +148,20 @@ async fn main() -> anyhow::Result<()> {
     // Spawn background task to process notification queue messages
     tokio::spawn(process_notification_queue(
         notification_queue,
-        db_cache.clone(),
-        search_index_factory.clone(),
-        storage_factory.clone(),
-        event_publisher_factory.clone(),
-        processing.clone(),
+        NotificationQueueData {
+            db_cache: db_cache.clone(),
+            search: search_index_factory.clone(),
+            storage: storage_factory.clone(),
+            events: event_publisher_factory.clone(),
+            processing: processing.clone(),
+        },
     ));
 
     // Spawn background scheduled tasks
-    tokio::spawn(perform_background_tasks(
-        db_cache.clone(),
-        storage_factory.clone(),
-    ));
+    tokio::spawn(perform_background_tasks(BackgroundTaskData {
+        db_cache: db_cache.clone(),
+        storage: storage_factory.clone(),
+    }));
 
     // Determine the socket address to bind against
     let server_address = std::env::var(SERVER_ADDRESS_ENV)

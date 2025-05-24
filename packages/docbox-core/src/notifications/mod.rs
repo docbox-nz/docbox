@@ -56,15 +56,20 @@ pub(crate) trait NotificationQueue: Send + Sync + 'static {
     async fn next_message(&mut self) -> Option<NotificationQueueMessage>;
 }
 
+#[derive(Clone)]
+pub struct NotificationQueueData {
+    pub db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
+    pub search: SearchIndexFactory,
+    pub storage: StorageLayerFactory,
+    pub events: EventPublisherFactory,
+    pub processing: ProcessingLayer,
+}
+
 /// Processes events coming from the notification queue. This will be
 /// things like successful file uploads that need to be processed
 pub async fn process_notification_queue(
     mut notification_queue: AppNotificationQueue,
-    db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
-    search: SearchIndexFactory,
-    storage: StorageLayerFactory,
-    events: EventPublisherFactory,
-    processing: ProcessingLayer,
+    data: NotificationQueueData,
 ) {
     // Process messages from the notification queue
     while let Some(message) = notification_queue.next_message().await {
@@ -74,11 +79,7 @@ pub async fn process_notification_queue(
                 object_key,
             } => {
                 tokio::spawn(safe_handle_file_uploaded(
-                    db_cache.clone(),
-                    search.clone(),
-                    storage.clone(),
-                    events.clone(),
-                    processing.clone(),
+                    data.clone(),
                     bucket_name,
                     object_key,
                 ));
@@ -88,42 +89,22 @@ pub async fn process_notification_queue(
 }
 
 pub async fn safe_handle_file_uploaded(
-    db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
-    search: SearchIndexFactory,
-    storage: StorageLayerFactory,
-    events: EventPublisherFactory,
-    processing: ProcessingLayer,
-
+    data: NotificationQueueData,
     bucket_name: String,
     object_key: String,
 ) {
-    if let Err(cause) = handle_file_uploaded(
-        db_cache,
-        search,
-        storage,
-        events,
-        processing,
-        bucket_name,
-        object_key,
-    )
-    .await
-    {
+    if let Err(cause) = handle_file_uploaded(data, bucket_name, object_key).await {
         tracing::error!(?cause, "failed to handle sqs file upload");
     }
 }
 
 pub async fn handle_file_uploaded(
-    db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
-    search: SearchIndexFactory,
-    storage: StorageLayerFactory,
-    events: EventPublisherFactory,
-    processing: ProcessingLayer,
-
+    data: NotificationQueueData,
     bucket_name: String,
     object_key: String,
 ) -> anyhow::Result<()> {
     let tenant = {
-        let db = connect_root_database(&db_cache).await?;
+        let db = connect_root_database(&data.db_cache).await?;
         match Tenant::find_by_bucket(&db, &bucket_name).await? {
             Some(value) => value,
             None => {
@@ -146,7 +127,7 @@ pub async fn handle_file_uploaded(
         }
     };
 
-    let db = connect_tenant_database(&db_cache, &tenant).await?;
+    let db = connect_tenant_database(&data.db_cache, &tenant).await?;
 
     // Locate a pending upload task for the uploaded file
     let task = match PresignedUploadTask::find_by_file_key(&db, &object_key).await {
@@ -179,12 +160,12 @@ pub async fn handle_file_uploaded(
     // Update stored editing user data
     let complete = CompletePresigned { task, folder };
 
-    let search = search.create_search_index(&tenant);
-    let storage = storage.create_storage_layer(&tenant);
-    let events = events.create_event_publisher(&tenant);
+    let search = data.search.create_search_index(&tenant);
+    let storage = data.storage.create_storage_layer(&tenant);
+    let events = data.events.create_event_publisher(&tenant);
 
     // Create task future that performs the file upload
-    safe_complete_presigned(db, search, storage, events, processing, complete).await?;
+    safe_complete_presigned(db, search, storage, events, data.processing, complete).await?;
 
     Ok(())
 }
