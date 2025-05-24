@@ -1,0 +1,83 @@
+[package]
+name = "docbox-core"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Mock header values, used for browser local testing
+mock-browser = []
+
+[dependencies]
+# Environment variables 
+dotenvy = "0.15.7"
+
+# Database access
+docbox-database = { version = "0.1.0", path = "../docbox-database" }
+docbox-web-scraper = { version = "0.1.0", path = "../docbox-web-scraper" }
+
+# PDF to image conversion, text extraction 
+pdf_process = { version = "0.2.0" }
+
+# Office conversion client
+office-convert-client = { version = "0.3.0" }
+
+# Image conversion and manipulation
+image = "0.25.2"
+# Image EXIF metadata parsing
+kamadak-exif = "0.6.1"
+
+# Asynchronous runtime & Helpers
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# HTTP client
+reqwest = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Serialization and JSON
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Opensearch client
+opensearch = { version = "2.2.0", default-features = false, features = [
+    "rustls-tls",
+    "aws-auth",
+] }
+
+# Validation & Axum validation integration
+garde = { workspace = true }
+
+# AWS Config, AWS S3 sdk, AWS typing internals
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
+aws-sdk-s3 = { version = "1.42.0", features = [] }
+aws-sdk-sqs = { version = "1.62.0", features = [] }
+aws-smithy-types = { version = "1.2.0", features = [
+    "byte-stream-poll-next",
+    "rt-tokio",
+] }
+aws-sdk-secretsmanager = "1.45.0"
+
+# URL encoding to decode object key names
+urlencoding = "2.1"
+
+bytes = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+mime = { workspace = true }
+
+# SHA256 Hashing
+sha256 = { version = "1.5.0", default-features = false }
+
+async-trait = { workspace = true }
+mail-parser = "0.11.0"
+
+# Base64 encoding / decoding 
+base64 = "0.22.1"
+bytes-utils = "0.1.4"

@@ -1,0 +1,56 @@
+[package]
+name = "docbox-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Environment variables 
+dotenvy = "0.15.7"
+
+# Command line parser
+clap = { version = "4.5.38", features = ["derive"] }
+
+# Error reporting
+eyre = "0.6.12"
+color-eyre = "0.6"
+
+# Core business logic
+docbox-core = { version = "0.1.0", path = "../docbox-core" }
+
+# Database access
+docbox-database = { version = "0.1.0", path = "../docbox-database" }
+
+# Asynchronous runtime & Helpers
+tokio = { version = "1", features = ["full"] }
+
+# Serialization and JSON
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+bytes = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+mime = { workspace = true }
+
+# Database client
+sqlx = { version = "0.8", default-features = false, features = [
+    # Using tokio async runtime
+    "runtime-tokio",
+    # TLS support backed by rustls
+    "tls-rustls",
+    # Macros
+    "macros",
+    # PostgreSQL database driver
+    "postgres",
+    # UUID support
+    "uuid",
+    # Date time support
+    "chrono",
+    # JSON support
+    "json",
+] }

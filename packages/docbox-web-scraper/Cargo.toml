@@ -1,0 +1,41 @@
+[package]
+name = "docbox-web-scraper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# HTML parser for OGP metadata
+tl = "0.7.8"
+
+# Logging
+tracing = { workspace = true }
+
+# HTTP
+reqwest = { workspace = true }
+
+# Serialization support
+serde = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Cheap bytes type
+bytes = { workspace = true }
+
+# Mime types
+mime = { workspace = true }
+
+# URLs
+url = { workspace = true }
+
+# Caching
+moka = { workspace = true }
+
+# Base64 encoding / decoding for data URL
+base64 = "0.22.1"
+
+# HTTP primitives
+http = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros"] }

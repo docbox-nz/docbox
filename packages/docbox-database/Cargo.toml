@@ -1,0 +1,55 @@
+[package]
+name = "docbox-database"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Mock header values, used for browser local testing
+mock-browser = []
+
+[dependencies]
+# Asyncronous runtime & Helpers
+tokio = { version = "1", features = ["full"] }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Serialization and JSON
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Database client
+sqlx = { version = "0.8", default-features = false, features = [
+    # Using tokio async runtime
+    "runtime-tokio",
+    # TLS support backed by rustls
+    "tls-rustls",
+    # Macros
+    "macros",
+    # PostgreSQL database driver
+    "postgres",
+    # UUID support
+    "uuid",
+    # Date time support
+    "chrono",
+    # JSON support
+    "json",
+] }
+
+# UUID v4 support
+uuid = { workspace = true }
+
+# Date & time
+chrono = { workspace = true }
+
+# Caching
+moka = { workspace = true }
+
+# Enum -> String helpers and macros
+strum = { version = "0.26", features = ["derive"] }
+
+# Async trait support
+async-trait = { workspace = true }

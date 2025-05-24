@@ -1,0 +1,60 @@
+[package]
+name = "docbox"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Mock header values, used for browser local testing
+mock-browser = []
+
+[dependencies]
+# Environment variables 
+dotenvy = "0.15.7"
+
+# Core business logic
+docbox-core = { version = "0.1.0", path = "../docbox-core" }
+
+# Database access
+docbox-database = { version = "0.1.0", path = "../docbox-database" }
+
+# Web scraping
+docbox-web-scraper = { version = "0.1.0", path = "../docbox-web-scraper" }
+
+# Asynchronous runtime & Helpers
+tokio = { version = "1", features = ["full"] }
+
+# HTTP server
+axum = { version = "0.7.5", features = ["multipart"] }
+
+# HTTP layers for ratelimiting, CORS, and tracing
+tower-http = { version = "0.5", features = ["limit", "cors", "trace"] }
+
+# Typed multipart extraction 
+axum_typed_multipart = "0.11.1"
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Serialization and JSON
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Validation & Axum validation integration
+garde = { workspace = true }
+axum-valid = { version = "0.19.0", default-features = false, features = [
+    "garde",
+    "basic",
+    "full_garde",
+] }
+
+
+bytes = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+mime = { workspace = true }

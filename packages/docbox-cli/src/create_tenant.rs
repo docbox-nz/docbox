@@ -1,0 +1,172 @@
+use std::path::PathBuf;
+
+use docbox_core::{
+    aws::{aws_config, S3Client, SecretsManagerClient},
+    search::{
+        os::{create_open_search_prod, OpenSearchIndexFactory},
+        SearchIndexFactory,
+    },
+    secrets::{aws::AwsSecretManager, AppSecretManager},
+    services::tenant::{initialize_tenant, rollback_tenant_error, InitTenantState},
+    storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
+};
+use docbox_database::{
+    create::{create_database, create_tenant_user},
+    models::tenant::TenantId,
+    DatabasePoolCache,
+};
+use eyre::Context;
+use serde::Deserialize;
+use serde_json::json;
+
+use crate::{connect_db, Credentials};
+
+/// Request to create a tenant
+#[derive(Debug, Deserialize)]
+pub struct CreateTenant {
+    /// Unique ID for the tenant
+    pub id: TenantId,
+
+    /// Database name for the tenant
+    pub db_name: String,
+
+    pub env: String,
+
+    /// Database secret credentials name for the tenant
+    /// (Where the username and password will be stored/)
+    pub db_secret_name: String,
+
+    pub db_role_name: String,
+    pub db_password: String,
+
+    /// Name of the tenant s3 bucket
+    pub s3_name: String,
+
+    /// Name of the tenant search index
+    pub os_index_name: String,
+
+    /// URL for the SQS event queue
+    pub event_queue_url: Option<String>,
+
+    /// CORS Origins for setting up presigned uploads with S3
+    pub origins: Vec<String>,
+
+    /// ARN for the S3 queue to publish S3 notifications, required
+    /// for presigned uploads
+    pub s3_queue_arn: Option<String>,
+}
+
+pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
+    // Load CLI credentials
+    let credentials_raw = tokio::fs::read("cli-credentials.json").await?;
+    let credentials: Credentials = serde_json::from_slice(&credentials_raw)?;
+
+    // Load the create tenant config
+    let config_raw = tokio::fs::read(tenant_file).await?;
+    let config: CreateTenant =
+        serde_json::from_slice(&config_raw).context("failed to parse config")?;
+
+    // Load AWS configuration
+    let aws_config = aws_config().await;
+
+    // Connect to the docbox database
+    let db_docbox = connect_db(
+        &credentials.host,
+        credentials.port,
+        &credentials.username,
+        &credentials.password,
+        "docbox",
+    )
+    .await
+    .context("failed to connect to docbox database")?;
+
+    // Create the tenant database
+    create_database(&db_docbox, &config.db_name)
+        .await
+        .context("failed to create tenant database")?;
+    tracing::info!("created tenant database");
+
+    // Connect to the tenant database
+    let db_tenant = connect_db(
+        &credentials.host,
+        credentials.port,
+        &credentials.username,
+        &credentials.password,
+        &config.db_name,
+    )
+    .await
+    .context("failed to connect to tenant database")?;
+
+    // Setup the tenant user
+    create_tenant_user(
+        &db_tenant,
+        &config.db_name,
+        &config.db_role_name,
+        &config.db_password,
+    )
+    .await
+    .context("failed to setup tenant user")?;
+    tracing::info!("created tenant user");
+
+    // Connect to secrets manager
+    let secrets_client = SecretsManagerClient::new(&aws_config);
+    let secrets = AppSecretManager::Aws(AwsSecretManager::new(secrets_client));
+
+    // Create and store the new database secret
+    let secret_value = json!({
+        "username": config.db_role_name,
+        "password": config.db_password
+    });
+    let secret_value = serde_json::to_string(&secret_value)?;
+    secrets
+        .create_secret(&config.db_secret_name, &secret_value)
+        .await
+        .map_err(|err| eyre::Error::msg(err.to_string()))?;
+
+    tracing::info!("created database secret");
+
+    // Setup a database pool
+    let db_cache = DatabasePoolCache::new(secrets);
+
+    // Setup the search index
+    let open_search =
+        create_open_search_prod(&aws_config).map_err(|err| eyre::Error::msg(err.to_string()))?;
+    let search_factory = SearchIndexFactory::new(OpenSearchIndexFactory::new(open_search));
+
+    // Setup S3 access
+    let s3_client = S3Client::new(&aws_config);
+    let storage_factory = StorageLayerFactory::new(S3StorageLayerFactory::new(s3_client));
+
+    // Attempt to initialize the tenant
+    let mut init_state = InitTenantState::default();
+    let tenant = match initialize_tenant(
+        &db_cache,
+        &search_factory,
+        &storage_factory,
+        docbox_core::services::tenant::CreateTenant {
+            id: config.id,
+            db_name: config.db_name,
+            db_secret_name: config.db_secret_name,
+            s3_name: config.s3_name,
+            os_index_name: config.os_index_name,
+            event_queue_url: config.event_queue_url,
+            origins: config.origins,
+            s3_queue_arn: config.s3_queue_arn,
+        },
+        config.env,
+        &mut init_state,
+    )
+    .await
+    {
+        Ok(value) => value,
+        Err(err) => {
+            // Attempt to rollback any allocated resources in the background
+            tokio::spawn(rollback_tenant_error(init_state));
+            return Err(eyre::Error::from(err));
+        }
+    };
+
+    tracing::info!(?tenant, "tenant created successfully");
+
+    Ok(())
+}

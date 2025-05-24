@@ -1,0 +1,1942 @@
+openapi: 3.0.3
+info:
+  title: Docbox API
+  version: 1.0.0
+  description: API specification for docbox
+
+paths:
+  /admin/tenant:
+    post:
+      summary: Create a tenant
+      description: >
+        Administrative endpoint creates a new tenant, performs tenant setup such as:
+        - Creating the tenant in the root database
+        - Connect to the tenant database and setup the database tables 
+        - Create the tenant S3 bucket and attach bucket queue events
+        - Create the tenant opensearch index
+      operationId: create_tenant
+      parameters:
+        - $ref: "#/components/parameters/x-tenant-env"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  allOf:
+                    - $ref: "#/components/schemas/TenantId"
+                    - description: Unique ID to give the tenant
+              required:
+                - id
+      responses:
+        "201":
+          description: Tenant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    allOf:
+                      - $ref: "#/components/schemas/TenantId"
+                      - description: ID of the created tenant (Same as the provided ID)
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /admin/tenant/{tenant_id}:
+    get:
+      summary: Get a tenant
+      operationId: get_tenant
+      description: >
+        Administrative endpoint to request the details of a tenant. Provides the
+        details of the tenant itself along with a list of all the document boxes 
+        within the tenant
+      parameters:
+        - $ref: "#/components/parameters/x-tenant-env"
+        - name: tenant_id
+          in: path
+          description: "ID Of the tenant to get"
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Tenant existed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tenant:
+                    allOf:
+                      - $ref: "#/components/schemas/Tenant"
+                      - description: Configuration for the requested tenant
+                  document_boxes:
+                    type: array
+                    description: List of all document boxes available in the tenant
+                    items:
+                      $ref: "#/components/schemas/DocumentBox"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /admin/search:
+    post:
+      summary: Search within a tenant
+      operationId: search_tenant
+      description: >
+        Administrative endpoint to search within a set of document boxes in a provided
+        tenant. This is an administrative endpoint because user authentication cannot 
+        be enforced on this endpoint because its not apart of a specific document box
+        and thus authentication should be performed on the proxy server and performed
+        on behalf of the user based on scopes they're allowed access to
+      parameters:
+        - $ref: "#/components/parameters/x-tenant-env"
+        - $ref: "#/components/parameters/x-tenant-id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  properties:
+                    scopes:
+                      type: array
+                      description: >
+                        Document box scopes to search within, if none are provided empty
+                        search results will be returned
+                      items:
+                        $ref: "#/components/schemas/DocumentBoxScope"
+                  required:
+                    - scopes
+                - $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: Search complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_hits:
+                    type: number
+                    description: Total number of hits from the query
+                  results:
+                    type: array
+                    description: Search result items
+                    items:
+                      $ref: "#/components/schemas/SearchResultItemV2WithScope"
+
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /admin/flush-db-cache:
+    post:
+      summary: Flush database cache
+      description: >
+        Administrative endpoint, flushes the cache for database credentials. This should
+        be used when database credentials are updated. This removes all cached 
+        AWS Secrets Manager keys for database connections and clears the database pool
+        cache so connections can be re-established with updated credentials
+      operationId: admin_flush_database_cache
+      responses:
+        "204":
+          description: Flush successful
+  /admin/purge-expired-presigned-tasks:
+    post:
+      summary: Flush database cache
+      description: >
+        Administrative endpoint, runs the cleanup logic to clear presigned file upload tasks
+        that have expired. This task is automatically run in the background internally this 
+        endpoint just allows manually triggering it
+      operationId: admin_purge_expired_presigned_tasks
+      responses:
+        "204":
+          description: Flush successful
+  /box/:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+
+    post:
+      summary: Create a document box
+      operationId: create_document_box
+      description: >
+        Creates a new document box with the provided details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  allOf:
+                    - $ref: "#/components/schemas/DocumentBoxScope"
+                    - description: Scope for the document box (Must be unique)
+              required:
+                - scope
+      responses:
+        "201":
+          description: Document box created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  document_box:
+                    $ref: "#/components/schemas/DocumentBox"
+                  root:
+                    $ref: "#/components/schemas/FolderWithExtra"
+                  children:
+                    type: array
+                    description: >
+                      Children within this folder 
+                      (Included for response type consistency, always empty at this stage)
+                    items:
+                      $ref: "#/components/schemas/ResolvedFolderWithExtra"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Document box with that scope already exists
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+
+    get:
+      summary: Get a document box
+      operationId: get_document_box
+      description: >
+        Get a document box along with its root folder and content at the top level
+      responses:
+        "200":
+          description: Document box existed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  document_box:
+                    $ref: "#/components/schemas/DocumentBox"
+                  root:
+                    $ref: "#/components/schemas/FolderWithExtra"
+                  children:
+                    $ref: "#/components/schemas/ResolvedFolderWithExtra"
+        "404":
+          description: Document box not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      summary: Delete a document box
+      operationId: delete_document_box
+      description: >
+        Delete the document box and all content within it
+      responses:
+        "204":
+          description: Document box deleted successfully
+        "404":
+          description: Document box not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/stats:
+    get:
+      summary: Get a document box file count stats
+      operationId: get_document_box_stats
+      parameters:
+        - $ref: "#/components/parameters/x-tenant-env"
+        - $ref: "#/components/parameters/x-tenant-id"
+        - $ref: "#/components/parameters/x-user-id"
+        - $ref: "#/components/parameters/x-user-name"
+        - $ref: "#/components/parameters/x-user-image-id"
+        - $ref: "#/components/parameters/scope"
+      responses:
+        "200":
+          description: Document box existed and stats were generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_files:
+                    type: number
+                  total_links:
+                    type: number
+                  total_folders:
+                    type: number
+        "404":
+          description: Document box not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/search:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+    post:
+      summary: Search within a document box
+      operationId: searchDocumentBox
+      description: >
+        Search for items within the document box
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: Search results returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResultResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/folder:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+    post:
+      summary: Create a folder
+      operationId: create_folder
+      description: >
+        Create a folder within a document box
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  description: Name of the folder to create
+                folder_id:
+                  $ref: "#/components/schemas/FolderId"
+                  description: Parent folder ID (Folder to create within)
+              required:
+                - name
+                - folder_id
+      responses:
+        "201":
+          description: Folder created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: The provided parent folder was not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/folder/{folder_id}:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/folder_id"
+    get:
+      summary: Get a folder
+      operationId: get_folder
+      description: >
+        Request a specific folder, responds with the folder itself as well as the 
+        children contained in the folder (Depth of 1, not recursive)
+      responses:
+        "200":
+          description: Folder exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderResponse"
+        "404":
+          description: Folder not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      summary: Update a folder
+      operationId: update_folder
+      description: >
+        Update a folder, allows changing the folder name and parent folder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  nullable: true
+                  minLength: 1
+                folder_id:
+                  $ref: "#/components/schemas/FolderId"
+                  nullable: true
+      responses:
+        "200":
+          description: Folder updated successfully
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Folder not found or target folder could not be found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      summary: Delete a folder
+      operationId: delete_folder
+      description: >
+        Deletes a folder and everything contained within the folder
+      responses:
+        "204":
+          description: Folder deleted successfully
+        "404":
+          description: Folder not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/folder/{folder_id}/edit-history:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/folder_id"
+    get:
+      summary: Get folder edit history
+      operationId: get_folder_edit_history
+      description: >
+        Request the history of edits performed on a folder
+      responses:
+        "200":
+          description: Folder edit history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EditHistory"
+        "404":
+          description: Folder not found
+  /box/{scope}/task/{task_id}:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/task_id"
+    get:
+      summary: Get task state
+      operationId: get_task_state
+      description: >
+        Request the current state of a background task
+      responses:
+        "200":
+          description: Task existed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    $ref: "#/components/schemas/TaskId"
+                  document_box:
+                    $ref: "#/components/schemas/DocumentBoxScope"
+                  status:
+                    type: string
+                    enum: [Pending, Completed, Failed]
+                    description: Current status of the task
+                  output_data:
+                    type: object
+                    description: >
+                      Output data from the task, this is null until the status is
+                      either Completed or Failed
+                    nullable: true
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: Date of the task creation
+                  completed_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: >
+                      Date of the task completion or failure, this is null until the 
+                      status is either Completed or Failed
+        "404":
+          description: Task not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/file:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+    post:
+      summary: Upload a file
+      operationId: upload_file
+      description: >
+        Upload a file, this performs an immediate multipart file upload. 
+
+        When "asynchronous" is specified the processing portion will be 
+        moved to a background task and the task ID for polling will be 
+        returned instead
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload
+                name:
+                  type: string
+                  minLength: 1
+                  nullable: true
+                  description: Name of the file
+                folder_id:
+                  allOf:
+                    - $ref: "#/components/schemas/FolderId"
+                    - nullable: true
+                      description: Folder to put the file into
+                asynchronous:
+                  type: boolean
+                  default: false
+                  description: Whether to process the file asynchronously
+                fixed_id:
+                  allOf:
+                    - $ref: "#/components/schemas/FileId"
+                    - nullable: true
+                      description: >
+                        Optional fixed ID to use for the file should only be used when 
+                        the file must have a specific ID, will error if the ID is in use
+              required:
+                - file
+                - name
+                - folder_id
+      responses:
+        "200":
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    description: >
+                      Response for a non asynchronous upload contains the uploaded file 
+                      result in the response
+                    properties:
+                      file:
+                        $ref: "#/components/schemas/FileWithExtra"
+                      generated:
+                        $ref: "#/components/schemas/GeneratedFile"
+                  - type: object
+                    description: >
+                      Response for an asynchronous upload, response contains the ID of a
+                      task that should be polled to reveal the result
+                    properties:
+                      task_id:
+                        $ref: "#/components/schemas/TaskId"
+                      created_at:
+                        type: string
+                        format: date-time
+
+                type: array
+                items:
+                  $ref: "#/components/schemas/EditHistory"
+  /box/{scope}/file/presigned:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+    post:
+      summary: Create a presigned upload
+      operationId: create_presigned
+      description: >
+        Creates a presigned upload task to allow uploading a file directly to S3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                folder_id:
+                  allOf:
+                    - $ref: "#/components/schemas/FolderId"
+                    - description: ID of the folder to store the file in
+                size:
+                  type: number
+                  description: Size of the file that will be uploaded
+                mime:
+                  type: string
+                  description: Mime/Content type of the file that will be uploaded
+
+      responses:
+        "201":
+          description: Created a presigned upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    allOf:
+                      - $ref: "#/components/schemas/PresignedUploadTaskId"
+                        description: ID of the presigned upload task to poll for completion
+                  method:
+                    type: string
+                    description: HTTP method to perform the presigned upload request with
+                  uri:
+                    type: string
+                    description: URL to send the presigned upload request to
+                  headers:
+                    type: object
+                    description: Any headers that must be included in the request
+                required:
+                  - file
+                  - name
+                  - folder_id
+  /box/{scope}/file/presigned/{task_id}:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/presigned_upload_task_id"
+    get:
+      summary: Get a presigned upload
+      operationId: get_presigned
+      description: >
+        Get the status of a presigned file upload
+      responses:
+        "200":
+          description: Created a presigned upload
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [Pending]
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [Complete]
+                      file:
+                        $ref: "#/components/schemas/FileWithExtra"
+                      generated:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/GeneratedFile"
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [Failed]
+                      error:
+                        type: string
+        "404":
+          description: Presigned upload task not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/file/{file_id}:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/file_id"
+    get:
+      summary: Get a file
+      operationId: get_file
+      description: >
+        Request details about a specific file, can be used to check if a file exists.
+
+        Response also includes a list of generated files which can be used to 
+        determine if the file can be previewed in a specific way
+      responses:
+        "200":
+          description: File existed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file:
+                    $ref: "#/components/schemas/FileWithExtra"
+                  generated:
+                    $ref: "#/components/schemas/GeneratedFile"
+        "404":
+          description: File not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      summary: Update a file
+      operationId: update_file
+      description: >
+        Update a file, this can be used to change the file name and move 
+        the file to another folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The new name for the file if updating the file
+                  minLength: 1
+                  nullable: true
+                folder_id:
+                  allOf:
+                    - $ref: "#/components/schemas/FolderId"
+                    - nullable: true
+                      description: New folder to move to if moving the file
+      responses:
+        "200":
+          description: File updated successfully
+        "404":
+          description: File not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      summary: Delete a file
+      operationId: delete_file
+      description: >
+        Deletes the file and all associated generated files
+      responses:
+        "204":
+          description: File deleted successfully
+        "404":
+          description: File not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/file/{file_id}/raw:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/file_id"
+    get:
+      summary: Get raw file content
+      operationId: get_raw_file
+      description: >
+        Get the raw binary contents of the file itself from S3 
+
+        This endpoint sets the Content-Disposition headers, specify 
+        the download query argument to force downloading the file 
+        in browsers. Defaults to "inline" unless "download" is specified
+        as a query parameter
+      parameters:
+        - in: query
+          name: download
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Whether to force downloading of the file
+      responses:
+        "200":
+          description: Raw file content retrieved successfully
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: File not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/file/{file_id}/edit-history:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/file_id"
+    get:
+      summary: Get file edit history
+      operationId: getFileEditHistory
+      responses:
+        "200":
+          description: File edit history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EditHistory"
+        "404":
+          description: File not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/file/{file_id}/generated/{generated_type}:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/file_id"
+      - $ref: "#/components/parameters/generated_file_type"
+    get:
+      summary: Get generated file details
+      operationId: get_generated_file
+      description: >
+        Gets the details about a specific generated file
+      responses:
+        "200":
+          description: Generated file retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedFile"
+        "404":
+          description: Generated file not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/file/{file_id}/generated/{generated_type}/raw:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/file_id"
+      - $ref: "#/components/parameters/generated_file_type"
+    get:
+      summary: Get raw generated file content
+      operationId: get_raw_generated_file
+      description: >
+        Retrieves and responds with the raw contents of a specific generated file. This
+        should be used when serving the file up from the browser.
+
+        Sets the Content-Disposition header to display the file inline so that this URL
+        can be used in pdf viewers.
+      responses:
+        "200":
+          description: >
+            Raw generated file content retrieved successfully
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Generated file not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/link:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+    post:
+      summary: Create a link
+      operationId: create_link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                value:
+                  type: string
+                  minLength: 1
+                folder_id:
+                  $ref: "#/components/schemas/FolderId"
+              required:
+                - name
+                - value
+                - folder_id
+      responses:
+        "201":
+          description: Link created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkWithExtra"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/link/{link_id}:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/link_id"
+    get:
+      summary: Get a link
+      operationId: get_link
+      responses:
+        "200":
+          description: Link retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkWithExtra"
+        "404":
+          description: Link not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      summary: Update a link
+      operationId: update_link
+      description: >
+        Update the properties of a specific link such as renaming, updating the link value,
+        and moving the link to another folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  nullable: true
+                  description: New name for the link if renaming the link
+                value:
+                  type: string
+                  minLength: 1
+                  nullable: true
+                  description: New value for the link URL if changing the link
+                folder_id:
+                  allOf:
+                    - $ref: "#/components/schemas/FolderId"
+                    - nullable: true
+                      description: The folder to move the link to if moving the link
+      responses:
+        "200":
+          description: Link updated successfully
+        "404":
+          description: Link not found or destination folder not found when moving
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      summary: Delete a link
+      operationId: delete_link
+      description: >
+        Delete a stored link
+      responses:
+        "204":
+          description: Link deleted successfully
+        "404":
+          description: Link not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/link/{link_id}/metadata:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/link_id"
+    get:
+      summary: Get link metadata
+      operationId: get_link_metadata
+      description: >
+        Get website metadata from the website at the link location
+      responses:
+        "200":
+          description: Link metadata retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    nullable: true
+                    description: Website title extracted from the website metadata (Title tag)
+                  og_title:
+                    type: string
+                    nullable: true
+                    description: Website title extracted from the website metadata (OGP)
+                  og_description:
+                    type: string
+                    description: Website description extracted from the website metadata
+                    nullable: true
+                  favicon:
+                    type: boolean
+                    description: Whether the website has a favicon
+                  image:
+                    type: boolean
+                    description: Whether the website has a OGP image
+                required:
+                  - title
+                  - og_title
+                  - og_description
+                  - favicon
+                  - image
+        "404":
+          description: Link not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/link/{link_id}/favicon:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/link_id"
+    get:
+      summary: Get link favicon
+      operationId: get_link_favicon
+      description: >
+        Requests the favicon for the website at the links location
+      responses:
+        "200":
+          description: Link has a favicon
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Link has no favicon or link is not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /box/{scope}/link/{link_id}/image:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/link_id"
+    get:
+      summary: Get link image
+      operationId: get_link_image
+      description: >
+        Requests the OGP metadata "social image" for the website at the links location.
+        Will be loaded from cache or requested from the website using the proxy service
+      responses:
+        "200":
+          description: Link has an associated social image
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Link has no favicon or link is not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /box/{scope}/link/{link_id}/edit-history:
+    parameters:
+      - $ref: "#/components/parameters/x-tenant-env"
+      - $ref: "#/components/parameters/x-tenant-id"
+      - $ref: "#/components/parameters/x-user-id"
+      - $ref: "#/components/parameters/x-user-name"
+      - $ref: "#/components/parameters/x-user-image-id"
+      - $ref: "#/components/parameters/scope"
+      - $ref: "#/components/parameters/link_id"
+    get:
+      summary: Get link edit history
+      operationId: get_link_edit_history
+      description: >
+        Get the edit history for changes to a link
+      responses:
+        "200":
+          description: Link edit history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EditHistory"
+        "404":
+          description: Link not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  parameters:
+    scope:
+      name: scope
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/DocumentBoxScope"
+    folder_id:
+      name: folder_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/FolderId"
+    file_id:
+      name: file_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/FileId"
+    link_id:
+      name: link_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/LinkId"
+    task_id:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/TaskId"
+    presigned_upload_task_id:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/PresignedUploadTaskId"
+    generated_file_type:
+      name: generated_type
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/GeneratedFileType"
+    x-tenant-id:
+      name: x-tenant-id
+      in: header
+      description: ID of the tenant the request is for
+      required: true
+      schema:
+        $ref: "#/components/schemas/TenantId"
+    x-tenant-env:
+      name: x-tenant-env
+      in: header
+      description: Environment to operate withins
+      required: true
+      schema:
+        type: string
+    x-user-id:
+      name: x-user-id
+      in: header
+      description: ID of the user performing the operation (If performed by a user)
+      required: false
+      schema:
+        $ref: "#/components/schemas/UserId"
+    x-user-name:
+      name: x-user-id
+      in: header
+      description: Name of the user performing the operation (If performed by a user)
+      required: false
+      schema:
+        type: string
+    x-user-image-id:
+      name: x-user-image-id
+      in: header
+      description: Image ID of the user performing the operation (If performed by a user)
+      required: false
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Bad request, response body contains the error message
+      content: text/plain
+
+    NotFound:
+      description: Resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    Tenant:
+      type: object
+      description: Configuration details about a tenant
+      properties:
+        id:
+          $ref: "#/components/schemas/TenantId"
+        db_name:
+          type: string
+          description: Name of the database the tenant uses
+        db_secret_name:
+          type: string
+          description: Name of the AWS secret containing the database credentials
+        s3_name:
+          type: string
+          description: Name of the S3 bucket storing the tenant data
+        os_index_name:
+          type: string
+          description: Name of te opensearch index containing the tenant data
+        env:
+          type: string
+          description: >
+            Environment the tenant is within. Keyed with ID to allow the same ID to
+            exist within multiple different environments. Common values:
+            - "Development"
+            - "Production"
+      required:
+        - id
+        - db_name
+        - db_secret_name
+        - s3_name
+        - os_index_name
+        - env
+
+    DocumentBox:
+      type: object
+      description: Basic details about a document box
+      properties:
+        scope:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - scope
+        - created_at
+
+    SearchRequest:
+      type: object
+      description: >
+        Request for searching
+      properties:
+        version:
+          type: string
+          description: Version for the response format
+          enum: [V1, V2]
+          default: V1
+        query:
+          type: string
+          description: Search query
+          minLength: 1
+        neural:
+          type: boolean
+          description: >
+            Enable searching with AI, not currently enabled on production
+        mime:
+          type: string
+          description: >
+            Filter to searching files with a specific mime type
+        include_name:
+          type: boolean
+          description: >
+            Whether to include the name of the item when searching with the query
+        include_content:
+          type: boolean
+          description: >
+            Whether to include the contents when searching with the query
+        max_fragment_size:
+          type: number
+          maximum: 150
+          default: 150
+          description: >
+            Maximum size of text fragments to highlight, only works when "include_content"
+            is specified
+        max_fragments:
+          type: number
+          maximum: 100
+          default: 3
+          description: >
+            Maximum number of text fragments to extract per page of the file
+        created_at:
+          allOf:
+            - $ref: "#/components/schemas/SearchRange"
+            - description: Filter to a specific creation date range
+        modified:
+          allOf:
+            - $ref: "#/components/schemas/SearchRange"
+            - description: Filter to a specific modified date range
+        created_by:
+          allOf:
+            - $ref: "#/components/schemas/UserId"
+            - description: User ID for a user to filter creation by
+        folder_id:
+          allOf:
+            - $ref: "#/components/schemas/FolderId"
+            - description: >
+                ID of a folder to filter to the contents of searches within the folder itself
+                as well as within all nested folders
+        item_id:
+          allOf:
+            - $ref: "#/components/schemas/ItemId"
+            - description: >
+                Filter to searching over a specific item only
+        size:
+          type: number
+          description: Number of items to include in the response
+          default: 50
+        offset:
+          type: number
+          description: Offset to start querying from
+          default: 0
+        max_pages:
+          type: number
+          description: Maximum pages to include in the response for file content
+          maximum: 100
+          default: 3
+        pages_offset:
+          type: number
+          description: Offset for results within the files pages query
+          default: 0
+
+    SearchRange:
+      type: object
+      description: >
+        Range of dates for a search query
+      properties:
+        start:
+          type: string
+          format: date-time
+          description: Start portion of a date range (Omit to include any dates before the end date)
+          nullable: true
+        end:
+          type: string
+          format: date-time
+          description: End portion of a date range (Omit to include any dates after the start date)
+          nullable: true
+
+    UserId:
+      type: string
+      description: ID of a user
+
+    TenantId:
+      type: string
+      format: uuid
+      description: ID of a tenant
+
+    ItemId:
+      oneOf:
+        - $ref: "#/components/schemas/FileId"
+        - $ref: "#/components/schemas/FolderId"
+        - $ref: "#/components/schemas/LinkId"
+
+    TaskId:
+      type: string
+      format: uuid
+      description: ID of a asynchronous background task that can be polled
+
+    PresignedUploadTaskId:
+      type: string
+      format: uuid
+      description: ID of a presigned upload task that can be polled
+
+    FileId:
+      type: string
+      format: uuid
+      description: ID of a file
+
+    FolderId:
+      type: string
+      format: uuid
+      description: ID of a folder
+
+    LinkId:
+      type: string
+      format: uuid
+      description: ID of a link
+
+    DocumentBoxScope:
+      type: string
+      description: Unique scope for a document box
+      minLength: 1
+      example: "user:a71502fe-c025-4a06-ae5d-3131535a8237:uploaded"
+
+    SearchResultResponse:
+      description: >
+        Result from a search request, type of response depends on the version
+        number provided in the SearchRequest
+      oneOf:
+        - type: array
+          description: Version 1 response type
+          items:
+            $ref: "#/components/schemas/SearchResultItemV1"
+        - type: object
+          description: Version 2 response type
+          properties:
+            total_hits:
+              type: number
+            results:
+              type: array
+              items:
+                $ref: "#/components/schemas/SearchResultItemV2WithScope"
+
+    SearchResultItemV1:
+      description: >
+        Version 1 of the search results, legacy format before specific content
+        pages were extracted and stored
+      allOf:
+        - type: object
+          properties:
+            score:
+              type: number
+              format: float
+              description: Score ranking for the search result
+            path:
+              type: array
+              description: Folder path to the item
+              items:
+                $ref: "#/components/schemas/FolderPathSegment"
+            content_matches:
+              type: array
+              description: Matches within the content (Files and links)
+              items:
+                type: string
+                description: Matched portion fo the context text with highlighting
+          required:
+            - score
+            - path
+        - $ref: "#/components/schemas/SearchResultData"
+
+    SearchResultItemV2WithScope:
+      description: >
+        Search result with the document box scope its within for global search results
+        where the specific box must be identified
+      allOf:
+        - $ref: "#/components/schemas/SearchResultItemV2"
+        - type: object
+          properties:
+            scope:
+              $ref: "#/components/schemas/DocumentBoxScope"
+
+    SearchResultItemV2:
+      description: >
+        Item from a search result (File/Link/Folder) with additional search related information.
+
+        Version 2 for the improved page results and identifying page numbers and additional search
+        location information intended for global app search across many document boxes
+      allOf:
+        - type: object
+          properties:
+            score:
+              type: number
+              format: float
+              description: Score ranking for the search result
+            path:
+              type: array
+              description: Folder path to the item
+              items:
+                $ref: "#/components/schemas/FolderPathSegment"
+            page_matches:
+              type: array
+              description: Matches within pages of the item (For files)
+              items:
+                $ref: "#/components/schemas/PageResult"
+            total_hits:
+              type: number
+              description: Number of matches in the search results query
+            name_match:
+              type: boolean
+              description: Whether the name matches the search query
+            content_match:
+              type: boolean
+              description: Whether the content matches the search query
+          required:
+            - score
+            - path
+            - page_matches
+            - total_hits
+            - name_match
+            - content_match
+        - $ref: "#/components/schemas/SearchResultData"
+
+    PageResult:
+      type: object
+      properties:
+        page:
+          type: number
+        matches:
+          type: array
+          items:
+            type: string
+
+    SearchResultData:
+      type: object
+      description: >
+        Search result item (File/Link/Folder), discriminated union based on the "type" property
+      discriminator:
+        propertyName: type
+        mapping:
+          File: "#/components/schemas/FileWithExtra"
+          Folder: "#/components/schemas/FolderWithExtra"
+          Link: "#/components/schemas/LinkWithExtra"
+      oneOf:
+        - allOf:
+            - $ref: "#/components/schemas/FileWithExtra"
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum: [File]
+        - allOf:
+            - $ref: "#/components/schemas/FolderWithExtra"
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum: [Folder]
+        - allOf:
+            - $ref: "#/components/schemas/LinkWithExtra"
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum: [Link]
+
+    FolderResponse:
+      type: object
+      properties:
+        folder:
+          $ref: "#/components/schemas/FolderWithExtra"
+        children:
+          allOf:
+            - $ref: "#/components/schemas/ResolvedFolderWithExtra"
+            - description: >
+                All the files, links, folders within the folder along with the path
+                to the folder itself
+
+    FolderWithExtra:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/FolderId"
+        name:
+          type: string
+          description: User provided name for the file
+        folder_id:
+          allOf:
+            - $ref: "#/components/schemas/FolderId"
+            - nullable: true
+              description: >
+                ID of the parent folder, this is null when the folder is the root 
+                folder of a document box
+        created_at:
+          type: string
+          format: date-time
+          description: When the folder was created
+        created_by:
+          allOf:
+            - $ref: "#/components/schemas/User"
+            - nullable: true
+              description: User who created the folder (If created by a user)
+        last_modified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: The last datetime of modification if the folder has been modified
+        last_modified_by:
+          allOf:
+            - $ref: "#/components/schemas/User"
+            - nullable: true
+              description: The last user who performed the last modification (If available)
+      required:
+        - id
+        - name
+        - document_box
+        - created_at
+
+    FileWithExtra:
+      type: object
+      description: >
+        File with additional information about the most recent edit and user information
+      properties:
+        id:
+          $ref: "#/components/schemas/FileId"
+        name:
+          type: string
+          description: Unique ID of the file
+        mime:
+          type: string
+          description: MIME / content type of the file
+        folder_id:
+          allOf:
+            - $ref: "#/components/schemas/FolderId"
+            - description: ID of the folder the file is within
+        hash:
+          type: string
+          description: SHA256 hash of the file contents
+        size:
+          type: number
+          description: File size in bytes
+        encrypted:
+          type: boolean
+          description: Whether the file has been detected as encrypted during processing
+        created_at:
+          type: string
+          format: date-time
+          description: When the file was created
+        created_by:
+          allOf:
+            - $ref: "#/components/schemas/User"
+            - nullable: true
+              description: User who created the file (If created by a user)
+        last_modified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: The last datetime of modification if the file has been modified
+        last_modified_by:
+          allOf:
+            - $ref: "#/components/schemas/User"
+            - nullable: true
+              description: The last user who performed the last modification (If available)
+      required:
+        - id
+        - name
+        - mime
+        - folder_id
+        - hash
+        - encrypted
+        - created_at
+
+    LinkWithExtra:
+      type: object
+      description: >
+        Link with additional information about the most recent edit and user information
+      properties:
+        id:
+          $ref: "#/components/schemas/LinkId"
+        name:
+          type: string
+          description: User provided name of the link
+        value:
+          type: string
+          description: The value of the link
+        folder_id:
+          allOf:
+            - $ref: "#/components/schemas/FolderId"
+            - description: ID of the folder this link is within
+        created_at:
+          type: string
+          format: date-time
+          description: When the link was created
+        created_by:
+          allOf:
+            - $ref: "#/components/schemas/User"
+            - nullable: true
+              description: User who created the link (If created by a user)
+        last_modified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: The last datetime of modification if the link has been modified
+        last_modified_by:
+          allOf:
+            - $ref: "#/components/schemas/User"
+            - nullable: true
+              description: The last user who performed the last modification (If available)
+      required:
+        - id
+        - name
+        - value
+        - folder_id
+        - created_at
+
+    GeneratedFileType:
+      type: string
+      description: Type of the generated file (PDF, thumbnail etc)
+      enum: [Pdf, CoverPage, SmallThumbnail, LargeThumbnail, TextContent]
+
+    GeneratedFile:
+      type: object
+      description: >
+        File generated as the outcome of processing another image file, could be a converted
+        file or a thumbnail image depending on the type
+      properties:
+        id:
+          type: string
+        file_id:
+          allOf:
+            - $ref: "#/components/schemas/FileId"
+            - description: ID of the file that this was generated from
+        mime:
+          type: string
+          description: Mime type of the generated file
+        type:
+          $ref: "#/components/schemas/GeneratedFileType"
+        hash:
+          type: string
+          description: SHA256 hash of the generated file contents
+        created_at:
+          type: string
+          format: date-time
+          description: When the file was created
+      required:
+        - id
+        - file_id
+        - mime
+        - type
+        - hash
+        - created_at
+
+    User:
+      type: object
+      description: >
+        Snapshot of the external user who performed the action,
+        the details for the user are updated every time they
+        perform an action
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/UserId"
+            - type: string
+              description: External ID of the user
+        name:
+          type: string
+          nullable: true
+          description: External name of the user if known
+        image_id:
+          type: string
+          nullable: true
+          description: External image ID of the user if known
+      required:
+        - id
+
+    EditHistory:
+      type: object
+      description: Edit history for a file, folder, or link
+      properties:
+        id:
+          type: string
+          description: Unique ID for the edit history item
+          format: uuid
+        file_id:
+          allOf:
+            - $ref: "#/components/schemas/FileId"
+            - nullable: true
+              description: Non-null if the edit history belongs to a file
+        link_id:
+          allOf:
+            - $ref: "#/components/schemas/LinkId"
+            - nullable: true
+              description: Non-null if the edit history belongs to a link
+        folder_id:
+          allOf:
+            - $ref: "#/components/schemas/FolderId"
+            - nullable: true
+              description: Non-null if the edit history belongs to a folder
+        user:
+          allOf:
+            - $ref: "#/components/schemas/User"
+            - nullable: true
+              description: Current known details of the user who performed the edit
+        type:
+          $ref: "#/components/schemas/EditHistoryType"
+        metadata:
+          $ref: "#/components/schemas/EditHistoryMetadata"
+        created_at:
+          type: string
+          format: date-time
+
+    EditHistoryType:
+      type: string
+      enum:
+        - MoveToFolder
+        - Rename
+        - LinkValue
+      description: >
+        Edit types:
+          * `MoveToFolder` - Item was moved to a different folder
+          * `Rename` - Item was renamed
+          * `LinkValue` - Item is a link and its value was changed
+
+    EditHistoryMetadata:
+      oneOf:
+        - $ref: "#/components/schemas/EditHistoryMetadataMoveToFolder"
+        - $ref: "#/components/schemas/EditHistoryMetadataRename"
+        - $ref: "#/components/schemas/EditHistoryMetadataLinkValue"
+      discriminator:
+        propertyName: type
+        mapping:
+          MoveToFolder: "#/components/schemas/EditHistoryMetadataMoveToFolder"
+          Rename: "#/components/schemas/EditHistoryMetadataRename"
+          LinkValue: "#/components/schemas/EditHistoryMetadataLinkValue"
+
+    EditHistoryMetadataMoveToFolder:
+      type: object
+      description: Metadata for an edit history where the item was moved to another folder
+      properties:
+        type:
+          type: string
+          enum: [MoveToFolder]
+        original_id:
+          type: string
+          nullable: true
+          description: Folder moved from
+        target_id:
+          type: string
+          description: Folder moved to
+      required:
+        - type
+        - target_id
+
+    EditHistoryMetadataRename:
+      type: object
+      description: Metadata for an edit history where the item was renamed
+      properties:
+        type:
+          type: string
+          enum: [Rename]
+        original_name:
+          type: string
+          description: Previous name
+        new_name:
+          type: string
+          description: New name
+      required:
+        - type
+        - original_name
+        - new_name
+
+    EditHistoryMetadataLinkValue:
+      type: object
+      description: Metadata for an edit history where a link value changed
+      properties:
+        type:
+          type: string
+          enum: [LinkValue]
+        previous_value:
+          type: string
+          description: Previous URL
+        new_value:
+          type: string
+          description: New URL
+      required:
+        - type
+        - previous_value
+        - new_value
+
+    ResolvedFolderWithExtra:
+      type: object
+      description: Contents of a folder and the resolved path to get to the folder
+      properties:
+        path:
+          type: array
+          description: Path to the requested folder
+          items:
+            $ref: "#/components/schemas/FolderPathSegment"
+        folders:
+          type: array
+          description: Folders within the folder
+          items:
+            $ref: "#/components/schemas/FolderWithExtra"
+        files:
+          type: array
+          description: Files within the folder
+          items:
+            $ref: "#/components/schemas/FileWithExtra"
+        links:
+          type: array
+          description: Links within the folder
+          items:
+            $ref: "#/components/schemas/LinkWithExtra"
+
+    FolderPathSegment:
+      type: object
+      description: Segment of the path to a folder
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/FolderId"
+            - description: ID of the folder from the segment part
+        name:
+          type: string
+          description: Name of the folder at the segment
+
+    ErrorResponse:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Descriptive message for the cause of the error
+        backtrace:
+          type: string
+          description: >
+            Server backtrace of the error, only present in local debugging disabled
+            for production releases

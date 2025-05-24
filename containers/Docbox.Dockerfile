@@ -1,0 +1,61 @@
+#  Builder part
+FROM rust:1.87 AS builder
+
+# Add rust target and install deps
+RUN rustup target add x86_64-unknown-linux-musl
+RUN apt update && apt install -y musl-tools musl-dev
+RUN update-ca-certificates
+
+WORKDIR /app
+
+# Dependency precachng
+COPY Cargo.toml .
+COPY Cargo.lock .
+
+# Copy crate cargo manifests
+COPY packages/docbox/Cargo.toml packages/docbox/Cargo.toml
+COPY packages/docbox-cli/Cargo.toml packages/docbox-cli/Cargo.toml
+COPY packages/docbox-core/Cargo.toml packages/docbox-core/Cargo.toml
+COPY packages/docbox-database/Cargo.toml packages/docbox-database/Cargo.toml
+COPY packages/docbox-web-scraper/Cargo.toml packages/docbox-web-scraper/Cargo.toml
+
+# Create empty entrypoints
+RUN mkdir packages/docbox/src && echo "fn main() {}" >packages/docbox/src/main.rs
+RUN mkdir packages/docbox-cli/src && echo "fn main() {}" >packages/docbox-cli/src/lib.rs
+RUN mkdir packages/docbox-core/src && echo "//placeholder" >packages/docbox-core/src/lib.rs
+RUN mkdir packages/docbox-database/src && echo "//placeholder" >packages/docbox-database/src/lib.rs
+RUN mkdir packages/docbox-web-scraper/src && echo "//placeholder" >packages/docbox-web-scraper/src/lib.rs
+
+# Run a build to download dependencies
+RUN cargo build -p docbox --target x86_64-unknown-linux-musl --release
+
+COPY packages packages
+
+RUN touch packages/docbox/src/main.rs
+RUN touch packages/docbox-cli/src/main.rs
+RUN touch packages/docbox-core/src/lib.rs
+RUN touch packages/docbox-database/src/lib.rs
+RUN touch packages/docbox-web-scraper/src/lib.rs
+
+RUN cargo build -p docbox --target x86_64-unknown-linux-musl --release
+
+# ----------------------------------------
+# Runner part
+# ----------------------------------------
+# Runner part
+FROM debian:bullseye-slim AS runner
+
+# Set environment variables to avoid interaction during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+
+# Install necessary tools
+RUN apt-get update && apt-get install -y poppler-utils && apt-get clean
+
+# Copy the built binary
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/docbox ./
+
+EXPOSE 8080
+
+CMD ["/app/docbox"]
