@@ -26,6 +26,7 @@ use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
+mod docs;
 mod error;
 mod middleware;
 mod models;

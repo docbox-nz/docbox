@@ -1,25 +1,48 @@
-//! File related endpoints
+//! # Tasks
+//!
+//! Endpoints related to background tasks
 
-use crate::{error::HttpResult, middleware::tenant::TenantDb, models::file::HttpFileError};
-use anyhow::Context;
+use crate::{
+    error::{HttpErrorResponse, HttpResult},
+    middleware::tenant::TenantDb,
+    models::task::HttpTaskError,
+};
 use axum::{extract::Path, Json};
 use docbox_database::models::{
     document_box::DocumentBoxScope,
     tasks::{Task, TaskId},
 };
 
-/// GET /box/:scope/task/:task_id
-///
-/// Gets a specific file details, metadata and associated
-/// generated files
+pub const TASK_TAG: &str = "task";
+
+/// Get the details about a specific task, used to poll
+/// the current progress of a task
+#[utoipa::path(
+        get,
+        path = "/box/{scope}/task/{task_id}",
+        responses(
+            (status = 200, description = "Task found successfully", body = Task),
+            (status = 404, description = "Task not found", body = HttpErrorResponse),
+            (status = 500, description = "Internal server error", body = HttpErrorResponse)
+        ),
+        params(
+            ("scope" = String, Path, description = "Scope the task is within"),
+            ("task_id" = String, Path, description = "ID of the task to query"),
+        )
+    )]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, TaskId)>,
 ) -> HttpResult<Task> {
-    let task = Task::find(&db, task_id, scope)
+    let task = Task::find(&db, task_id, &scope)
         .await
-        .context("failed to query task")?
-        .ok_or(HttpFileError::UnknownTask)?;
+        // Failed to query the database
+        .map_err(|cause| {
+            tracing::error!(?scope, ?task_id, ?cause, "failed to query task");
+            HttpTaskError::Database
+        })?
+        // Task not found
+        .ok_or(HttpTaskError::UnknownTask)?;
 
     Ok(Json(task))
 }

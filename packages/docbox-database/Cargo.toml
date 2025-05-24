@@ -53,3 +53,5 @@ strum = { version = "0.26", features = ["derive"] }
 
 # Async trait support
 async-trait = { workspace = true }
+
+utoipa = { workspace = true }

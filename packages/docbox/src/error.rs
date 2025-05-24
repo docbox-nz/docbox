@@ -11,6 +11,7 @@ use std::{
 };
 use thiserror::Error;
 use tracing::error;
+use utoipa::ToSchema;
 
 /// Type alias for dynamic error handling and JSON responses
 pub type HttpResult<T> = Result<Json<T>, DynHttpError>;
@@ -46,9 +47,8 @@ impl IntoResponse for DynHttpError {
         self.inner.log();
 
         // Create the response body
-        let body = Json(RawHttpError {
+        let body = Json(HttpErrorResponse {
             reason: self.inner.reason(),
-            backtrace: self.inner.backtrace(),
         });
         let status = self.inner.status();
 
@@ -80,10 +80,6 @@ pub trait HttpError: Error + Send + Sync + 'static {
     fn type_name(&self) -> &str {
         std::any::type_name::<Self>()
     }
-
-    fn backtrace(&self) -> Option<String> {
-        None
-    }
 }
 
 /// Wrapper around [anyhow::Error] allowing it to be used as a [HttpError]
@@ -100,12 +96,6 @@ impl HttpError for AnyhowHttpError {
     fn reason(&self) -> String {
         // Anyhow errors use a generic message
         format!("{}", self.0)
-    }
-
-    #[cfg(debug_assertions)]
-    fn backtrace(&self) -> Option<String> {
-        let backtrace_str = format!("{:?}", anyhow::Error::backtrace(&self.0));
-        Some(backtrace_str)
     }
 }
 
@@ -157,9 +147,8 @@ where
 }
 
 /// HTTP error JSON format for serializing responses
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct RawHttpError {
+pub struct HttpErrorResponse {
     pub reason: String,
-    pub backtrace: Option<String>,
 }

@@ -4,6 +4,7 @@ use crate::{DbExecutor, DbPool, DbResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{error::BoxDynError, prelude::FromRow, Database, Decode};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::document_box::DocumentBoxScope;
@@ -11,10 +12,10 @@ use super::document_box::DocumentBoxScope;
 pub type TaskId = Uuid;
 
 /// Represents a stored asynchronous task progress
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, FromRow, Serialize, ToSchema)]
 pub struct Task {
     /// Unique ID of the task
-    pub id: TaskId,
+    pub id: Uuid,
 
     /// ID of the document box the task belongs to
     pub document_box: DocumentBoxScope,
@@ -32,7 +33,9 @@ pub struct Task {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize)]
+#[derive(
+    Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize, ToSchema,
+)]
 pub enum TaskStatus {
     Pending,
     Completed,
@@ -124,11 +127,11 @@ impl Task {
     pub async fn find(
         db: impl DbExecutor<'_>,
         id: TaskId,
-        document_box: DocumentBoxScope,
+        document_box: &DocumentBoxScope,
     ) -> DbResult<Option<Task>> {
         sqlx::query_as(r#"SELECT * FROM "docbox_tasks" WHERE "id" = $1 AND "document_box" = $2"#)
             .bind(id)
-            .bind(document_box.as_str())
+            .bind(document_box)
             .fetch_optional(db)
             .await
     }

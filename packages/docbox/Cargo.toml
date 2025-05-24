@@ -58,3 +58,4 @@ bytes = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 mime = { workspace = true }
+utoipa = { workspace = true, features = ["url", "uuid", "chrono", "axum_extras"] }
