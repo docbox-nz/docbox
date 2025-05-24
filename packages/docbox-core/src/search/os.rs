@@ -511,7 +511,12 @@ pub fn create_opensearch_query(
         }));
     }
 
-    if let Some(ref query) = req.query {
+    let query = req
+        .query
+        // Filter out empty queries
+        .filter(|value| !value.is_empty());
+
+    if let Some(ref query) = query {
         if req.include_name {
             // Match name of documents
             should.push(json!({

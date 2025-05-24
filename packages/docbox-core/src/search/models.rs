@@ -132,8 +132,7 @@ pub struct AdminSearchRequest {
 #[serde(default)]
 pub struct SearchRequest {
     /// The search query
-    #[garde(length(min = 1))]
-    #[schema(min_length = 1)]
+    #[garde(skip)]
     pub query: Option<String>,
 
     /// Enable searching with AI
