@@ -24,7 +24,7 @@ use std::{
 };
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 
 mod docs;
 mod error;
@@ -50,6 +50,8 @@ async fn main() -> anyhow::Result<()> {
     let subscriber = tracing_subscriber::fmt()
         // Use the logging options from env variables
         .with_env_filter(EnvFilter::from_default_env())
+        // Include starting and stopping of spans
+        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         // Display source code file paths
         .with_file(true)
         // Display source code line numbers
