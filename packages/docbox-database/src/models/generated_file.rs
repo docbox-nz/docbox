@@ -3,6 +3,7 @@ use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{document_box::DocumentBoxScope, file::FileId};
@@ -10,7 +11,9 @@ use crate::{DbExecutor, DbResult};
 
 pub type GeneratedFileId = Uuid;
 
-#[derive(Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize)]
+#[derive(
+    Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize, ToSchema,
+)]
 pub enum GeneratedFileType {
     /// Conversion to PDF file
     Pdf,
@@ -37,11 +40,13 @@ impl TryFrom<String> for GeneratedFileType {
 }
 
 /// File generated as an artifact of an uploaded file
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, FromRow, Serialize, ToSchema)]
 pub struct GeneratedFile {
     /// Unique identifier for the file
+    #[schema(value_type = Uuid)]
     pub id: GeneratedFileId,
     /// File this generated file belongs  to
+    #[schema(value_type = Uuid)]
     pub file_id: FileId,
     /// Mime type of the generated file content
     pub mime: String,

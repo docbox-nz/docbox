@@ -1,12 +1,10 @@
 //! File related endpoints
 
-use std::{ops::DerefMut, str::FromStr};
-
 use crate::{
-    error::{DynHttpError, HttpResult, HttpStatusResult},
+    error::{DynHttpError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
-        action_user::ActionUser,
-        tenant::{TenantDb, TenantEvents, TenantSearch, TenantStorage},
+        action_user::{ActionUser, UserParams},
+        tenant::{TenantDb, TenantEvents, TenantParams, TenantSearch, TenantStorage},
     },
     models::{
         file::{
@@ -17,7 +15,7 @@ use crate::{
         folder::HttpFolderError,
     },
 };
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use axum::{
     body::Body,
     extract::{Path, Query},
@@ -47,10 +45,45 @@ use docbox_database::models::{
     user::User,
 };
 use mime::Mime;
+use std::{ops::DerefMut, str::FromStr};
 
-/// POST /box/:scope/file
+pub const FILE_TAG: &str = "File";
+
+/// Upload file
 ///
-/// Uploads a new document to the provided document box folder
+/// Uploads a new document to the provided document box folder.
+///
+/// If the asynchronous option is specified a task will be returned
+/// otherwise the completed file upload will be returned directly
+///
+/// In a browser environment its recommend to use the async option to
+/// prevent running into browser timeouts if the processing takes too long.
+///
+/// In a reverse proxy + browser situation prefer using the presigned file upload
+/// endpoint otherwise browsers may timeout while your server transfers the file
+///
+/// Synchronous uploads return [UploadedFile]
+/// Asynchronous uploads return [UploadTaskResponse]
+#[utoipa::path(
+    post,
+    operation_id = "file_upload",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file",
+    responses(
+        (status = 200, description = "Upload or task created successfully", body = FileUploadResponse),
+        (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
+        (status = 404, description = "Target folder could not be found", body = HttpErrorResponse),
+        (status = 409, description = "Fixed ID is already in use", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    request_body(content = UploadFileRequest, description = "Multipart upload", content_type = "multipart/form-data"),
+    params(
+        ("scope" = String, Path, description = "Scope to create the file within"),
+        TenantParams,
+        UserParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope))]
 #[allow(clippy::too_many_arguments)]
 pub async fn upload(
     action_user: ActionUser,
@@ -58,7 +91,9 @@ pub async fn upload(
     TenantSearch(opensearch): TenantSearch,
     TenantStorage(s3): TenantStorage,
     TenantEvents(events): TenantEvents,
+    //
     Extension(processing): Extension<ProcessingLayer>,
+    //
     Path(scope): Path<DocumentBoxScope>,
     Garde(TypedMultipart(req)): Garde<TypedMultipart<UploadFileRequest>>,
 ) -> HttpResult<FileUploadResponse> {
@@ -73,7 +108,7 @@ pub async fn upload(
             .context("failed to check duplicate files")?
             .is_some()
         {
-            return Err(anyhow!("fixed file id already in use").into());
+            return Err(DynHttpError::from(HttpFileError::FileIdInUse));
         }
     }
 
@@ -180,11 +215,29 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
     }
 }
 
-/// POST /box/:scope/file/presigned
+/// Create presigned file upload
 ///
 /// Creates a new "presigned" upload, where the file is uploaded
 /// directly to S3 [complete_presigned] is called by the client
 /// after it has completed its upload
+#[utoipa::path(
+    post,
+    operation_id = "file_create_presigned",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/presigned",
+    responses(
+        (status = 201, description = "Created presigned upload successfully", body = PresignedUploadResponse),
+        (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
+        (status = 404, description = "Target folder could not be found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the file within"),
+        TenantParams,
+        UserParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, req))]
 pub async fn create_presigned(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -227,11 +280,28 @@ pub async fn create_presigned(
     ))
 }
 
-/// GET /box/:scope/file/presigned/:task_id
+/// Get presigned file upload
 ///
 /// Gets the current state of a presigned upload either pending or
 /// complete, when complete the uploaded file and generated files
 /// are returned
+#[utoipa::path(
+    get,
+    operation_id = "file_get_presigned",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/presigned/{task_id}",
+    responses(
+        (status = 200, description = "Obtained presigned upload successfully", body = PresignedStatusResponse),
+        (status = 404, description = "Presigned upload not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("task_id" = Uuid, Path, description = "ID of the task to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, task_id))]
 pub async fn get_presigned(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, PresignedUploadTaskId)>,
@@ -261,10 +331,27 @@ pub async fn get_presigned(
     Ok(Json(PresignedStatusResponse::Complete { file, generated }))
 }
 
-/// GET /box/:scope/file/:file_id
+/// Get file by ID
 ///
 /// Gets a specific file details, metadata and associated
 /// generated files
+#[utoipa::path(
+    get,
+    operation_id = "file_get",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}",
+    responses(
+        (status = 200, description = "Obtained file successfully", body = FileResponse),
+        (status = 404, description = "File not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, file_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -281,9 +368,27 @@ pub async fn get(
     Ok(Json(FileResponse { file, generated }))
 }
 
-/// GET /box/:scope/file/:file_id/children
+/// Get file children
 ///
-/// Get all children for the provided file
+/// Get all children for the provided file, this is things like
+/// attachments for processed emails
+#[utoipa::path(
+    get,
+    operation_id = "file_get_children",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/children",
+    responses(
+        (status = 200, description = "Obtained children successfully", body = [FileWithExtra]),
+        (status = 404, description = "File not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, file_id))]
 pub async fn get_children(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -301,9 +406,26 @@ pub async fn get_children(
     Ok(Json(files))
 }
 
-/// GET /box/:scope/file/:file_id/edit-history
+/// Get file edit history
 ///
 /// Gets the edit history for the provided file
+#[utoipa::path(
+    get,
+    operation_id = "file_edit_history",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/edit-history",
+    responses(
+        (status = 200, description = "Obtained edit-history successfully", body = [EditHistory]),
+        (status = 404, description = "File not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, file_id))]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -320,9 +442,27 @@ pub async fn get_edit_history(
     Ok(Json(edit_history))
 }
 
-/// PUT /box/:scope/file/:file_id
+/// Update file
 ///
 /// Updates a file, can be a name change, a folder move, or both
+#[utoipa::path(
+    put,
+    operation_id = "file_update",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}",
+    responses(
+        (status = 200, description = "Obtained edit-history successfully", body = [EditHistory]),
+        (status = 404, description = "File not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        TenantParams,
+        UserParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, file_id, req))]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -380,9 +520,27 @@ pub async fn update(
     Ok(StatusCode::OK)
 }
 
-/// GET /box/:scope/file/:file_id/raw
+/// Get file raw
 ///
-/// Gets a specific file contents unprocessed
+/// Requests the raw contents of a file, this is used for downloading
+/// the file or viewing it in the browser or simply requesting its content
+#[utoipa::path(
+    get,
+    operation_id = "file_get_raw",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/raw",
+    responses(
+        (status = 200, description = "Obtained raw file successfully"),
+        (status = 404, description = "File not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, file_id, query))]
 pub async fn get_raw(
     TenantDb(db): TenantDb,
     TenantStorage(s3): TenantStorage,
@@ -419,9 +577,26 @@ pub async fn get_raw(
         .context("failed to create response")?)
 }
 
-/// DELETE /box/:scope/file/:file_id
+/// Delete file by ID
 ///
 /// Deletes the provided file
+#[utoipa::path(
+    delete,
+    operation_id = "file_delete",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}",
+    responses(
+        (status = 204, description = "Deleted file successfully"),
+        (status = 404, description = "File not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, file_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
@@ -441,10 +616,29 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// GET /box/:scope/file/:file_id/generated/:type
+/// Get generated file
 ///
-/// Request a generated file type for a file, gives back
-/// metadata
+/// Requests metadata about a specific generated file type for
+/// a file, will return the details about the generated file
+/// if it exists
+#[utoipa::path(
+    get,
+    operation_id = "file_get_generated",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/generated/{type}",
+    responses(
+        (status = 200, description = "Obtained generated file successfully", body = GeneratedFile),
+        (status = 404, description = "Generated file not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, file_id, generated_type))]
 pub async fn get_generated(
     TenantDb(db): TenantDb,
     Path((scope, file_id, generated_type)): Path<(DocumentBoxScope, FileId, GeneratedFileType)>,
@@ -457,9 +651,28 @@ pub async fn get_generated(
     Ok(Json(file))
 }
 
-/// GET /box/:scope/file/:file_id/generated/:type/raw
+/// Get generated file raw
 ///
-/// Request the contents of a generated file type for a file
+/// Request the contents of a specific generated file type
+/// for a file, will return the file contents
+#[utoipa::path(
+    get,
+    operation_id = "file_get_generated_raw",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/generated/{type}/raw",
+    responses(
+        (status = 200, description = "Obtained raw file successfully"),
+        (status = 404, description = "Generated file not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope, file_id, generated_type))]
 pub async fn get_generated_raw(
     TenantDb(db): TenantDb,
     TenantStorage(s3): TenantStorage,

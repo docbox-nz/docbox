@@ -9,8 +9,8 @@ use axum_valid::Garde;
 use crate::{
     error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
-        action_user::ActionUser,
-        tenant::{TenantDb, TenantEvents, TenantSearch, TenantStorage},
+        action_user::{ActionUser, UserParams},
+        tenant::{TenantDb, TenantEvents, TenantParams, TenantSearch, TenantStorage},
     },
     models::folder::{CreateFolderRequest, FolderResponse, HttpFolderError, UpdateFolderRequest},
 };
@@ -26,13 +26,14 @@ use docbox_database::models::{
     folder::{self, Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
 };
 
-pub const FOLDER_TAG: &str = "folder";
+pub const FOLDER_TAG: &str = "Folder";
 
 /// Create folder
 ///
 /// Creates a new folder in the provided document box folder
 #[utoipa::path(
     post,
+    operation_id = "folder_create",
     tag = FOLDER_TAG,
     path = "/box/{scope}/folder",
     responses(
@@ -42,6 +43,8 @@ pub const FOLDER_TAG: &str = "folder";
     ),
     params(
         ("scope" = String, Path, description = "Scope to create the folder within"),
+        TenantParams,
+        UserParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, req))]
@@ -110,6 +113,7 @@ pub async fn create(
 /// as well as the first resolved set of children for the folder
 #[utoipa::path(
     get,
+    operation_id = "folder_get",
     tag = FOLDER_TAG,
     path = "/box/{scope}/folder/{folder_id}",
     responses(
@@ -120,6 +124,7 @@ pub async fn create(
     params(
         ("scope" = String, Path, description = "Scope the folder resides within"),
         ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, folder_id))]
@@ -146,6 +151,7 @@ pub async fn get(
 /// Request the edit history for the provided folder
 #[utoipa::path(
     get,
+    operation_id = "folder_edit_history",
     tag = FOLDER_TAG,
     path = "/box/{scope}/folder/{folder_id}/edit-history",
     responses(
@@ -156,6 +162,7 @@ pub async fn get(
     params(
         ("scope" = String, Path, description = "Scope the folder resides within"),
         ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, folder_id))]
@@ -188,6 +195,7 @@ pub async fn get_edit_history(
 /// Updates a folder, can be a name change, a folder move, or both
 #[utoipa::path(
     put,
+    operation_id = "folder_update",
     tag = FOLDER_TAG,
     path = "/box/{scope}/folder/{folder_id}",
     responses(
@@ -199,6 +207,8 @@ pub async fn get_edit_history(
     params(
         ("scope" = String, Path, description = "Scope the folder resides within"),
         ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
+        TenantParams,
+        UserParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, folder_id, req))]
@@ -280,6 +290,7 @@ pub async fn update(
 /// folders within the folder before deleting itself
 #[utoipa::path(
     delete,
+    operation_id = "folder_delete",
     tag = FOLDER_TAG,
     path = "/box/{scope}/folder/{folder_id}",
     responses(
@@ -290,6 +301,7 @@ pub async fn update(
     params(
         ("scope" = String, Path, description = "Scope the folder resides within"),
         ("folder_id" = Uuid, Path, description = "ID of the folder to delete"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, folder_id))]

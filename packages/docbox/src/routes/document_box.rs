@@ -3,8 +3,8 @@
 use crate::{
     error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
-        action_user::ActionUser,
-        tenant::{TenantDb, TenantEvents, TenantSearch, TenantStorage},
+        action_user::{ActionUser, UserParams},
+        tenant::{TenantDb, TenantEvents, TenantParams, TenantSearch, TenantStorage},
     },
     models::document_box::{
         CreateDocumentBoxRequest, DocumentBoxResponse, DocumentBoxStats, HttpDocumentBoxError,
@@ -32,19 +32,24 @@ use docbox_database::models::{
 };
 use tracing::{debug, error};
 
-pub const DOCUMENT_BOX_TAG: &str = "document_box";
+pub const DOCUMENT_BOX_TAG: &str = "Document Box";
 
 /// Create document box
 ///
 /// Creates a new document box using the requested scope
 #[utoipa::path(
     post,
+    operation_id = "document_box_create",
     tag = DOCUMENT_BOX_TAG,
     path = "/box",
     responses(
         (status = 201, description = "Document box created successfully", body = DocumentBoxResponse),
         (status = 409, description = "Scope already exists", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        TenantParams, 
+        UserParams
     )
 )]
 #[tracing::instrument(skip_all, fields(req))]
@@ -99,12 +104,17 @@ pub async fn create(
 /// along with the resolved root folder children
 #[utoipa::path(
     get,
+    operation_id = "document_box_get",
     tag = DOCUMENT_BOX_TAG,
     path = "/box/{scope}",
     responses(
         (status = 200, description = "Document box obtained successfully", body = DocumentBoxResponse),
         (status = 404, description = "Document box not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ), 
+    params(
+        ("scope" = String, Path, description = "Scope of the document box"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope))]
@@ -145,12 +155,17 @@ pub async fn get(
 /// - Total folders
 #[utoipa::path(
     get,
+    operation_id = "document_box_stats",
     tag = DOCUMENT_BOX_TAG,
     path = "/box/{scope}/stats",
     responses(
         (status = 200, description = "Document box stats obtained successfully", body = DocumentBoxStats),
         (status = 404, description = "Document box not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope of the document box"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope))]
@@ -193,12 +208,17 @@ pub async fn stats(
 /// bucket?
 #[utoipa::path(
     delete,
+    operation_id = "document_box_delete",
     tag = DOCUMENT_BOX_TAG,
     path = "/box/{scope}",
     responses(
         (status = 204, description = "Document box deleted successfully"),
         (status = 404, description = "Document box not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope of the document box"),    
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope))]
@@ -225,11 +245,12 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// POST /box/:scope/search
+/// Search document box
 ///
 /// Search within the document box
 #[utoipa::path(
     post,
+    operation_id = "document_box_search",
     tag = DOCUMENT_BOX_TAG,
     path = "/box/{scope}/search",
     responses(
@@ -237,6 +258,10 @@ pub async fn delete(
         (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
         (status = 404, description = "Target folder not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = String, Path, description = "Scope of the document box"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope))]

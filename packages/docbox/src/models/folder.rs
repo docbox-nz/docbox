@@ -12,6 +12,7 @@ use utoipa::ToSchema;
 pub struct CreateFolderRequest {
     /// Name for the folder
     #[garde(length(min = 1))]
+    #[schema(min_length = 1)]
     pub name: String,
 
     /// Folder to store folder in
@@ -35,6 +36,7 @@ pub struct FolderResponse {
 pub struct UpdateFolderRequest {
     /// Name for the folder
     #[garde(inner(length(min = 1)))]
+    #[schema(min_length = 1)]
     pub name: Option<String>,
 
     /// New parent folder for the folder

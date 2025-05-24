@@ -1,10 +1,10 @@
 //! Extractor for getting the user details from the headers set by the API
 
+use crate::error::{DynHttpError, HttpCommonError};
 use anyhow::Context;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
-
-use crate::error::{DynHttpError, HttpCommonError};
 use docbox_database::{models::user::User, DbExecutor};
+use utoipa::IntoParams;
 
 pub struct ActionUser(pub Option<ActionUserData>);
 
@@ -37,6 +37,22 @@ pub struct ActionUserData {
 const USER_ID_HEADER: &str = "x-user-id";
 const USER_NAME_HEADER: &str = "x-user-name";
 const USER_IMAGE_ID_HEADER: &str = "x-user-image-id";
+
+/// OpenAPI param for optional the user identifying headers
+#[derive(IntoParams)]
+#[into_params(parameter_in = Header)]
+#[allow(unused)]
+pub struct UserParams {
+    /// Optional ID of the user if performed on behalf of a user
+    #[param(rename = "x-user-id")]
+    pub user_id: Option<String>,
+    /// Optional name of the user if performed on behalf of a user
+    #[param(rename = "x-user-name")]
+    pub user_name: Option<String>,
+    /// Optional image ID of the user if performed on behalf of a user
+    #[param(rename = "x-user-image-id")]
+    pub user_image_id: Option<String>,
+}
 
 #[async_trait]
 impl<S> FromRequestParts<S> for ActionUser

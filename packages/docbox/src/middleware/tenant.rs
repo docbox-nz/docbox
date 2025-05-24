@@ -22,12 +22,26 @@ use docbox_database::{
     connect_root_database, connect_tenant_database, models::tenant::Tenant, DatabasePoolCache,
     DbPool,
 };
+use utoipa::IntoParams;
 use uuid::Uuid;
 
 // Header for the tenant ID
 const TENANT_ID_HEADER: &str = "x-tenant-id";
 // Header for the tenant env
 const TENANT_ENV_HEADER: &str = "x-tenant-env";
+
+/// OpenAPI param for requiring the tenant identifier headers
+#[derive(IntoParams)]
+#[into_params(parameter_in = Header)]
+#[allow(unused)]
+pub struct TenantParams {
+    /// ID of the tenant you are targeting
+    #[param(rename = "x-tenant-id")]
+    pub tenant_id: String,
+    /// Environment of the tenant you are targeting
+    #[param(rename = "x-tenant-env")]
+    pub tenant_env: String,
+}
 
 /// Authenticates the requested tenant, loads the tenant from the database and stores it
 /// on the request extensions so it can be extracted by handlers

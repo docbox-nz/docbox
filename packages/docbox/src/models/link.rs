@@ -12,10 +12,12 @@ use utoipa::ToSchema;
 pub struct CreateLink {
     /// Name for the link
     #[garde(length(min = 1))]
+    #[schema(min_length = 1)]
     pub name: String,
 
     /// Link URL
     #[garde(length(min = 1))]
+    #[schema(min_length = 1)]
     pub value: String,
 
     /// Folder to store link in
@@ -29,10 +31,12 @@ pub struct CreateLink {
 pub struct UpdateLinkRequest {
     /// Name for the link
     #[garde(inner(length(min = 1)))]
+    #[schema(min_length = 1)]
     pub name: Option<String>,
 
     /// Value for the link
     #[garde(inner(length(min = 1)))]
+    #[schema(min_length = 1)]
     pub value: Option<String>,
 
     /// New parent folder for the link

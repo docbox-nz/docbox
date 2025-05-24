@@ -49,18 +49,19 @@ pub struct LinkWithExtra {
     pub created_at: DateTime<Utc>,
     /// User who created the file
     #[sqlx(flatten)]
+    #[schema(nullable, value_type = User)]
     pub created_by: CreatedByUser,
     /// Last time the file was modified
     pub last_modified_at: Option<DateTime<Utc>>,
     /// User who last modified the file
     #[sqlx(flatten)]
+    #[schema(nullable, value_type = User)]
     pub last_modified_by: LastModifiedByUser,
 }
 
 /// Wrapper type for extracting a [User] that was joined
 /// from another table where the fields are prefixed with "cb_"
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[schema(as = Option<User>)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(transparent)]
 pub struct CreatedByUser(pub Option<User>);
 
@@ -81,8 +82,7 @@ impl<'r> FromRow<'r, PgRow> for CreatedByUser {
 
 /// Wrapper type for extracting a [User] that was joined
 /// from another table where the fields are prefixed with "lmb_"
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[schema(as = Option<User>)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(transparent)]
 pub struct LastModifiedByUser(pub Option<User>);
 

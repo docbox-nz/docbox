@@ -5,14 +5,20 @@ use crate::routes::{
     task::{self, TASK_TAG},
     folder::{self, FOLDER_TAG},
     document_box::{self, DOCUMENT_BOX_TAG},
+    file::{self, FILE_TAG},
     utils::{self, UTILS_TAG},
     admin::{self, ADMIN_TAG},
 };
 
 #[derive(OpenApi)]
 #[openapi(
+    info(
+        title = "Docbox API",
+        description = "Docbox HTTP API",
+    ),
     tags(
         (name = DOCUMENT_BOX_TAG, description = "Document box related APIs"),
+        (name = FILE_TAG, description = "File related APIs"),
         (name = LINK_TAG, description = "Link related APIs"),
         (name = FOLDER_TAG, description = "Folder related APIs"),
         (name = TASK_TAG, description = "Background task related APIs"),
@@ -30,6 +36,18 @@ use crate::routes::{
         document_box::stats,
         document_box::delete,
         document_box::search,
+        // File routes
+        file::upload,
+        file::create_presigned,
+        file::get_presigned,
+        file::get,
+        file::get_children,
+        file::get_edit_history,
+        file::update,
+        file::get_raw,
+        file::delete,
+        file::get_generated,
+        file::get_generated_raw,
         // Folder routes
         folder::create,
         folder::get,
@@ -55,7 +73,7 @@ use crate::routes::{
 pub struct ApiDoc;
 
 #[test]
-#[ignore = "generates documentation"]
+#[ignore = "generates api documentation"]
 fn generate_api_docs() {
     let docs = ApiDoc::openapi().to_pretty_json().unwrap();
     std::fs::write("docbox.json", docs).unwrap();

@@ -25,6 +25,7 @@ use mime::Mime;
 use serde::{Deserialize, Serialize};
 use std::ops::DerefMut;
 use thiserror::Error;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
@@ -106,14 +107,14 @@ pub struct UploadFile {
     pub processing_config: Option<ProcessingConfig>,
 }
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(default)]
 pub struct ProcessingConfig {
     /// Email specific processing configuration
     pub email: Option<EmailProcessingConfig>,
 }
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(default)]
 pub struct EmailProcessingConfig {
     /// Whether to skip extracting attachments when processing an email

@@ -133,6 +133,7 @@ pub struct AdminSearchRequest {
 pub struct SearchRequest {
     /// The search query
     #[garde(length(min = 1))]
+    #[schema(min_length = 1)]
     pub query: Option<String>,
 
     /// Enable searching with AI
@@ -155,10 +156,12 @@ pub struct SearchRequest {
     /// Maximum size of text fragments to extract when highlighting
     /// content (only works when "include_content" is true)
     #[garde(range(max = 150))]
+    #[schema(maximum = 150)]
     pub max_fragment_size: Option<u16>,
 
     /// Max number of highlighted fragments to extract per page
     #[garde(range(max = 100))]
+    #[schema(maximum = 100)]
     pub max_fragments: Option<u16>,
 
     /// Creation date range search
@@ -193,6 +196,7 @@ pub struct SearchRequest {
 
     /// Maximum number of pages too return
     #[garde(range(max = 100))]
+    #[schema(maximum = 100)]
     pub max_pages: Option<u16>,
 
     /// Offset to start at when aggregating page results

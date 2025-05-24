@@ -17,30 +17,36 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::HashMap;
 use thiserror::Error;
+use utoipa::ToSchema;
 
 /// Request to create a new presigned file upload
 #[serde_as]
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize, Validate, ToSchema)]
 pub struct CreatePresignedRequest {
     /// Name of the file being uploaded
     #[garde(length(min = 1))]
+    #[schema(min_length = 1)]
     pub name: String,
 
     /// Folder to store the file in
     #[garde(skip)]
+    #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
 
     /// Size of the file being uploaded
     #[garde(range(min = 1, max = MAX_FILE_SIZE as i32))]
+    #[schema(minimum = 1)]
     pub size: i32,
 
     /// Mime type of the file
     #[garde(skip)]
     #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[schema(value_type = String)]
     pub mime: Mime,
 
     /// Optional parent file ID
     #[garde(skip)]
+    #[schema(value_type = Option<Uuid>)]
     pub parent_id: Option<FileId>,
 
     /// Optional processing config
@@ -48,15 +54,16 @@ pub struct CreatePresignedRequest {
     pub processing_config: Option<ProcessingConfig>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PresignedUploadResponse {
+    #[schema(value_type = Uuid)]
     pub task_id: PresignedUploadTaskId,
     pub method: String,
     pub uri: String,
     pub headers: HashMap<String, String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(tag = "status")]
 #[allow(clippy::large_enum_variant)]
 pub enum PresignedStatusResponse {
@@ -70,17 +77,22 @@ pub enum PresignedStatusResponse {
     },
 }
 
-#[derive(TryFromMultipart, Validate)]
+#[derive(TryFromMultipart, Validate, ToSchema)]
 pub struct UploadFileRequest {
     #[garde(length(min = 1))]
+    #[schema(min_length = 1)]
     pub name: String,
 
     /// Folder to store the file in
     #[garde(skip)]
+    #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
 
+    /// The actual file you are uploading, ensure the mime type for the file
+    /// is set correctly
     #[garde(skip)]
     #[form_data(limit = "unlimited")]
+    #[schema(format = Binary,value_type= Vec<u8>)]
     pub file: FieldData<Bytes>,
 
     /// Whether to process the file asynchronously returning a task
@@ -93,10 +105,12 @@ pub struct UploadFileRequest {
     ///
     /// Should not be provided for general use
     #[garde(skip)]
+    #[schema(value_type = Option<Uuid>)]
     pub fixed_id: Option<FileId>,
 
     /// Optional ID of a parent file (i.e for email attachments)
     #[garde(skip)]
+    #[schema(value_type = Option<Uuid>)]
     pub parent_id: Option<FileId>,
 
     /// JSON encoded processing config
@@ -104,37 +118,40 @@ pub struct UploadFileRequest {
     pub processing_config: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum FileUploadResponse {
     Sync(Box<UploadedFile>),
     Async(UploadTaskResponse),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct UploadedFile {
     /// The uploaded file itself
     pub file: FileWithExtra,
     /// Generated data alongside the file
     pub generated: Vec<GeneratedFile>,
     /// Additional files created and uploaded from processing the file
+    #[schema(no_recursion)]
     pub additional_files: Vec<UploadedFile>,
 }
 
 /// Request to rename and or move a file
-#[derive(Debug, Validate, Deserialize)]
+#[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct UpdateFileRequest {
     /// Name for the folder
     #[garde(inner(length(min = 1)))]
+    #[schema(min_length = 1)]
     pub name: Option<String>,
 
     /// New parent folder for the folder
     #[garde(skip)]
+    #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
 }
 
 /// Response for requesting a document box
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FileResponse {
     /// The file itself
     pub file: FileWithExtra,
@@ -149,8 +166,9 @@ pub struct RawFileQuery {
 }
 
 /// Response from creating an upload
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct UploadTaskResponse {
+    #[schema(value_type = Uuid)]
     pub task_id: TaskId,
     pub created_at: DateTime<Utc>,
 }
@@ -162,6 +180,9 @@ pub enum HttpFileError {
 
     #[error("unknown task")]
     UnknownTask,
+
+    #[error("fixed file id already in use")]
+    FileIdInUse,
 
     #[error("no matching generated file")]
     NoMatchingGenerated,
@@ -176,6 +197,7 @@ impl HttpError for HttpFileError {
 
     fn status(&self) -> axum::http::StatusCode {
         match self {
+            HttpFileError::FileIdInUse => StatusCode::CONFLICT,
             HttpFileError::UnknownFile
             | HttpFileError::NoMatchingGenerated
             | HttpFileError::UnknownTask => StatusCode::NOT_FOUND,

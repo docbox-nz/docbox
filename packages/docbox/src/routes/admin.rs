@@ -2,7 +2,7 @@
 
 use crate::{
     error::{HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
-    middleware::tenant::{TenantDb, TenantSearch},
+    middleware::tenant::{TenantDb, TenantParams, TenantSearch},
 };
 use axum::{http::StatusCode, Extension, Json};
 use axum_valid::Garde;
@@ -25,7 +25,7 @@ use docbox_database::{
 use std::sync::Arc;
 use tracing::error;
 
-pub const ADMIN_TAG: &str = "admin";
+pub const ADMIN_TAG: &str = "Admin";
 
 /// Admin Search
 ///
@@ -35,6 +35,7 @@ pub const ADMIN_TAG: &str = "admin";
 /// scopes
 #[utoipa::path(
     post,
+    operation_id = "admin_search_tenant",
     tag = ADMIN_TAG,
     path = "/admin/search",
     responses(
@@ -42,7 +43,8 @@ pub const ADMIN_TAG: &str = "admin";
         (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
         (status = 409, description = "Scope already exists", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
-    )
+    ),
+    params(TenantParams)
 )]
 #[tracing::instrument(skip_all, fields(req))]
 pub async fn search_tenant(
@@ -100,9 +102,12 @@ pub async fn search_tenant(
 
 /// Flush database cache
 ///
-/// Empties all the database pool and credentials caches
+/// Empties all the database pool and credentials caches, you can use this endpoint
+/// if you rotate your database credentials to refresh the database pool without
+/// needing to restart the server
 #[utoipa::path(
     post,
+    operation_id = "admin_flush_database_pool_cache",
     tag = ADMIN_TAG,
     path = "/admin/flush-db-cache",
     responses(
@@ -121,6 +126,7 @@ pub async fn flush_database_pool_cache(
 /// Purges all expired presigned tasks
 #[utoipa::path(
     post,
+    operation_id = "admin_purge_expired_presigned_tasks",
     tag = ADMIN_TAG,
     path = "/admin/purge-expired-presigned-tasks",
     responses(

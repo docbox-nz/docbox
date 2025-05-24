@@ -4,7 +4,7 @@
 
 use crate::{
     error::{HttpCommonError, HttpErrorResponse, HttpResult},
-    middleware::tenant::TenantDb,
+    middleware::tenant::{TenantDb, TenantParams},
     models::task::HttpTaskError,
 };
 use axum::{extract::Path, Json};
@@ -13,12 +13,15 @@ use docbox_database::models::{
     tasks::{Task, TaskId},
 };
 
-pub const TASK_TAG: &str = "task";
+pub const TASK_TAG: &str = "Task";
 
+/// Get task by ID
+///
 /// Get the details about a specific task, used to poll
 /// the current progress of a task
 #[utoipa::path(
     get,
+    operation_id = "task_get",
     tag = TASK_TAG,
     path = "/box/{scope}/task/{task_id}",
     responses(
@@ -29,6 +32,7 @@ pub const TASK_TAG: &str = "task";
     params(
         ("scope" = String, Path, description = "Scope the task is within"),
         ("task_id" = String, Path, description = "ID of the task to query"),
+        TenantParams
     )
 )]
 pub async fn get(

@@ -12,8 +12,9 @@ use utoipa::ToSchema;
 /// Request to create a document box
 #[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct CreateDocumentBoxRequest {
-    /// The document box scope
+    /// Scope for the document box to use
     #[garde(length(min = 1))]
+    #[schema(min_length = 1)]
     pub scope: String,
 }
 

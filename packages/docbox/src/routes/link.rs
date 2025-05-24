@@ -14,6 +14,8 @@ use axum_valid::Garde;
 use docbox_core::search::models::UpdateSearchIndexData;
 
 use crate::error::{HttpCommonError, HttpErrorResponse};
+use crate::middleware::action_user::UserParams;
+use crate::middleware::tenant::TenantParams;
 use crate::{
     error::{DynHttpError, HttpResult, HttpStatusResult},
     middleware::{
@@ -36,13 +38,14 @@ use docbox_database::models::{
 };
 use docbox_web_scraper::WebsiteMetaService;
 
-pub const LINK_TAG: &str = "link";
+pub const LINK_TAG: &str = "Link";
 
 /// Create link
 ///
 /// Creates a new link within the provided document box
 #[utoipa::path(
     post,
+    operation_id = "link_create",
     tag = LINK_TAG,
     path = "/box/{scope}/link",
     responses(
@@ -52,6 +55,8 @@ pub const LINK_TAG: &str = "link";
     ),
     params(
         ("scope" = String, Path, description = "Scope to create the link within"),
+        TenantParams,
+        UserParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, req))]
@@ -113,6 +118,7 @@ pub async fn create(
 /// Request a specific link by ID
 #[utoipa::path(
     get,
+    operation_id = "link_get",
     tag = LINK_TAG,
     path = "/box/{scope}/link/{link_id}",
     responses(
@@ -123,6 +129,7 @@ pub async fn create(
     params(
         ("scope" = String, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, link_id))]
@@ -150,6 +157,7 @@ pub async fn get(
 /// the website itself such as title, and OGP metadata
 #[utoipa::path(
     get,
+    operation_id = "link_get_metadata",
     tag = LINK_TAG,
     path = "/box/{scope}/link/{link_id}/metadata",
     responses(
@@ -160,6 +168,7 @@ pub async fn get(
     params(
         ("scope" = String, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, link_id))]
@@ -198,6 +207,7 @@ pub async fn get_metadata(
 /// the link points to
 #[utoipa::path(
     get,
+    operation_id = "link_get_favicon",
     tag = LINK_TAG,
     path = "/box/{scope}/link/{link_id}/favicon",
     responses(
@@ -208,6 +218,7 @@ pub async fn get_metadata(
     params(
         ("scope" = String, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, link_id))]
@@ -243,6 +254,7 @@ pub async fn get_favicon(
 /// directly
 #[utoipa::path(
     get,
+    operation_id = "link_get_image",
     tag = LINK_TAG,
     path = "/box/{scope}/link/{link_id}/image",
     responses(
@@ -253,6 +265,7 @@ pub async fn get_favicon(
     params(
         ("scope" = String, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, link_id))]
@@ -286,6 +299,7 @@ pub async fn get_image(
 /// Request the edit history for the provided link
 #[utoipa::path(
     get,
+    operation_id = "link_get_edit_history",
     tag = LINK_TAG,
     path = "/box/{scope}/link/{link_id}/edit-history",
     responses(
@@ -296,6 +310,7 @@ pub async fn get_image(
     params(
         ("scope" = String, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, link_id))]
@@ -330,6 +345,7 @@ pub async fn get_edit_history(
 /// Updates a link, can be a name change, value change, a folder move, or all
 #[utoipa::path(
     put,
+    operation_id = "link_update",
     tag = LINK_TAG,
     path = "/box/{scope}/link/{link_id}",
     responses(
@@ -340,6 +356,8 @@ pub async fn get_edit_history(
     params(
         ("scope" = String, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
+        TenantParams,
+        UserParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, link_id, req))]
@@ -413,6 +431,7 @@ pub async fn update(
 /// Deletes a specific link using its ID
 #[utoipa::path(
     delete,
+    operation_id = "link_delete",
     tag = LINK_TAG,
     path = "/box/{scope}/link/{link_id}",
     responses(
@@ -423,6 +442,7 @@ pub async fn update(
     params(
         ("scope" = String, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to delete"),
+        TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope, link_id))]

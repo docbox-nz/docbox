@@ -30,7 +30,7 @@ mod docs;
 mod error;
 mod middleware;
 mod models;
-mod routes;
+pub mod routes;
 
 // Current size limit 100MB, adjust according to our decided max size
 const MAX_FILE_SIZE: usize = 100 * 1000 * 1024;
