@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  # This will trigger when a tag like v1.0.0 is pushed
+  # will create a release
+  push:
+    tags:
+      - "*.*.*"
+  # Manual trigger for creating an artifact (button in the UI)
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  contents: write
+
+jobs:
+  build:
+    name: Build docbox
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repo for building
+      - uses: actions/checkout@v4
+
+      # Setup rust for building the service
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-musl
+          override: true
+
+      # Build the binary
+      - name: Build for ${{ matrix.target }}
+        run: cargo build -p docbox --target x86_64-unknown-linux-musl --release
+
+      # Copy built binary to output directory
+      - name: Copy binary to output
+        run: |
+          mkdir output
+          cp target/x86_64-unknown-linux-musl/release/docbox docbox
+        shell: bash
+
+      # Upload an artifact if manually triggered
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: docbox
+          path: docbox
+
+      # Upload a release when a tag was created
+      - name: Upload binary to release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'push'
+        with:
+          draft: true
+          files: docbox
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
