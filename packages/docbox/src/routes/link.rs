@@ -190,7 +190,7 @@ pub async fn get_metadata(
     })?;
 
     let resolved = website_service.resolve_website(&url).await.ok_or_else(|| {
-        tracing::error!("failed to resolve link site metadata");
+        tracing::warn!("failed to resolve link site metadata");
         HttpLinkError::FailedResolve
     })?;
 
