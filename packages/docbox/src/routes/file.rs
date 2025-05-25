@@ -82,7 +82,7 @@ pub const FILE_TAG: &str = "File";
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope))]
+#[tracing::instrument(skip_all, fields(scope = %scope))]
 #[allow(clippy::too_many_arguments)]
 pub async fn upload(
     action_user: ActionUser,
@@ -260,7 +260,7 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, req))]
+#[tracing::instrument(skip_all, fields(scope = %scope, req = ?req))]
 pub async fn create_presigned(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -331,7 +331,7 @@ pub async fn create_presigned(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, task_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, task_id = %task_id))]
 pub async fn get_presigned(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, PresignedUploadTaskId)>,
@@ -390,7 +390,7 @@ pub async fn get_presigned(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, file_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -433,7 +433,7 @@ pub async fn get(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, file_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id))]
 pub async fn get_children(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -476,7 +476,7 @@ pub async fn get_children(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, file_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id))]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -519,7 +519,7 @@ pub async fn get_edit_history(
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, file_id, req))]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, req = ?req))]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -622,7 +622,7 @@ pub async fn update(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, file_id, query))]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, query = ?query))]
 pub async fn get_raw(
     TenantDb(db): TenantDb,
     TenantStorage(s3): TenantStorage,
@@ -680,7 +680,7 @@ pub async fn get_raw(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, file_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
@@ -728,7 +728,7 @@ pub async fn delete(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, file_id, generated_type))]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type))]
 pub async fn get_generated(
     TenantDb(db): TenantDb,
     Path((scope, file_id, generated_type)): Path<(DocumentBoxScope, FileId, GeneratedFileType)>,
@@ -765,7 +765,7 @@ pub async fn get_generated(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, file_id, generated_type))]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type))]
 pub async fn get_generated_raw(
     TenantDb(db): TenantDb,
     TenantStorage(s3): TenantStorage,

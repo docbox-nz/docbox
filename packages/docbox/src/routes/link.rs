@@ -56,7 +56,7 @@ pub const LINK_TAG: &str = "Link";
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, req))]
+#[tracing::instrument(skip_all, fields(scope = %scope))]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -129,7 +129,7 @@ pub async fn create(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, link_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
@@ -168,7 +168,7 @@ pub async fn get(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, link_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn get_metadata(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -190,7 +190,7 @@ pub async fn get_metadata(
     })?;
 
     let resolved = website_service.resolve_website(&url).await.ok_or_else(|| {
-        tracing::warn!("failed to resolve link site metadata");
+        tracing::error!("failed to resolve link site metadata");
         HttpLinkError::FailedResolve
     })?;
 
@@ -223,7 +223,7 @@ pub async fn get_metadata(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, link_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn get_favicon(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -276,7 +276,7 @@ pub async fn get_favicon(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, link_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn get_image(
     TenantDb(db): TenantDb,
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
@@ -327,7 +327,7 @@ pub async fn get_image(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, link_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
@@ -374,7 +374,7 @@ pub async fn get_edit_history(
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, link_id, req))]
+#[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id, req = ?req))]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -486,7 +486,7 @@ pub async fn update(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, link_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantSearch(opensearch): TenantSearch,

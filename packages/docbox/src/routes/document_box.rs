@@ -51,7 +51,7 @@ pub const DOCUMENT_BOX_TAG: &str = "Document Box";
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(req))]
+#[tracing::instrument(skip_all, fields(req = ?req))]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -116,7 +116,7 @@ pub async fn create(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope))]
+#[tracing::instrument(skip_all, fields(scope = %scope))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path(scope): Path<DocumentBoxScope>,
@@ -175,7 +175,7 @@ pub async fn get(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope))]
+#[tracing::instrument(skip_all, fields(scope = %scope))]
 pub async fn stats(
     TenantDb(db): TenantDb,
     Path(scope): Path<DocumentBoxScope>,
@@ -236,7 +236,7 @@ pub async fn stats(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope))]
+#[tracing::instrument(skip_all, fields(scope = %scope))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantSearch(search): TenantSearch,
@@ -279,7 +279,7 @@ pub async fn delete(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope))]
+#[tracing::instrument(skip_all, fields(scope = %scope, req = ?req))]
 pub async fn search(
     TenantDb(db): TenantDb,
     TenantSearch(opensearch): TenantSearch,

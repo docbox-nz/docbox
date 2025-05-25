@@ -45,7 +45,7 @@ pub const FOLDER_TAG: &str = "Folder";
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, req))]
+#[tracing::instrument(skip_all, fields(scope = %scope, req = ?req))]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -125,7 +125,7 @@ pub async fn create(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, folder_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
@@ -168,7 +168,7 @@ pub async fn get(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, folder_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id))]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
@@ -214,7 +214,7 @@ pub async fn get_edit_history(
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, folder_id, req))]
+#[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id, req = ?req))]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -329,7 +329,7 @@ pub async fn update(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope, folder_id))]
+#[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantStorage(s3): TenantStorage,

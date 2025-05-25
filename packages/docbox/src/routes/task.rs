@@ -35,6 +35,7 @@ pub const TASK_TAG: &str = "Task";
         TenantParams
     )
 )]
+#[tracing::instrument(skip_all, fields(scope = %scope, task_id = %task_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, TaskId)>,

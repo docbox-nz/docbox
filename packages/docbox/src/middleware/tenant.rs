@@ -19,6 +19,7 @@ use docbox_core::{
 };
 use docbox_database::{models::tenant::Tenant, DatabasePoolCache, DbPool};
 use thiserror::Error;
+use tracing::Instrument;
 use utoipa::IntoParams;
 use uuid::Uuid;
 
@@ -51,11 +52,14 @@ pub async fn tenant_auth_middleware(
     // Extract the request tenant
     let tenant = extract_tenant(&headers, &db_cache).await?;
 
+    // Provide a request span that contains the tenant metadata
+    let span = tracing::info_span!("tenant", tenant_id = %tenant.id, tenant_env = %tenant.env);
+
     // Add the tenant as an extension
     request.extensions_mut().insert(tenant);
 
     // Continue the request normally
-    Ok(next.run(request).await)
+    Ok(next.run(request).instrument(span).await)
 }
 
 pub fn get_tenant_env(headers: &HeaderMap) -> Result<String, ExtractTenantError> {

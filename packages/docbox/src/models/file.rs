@@ -21,7 +21,7 @@ use utoipa::ToSchema;
 
 /// Request to create a new presigned file upload
 #[serde_as]
-#[derive(Deserialize, Validate, ToSchema)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreatePresignedRequest {
     /// Name of the file being uploaded
     #[garde(length(min = 1))]

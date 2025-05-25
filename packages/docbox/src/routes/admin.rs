@@ -46,7 +46,7 @@ pub const ADMIN_TAG: &str = "Admin";
     ),
     params(TenantParams)
 )]
-#[tracing::instrument(skip_all, fields(req))]
+#[tracing::instrument(skip_all, fields(req = ?req))]
 pub async fn search_tenant(
     TenantDb(db): TenantDb,
     TenantSearch(search): TenantSearch,

@@ -13,23 +13,25 @@ pub fn init_logging_with_sentry(dsn: String) -> anyhow::Result<sentry::ClientIni
     };
     let sentry = sentry::init((dsn, options));
 
-    let sentry_layer = sentry_tracing::layer().event_filter(|event| {
-        match event.level() {
-            &Level::ERROR => {
-                // Ignore errors emitted from the docbox_web_scraper when emitting
-                // errors to sentry (These are errors caused by the upstream site)
-                if let Some(module_path) = event.module_path() {
-                    if module_path.starts_with("docbox_web_scraper") {
-                        return sentry_tracing::EventFilter::Ignore;
+    let sentry_layer = sentry_tracing::layer()
+        .event_filter(|event| {
+            match event.level() {
+                &Level::ERROR => {
+                    // Ignore errors emitted from the docbox_web_scraper when emitting
+                    // errors to sentry (These are errors caused by the upstream site)
+                    if let Some(module_path) = event.module_path() {
+                        if module_path.starts_with("docbox_web_scraper") {
+                            return sentry_tracing::EventFilter::Ignore;
+                        }
                     }
-                }
 
-                sentry_tracing::EventFilter::Event
+                    sentry_tracing::EventFilter::Event
+                }
+                &Level::WARN | &Level::INFO => sentry_tracing::EventFilter::Breadcrumb,
+                &Level::DEBUG | &Level::TRACE => sentry_tracing::EventFilter::Ignore,
             }
-            &Level::WARN | &Level::INFO => sentry_tracing::EventFilter::Breadcrumb,
-            &Level::DEBUG | &Level::TRACE => sentry_tracing::EventFilter::Ignore,
-        }
-    });
+        })
+        .enable_span_attributes();
 
     tracing_subscriber::registry()
         .with(filter()?)
