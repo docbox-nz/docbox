@@ -117,6 +117,7 @@ impl WebsiteMetaService {
             .get_with(url.to_string(), async move {
                 // Check if we are allowed to access the URL
                 if !is_allowed_url::<TokioDomainResolver>(url).await {
+                    tracing::warn!("skipping resolve website metadata for disallowed url");
                     return None;
                 }
 
@@ -171,6 +172,7 @@ impl WebsiteMetaService {
                 // Check we are allowed to access the URL if its absolute
                 if let ResolvedUri::Absolute(image_url) = &image_url {
                     if !is_allowed_url::<TokioDomainResolver>(image_url).await {
+                        tracing::warn!("skipping resolve image for disallowed url");
                         return None;
                     }
                 }
