@@ -1,16 +1,14 @@
 use crate::{
+    office::{OfficeConverter, PdfConvertError},
     processing::{pdf::process_pdf, ProcessingError, ProcessingOutput},
-    services::{
-        generated::QueuedUpload,
-        pdf::{ConvertToPdf, LibreOfficeConverter, PdfConvertError},
-    },
+    services::generated::QueuedUpload,
 };
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 
 #[derive(Clone)]
 pub struct OfficeProcessingLayer {
-    pub converter: LibreOfficeConverter,
+    pub converter: OfficeConverter,
 }
 
 /// Processes a PDF compatible office/other supported file format. Converts to

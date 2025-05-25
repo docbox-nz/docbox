@@ -1,24 +1,20 @@
 use crate::{
+    office::{is_pdf_compatible, PdfConvertError},
     processing::{
         email::{is_mail_mime, process_email, EXPERIMENTAL_EMAIL_PARSING},
         image::process_image_async,
         office::process_office,
         pdf::process_pdf,
     },
-    services::{
-        files::upload::ProcessingConfig,
-        pdf::{is_pdf_compatible, is_pdf_file},
-    },
+    services::files::upload::ProcessingConfig,
 };
-use crate::{
-    search::models::DocumentPage,
-    services::{generated::QueuedUpload, pdf::PdfConvertError},
-};
+use crate::{search::models::DocumentPage, services::generated::QueuedUpload};
 use ::image::{ImageError, ImageFormat};
 use bytes::Bytes;
 use docbox_database::models::file::FileId;
 use mime::Mime;
 use office::OfficeProcessingLayer;
+use pdf::is_pdf_file;
 use pdf_process::{PdfInfoError, PdfTextError};
 use thiserror::Error;
 use tokio::task::JoinError;

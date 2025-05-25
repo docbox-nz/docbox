@@ -2,6 +2,7 @@ pub mod aws;
 pub mod background;
 pub mod events;
 pub mod notifications;
+pub mod office;
 pub mod processing;
 pub mod search;
 pub mod secrets;

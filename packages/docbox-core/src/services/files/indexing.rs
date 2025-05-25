@@ -6,15 +6,13 @@ use pdf_process::{
 use std::str::FromStr;
 
 use crate::{
-    processing::{ProcessingError, ProcessingIndexMetadata},
+    office::is_pdf_compatible,
+    processing::{pdf::is_pdf_file, ProcessingError, ProcessingIndexMetadata},
     search::{
         models::{DocumentPage, SearchIndexData, SearchIndexType, UpdateSearchIndexData},
         TenantSearchIndex,
     },
-    services::{
-        generated::QueuedUpload,
-        pdf::{is_pdf_compatible, is_pdf_file},
-    },
+    services::generated::QueuedUpload,
     storage::TenantStorageLayer,
 };
 

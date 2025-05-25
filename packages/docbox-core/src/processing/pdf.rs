@@ -6,6 +6,7 @@ use crate::{
 };
 use docbox_database::models::generated_file::GeneratedFileType;
 use futures::TryFutureExt;
+use mime::Mime;
 use pdf_process::{
     pdf_info, text::PAGE_END_CHARACTER, text_all_pages_split, PdfInfoArgs, PdfInfoError,
     PdfTextArgs,
@@ -111,4 +112,9 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
         index_metadata: Some(index_metadata),
         upload_queue,
     })
+}
+
+#[inline]
+pub fn is_pdf_file(mime: &Mime) -> bool {
+    mime.eq(&mime::APPLICATION_PDF)
 }

@@ -19,7 +19,7 @@ docbox-web-scraper = { version = "0.1.0", path = "../docbox-web-scraper" }
 pdf_process = { version = "0.2.0" }
 
 # Office conversion client
-office-convert-client = { version = "0.3.0" }
+office-convert-client = { version = "0.4.0" }
 
 # Image conversion and manipulation
 image = "0.25.2"

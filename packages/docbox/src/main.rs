@@ -5,13 +5,13 @@ use docbox_core::{
     background::{perform_background_tasks, BackgroundTaskData},
     events::{sqs::SqsEventPublisherFactory, EventPublisherFactory},
     notifications::{process_notification_queue, AppNotificationQueue, NotificationQueueData},
+    office::{convert_server::OfficeConverterServer, OfficeConverter},
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
     search::{
         os::{create_open_search, OpenSearchIndexFactory},
         SearchIndexFactory,
     },
     secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
-    services::pdf::LibreOfficeConverter,
     storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
 };
 use docbox_database::DatabasePoolCache;
@@ -43,6 +43,11 @@ const SERVER_ADDRESS_ENV: &str = "SERVER_ADDRESS";
 /// Default server address when not specified
 const DEFAULT_SERVER_ADDRESS: SocketAddr =
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8080));
+
+/// Environment variable to use for the convert server address
+const CONVERT_SERVER_ADDRESS_ENV: &str = "CONVERT_SERVER_ADDRESS";
+
+const DEFAULT_CONVERT_SERVER_ADDRESS: &str = "http://localhost:8081";
 
 fn main() -> anyhow::Result<()> {
     _ = dotenvy::dotenv();
@@ -104,7 +109,11 @@ fn main() -> anyhow::Result<()> {
 
 async fn server() -> anyhow::Result<()> {
     // Create the converter
-    let converter = LibreOfficeConverter::init()?;
+    let convert_server_addresses = std::env::var(CONVERT_SERVER_ADDRESS_ENV)
+        .unwrap_or(DEFAULT_CONVERT_SERVER_ADDRESS.to_string());
+    let converter_server =
+        OfficeConverterServer::from_addresses(convert_server_addresses.split(','))?;
+    let converter = OfficeConverter::ConverterServer(converter_server);
 
     // Setup processing layer data
     let processing = ProcessingLayer {
