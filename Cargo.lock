@@ -1799,6 +1799,7 @@ dependencies = [
  "moka",
  "reqwest",
  "serde",
+ "thiserror 1.0.69",
  "tl",
  "tokio",
  "tracing",

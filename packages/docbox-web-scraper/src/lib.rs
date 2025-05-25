@@ -11,6 +11,7 @@
 
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
+use data_uri::parse_data_uri;
 use http::{HeaderMap, HeaderValue};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
@@ -20,6 +21,7 @@ use std::{str::FromStr, time::Duration};
 use tracing::{debug, error};
 use url_validation::{is_allowed_url, TokioDomainResolver};
 
+mod data_uri;
 mod url_validation;
 
 pub type OgpHttpClient = reqwest::Client;
@@ -377,41 +379,6 @@ async fn get_website_metadata(
     })
 }
 
-/// Parses a base64 encoded image data URL
-fn parse_data_url(data_url: &str) -> anyhow::Result<(Bytes, Mime)> {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
-
-    // Strip the data prefix
-    let data_url = data_url.strip_prefix("data:").unwrap_or(data_url);
-
-    let (raw_mime, data_url) = data_url.split_once(';').context("invalid data url")?;
-
-    let mime: Mime = raw_mime.parse().context("invalid mime type")?;
-
-    // Split the data URL into metadata and base64-encoded data
-    let parts: Vec<&str> = data_url.split(',').collect();
-    if parts.len() != 2 {
-        return Err(anyhow!("invalid data url format"));
-    }
-
-    let metadata = parts[0];
-    let base64_data = parts[1];
-
-    // Only base64 is supported
-    if !metadata.contains("base64") {
-        return Err(anyhow!("unhandled data url format"));
-    }
-
-    // Decode the base64 data if needed
-    let data = STANDARD
-        .decode(base64_data)
-        .context("failed to decode data url base64")?;
-
-    let data = Bytes::from(data);
-
-    Ok((data, mime))
-}
-
 /// Downloads an image from a remote URL, handles resolving the URL path for
 /// relative and absolute URLs
 ///
@@ -428,7 +395,7 @@ pub async fn download_remote_img(
 ) -> anyhow::Result<Option<(Bytes, Mime)>> {
     // Handle data urls
     if href.starts_with("data:") {
-        return Ok(parse_data_url(href).ok());
+        return Ok(parse_data_uri(href).map(Some)?);
     }
 
     // Replace & encoding for query params

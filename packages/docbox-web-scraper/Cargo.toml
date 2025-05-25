@@ -21,6 +21,7 @@ serde = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }
+thiserror = { workspace = true }
 
 # Cheap bytes type
 bytes = { workspace = true }
