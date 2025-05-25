@@ -125,8 +125,15 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
 
     tracing::info!("created database secret");
 
-    // Setup a database pool
-    let db_cache = DatabasePoolCache::new(secrets);
+    // Setup database cache / connector
+    let db_cache = DatabasePoolCache::new(
+        credentials.host.clone(),
+        credentials.port,
+        // In the CLI the db credentials have high enough access to be used as the
+        // "root secret"
+        config.db_secret_name.clone(),
+        secrets,
+    );
 
     // Setup the search index
     let open_search =

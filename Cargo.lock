@@ -1773,7 +1773,6 @@ dependencies = [
 name = "docbox-database"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
  "moka",
@@ -1781,6 +1780,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "utoipa",

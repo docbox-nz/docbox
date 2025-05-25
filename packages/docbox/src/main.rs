@@ -145,8 +145,18 @@ async fn server() -> anyhow::Result<()> {
         }
     };
 
+    // Load database credentials
+    let db_host: String =
+        std::env::var("POSTGRES_HOST").context("missing environment variable POSTGRES_HOST")?;
+    let db_port: u16 = std::env::var("POSTGRES_PORT")
+        .context("missing environment variable POSTGRES_PORT")?
+        .parse()
+        .context("invalid POSTGRES_PORT port value")?;
+    let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
+        .context("missing environment variable DOCBOX_DB_CREDENTIAL_NAME")?;
+
     // Setup database cache / connector
-    let db_cache = DatabasePoolCache::new(secrets);
+    let db_cache = DatabasePoolCache::new(db_host, db_port, db_root_secret_name, secrets);
     let db_cache = Arc::new(db_cache);
 
     // Setup opensearch

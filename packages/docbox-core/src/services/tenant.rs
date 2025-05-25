@@ -5,9 +5,9 @@ use crate::secrets::AppSecretManager;
 use crate::storage::{StorageLayerFactory, TenantStorageLayer};
 use anyhow::anyhow;
 use docbox_database::models::tenant::TenantId;
+use docbox_database::DbConnectErr;
 use docbox_database::{
-    connect_root_database, connect_tenant_database, models::tenant::Tenant,
-    setup::create_tenant_tables, DatabasePoolCache, DbErr,
+    models::tenant::Tenant, setup::create_tenant_tables, DatabasePoolCache, DbErr,
 };
 use std::ops::DerefMut;
 use thiserror::Error;
@@ -45,11 +45,11 @@ pub struct CreateTenant {
 pub enum InitTenantError {
     /// Failed to connect to the root db
     #[error("failed to connect")]
-    ConnectRootDb(anyhow::Error),
+    ConnectRootDb(DbConnectErr),
 
     /// Failed to connect to the tenant db
     #[error("failed to connect")]
-    ConnectTenantDb(anyhow::Error),
+    ConnectTenantDb(DbConnectErr),
 
     /// Failed to start the database transaction
     #[error("failed to begin transaction")]
@@ -102,7 +102,8 @@ pub async fn initialize_tenant(
     env: String,
     init_state: &mut InitTenantState,
 ) -> Result<Tenant, InitTenantError> {
-    let root_db = connect_root_database(db_cache)
+    let root_db = db_cache
+        .get_root_pool()
         .await
         .map_err(InitTenantError::ConnectRootDb)?;
 
@@ -138,7 +139,8 @@ pub async fn initialize_tenant(
     })
     .map_err(InitTenantError::CreateTenant)?;
 
-    let tenant_db = connect_tenant_database(db_cache, &tenant)
+    let tenant_db = db_cache
+        .get_tenant_pool(&tenant)
         .await
         .map_err(InitTenantError::ConnectTenantDb)?;
 

@@ -1,6 +1,3 @@
-use std::time::Duration;
-
-use anyhow::Context;
 use async_trait::async_trait;
 use models::tenant::Tenant;
 use moka::{future::Cache, policy::EvictionPolicy};
@@ -9,6 +6,8 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool, Postgres, Transaction,
 };
+use std::{error::Error, time::Duration};
+use thiserror::Error;
 use tracing::debug;
 
 pub use sqlx::PgExecutor as DbExecutor;
@@ -29,75 +28,67 @@ pub type DbResult<T> = Result<T, DbErr>;
 /// Type of a database transaction
 pub type DbTransaction<'c> = Transaction<'c, Postgres>;
 
-/// Info for connecting to databases
-#[derive(Clone, Debug)]
-pub struct DbConnectInfo {
-    host: String,
-    port: u16,
-    user: String,
-    password: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct DbSecrets {
-    pub username: String,
-    pub password: String,
-}
-
-impl DbConnectInfo {
-    pub async fn load<S>(secrets: &S, secret_name: &str) -> anyhow::Result<DbConnectInfo>
-    where
-        S: DbSecretManager,
-    {
-        let host =
-            std::env::var("POSTGRES_HOST").context("missing environment variable POSTGRES_HOST")?;
-        let port = std::env::var("POSTGRES_PORT")
-            .context("missing environment variable POSTGRES_PORT")?
-            .parse()
-            .context("invalid POSTGRES_PORT port value")?;
-
-        let DbSecrets { username, password } = secrets.get_secret(secret_name).await?;
-
-        debug!("loaded database credentials from secrets");
-
-        Ok(DbConnectInfo {
-            host,
-            port,
-            user: username,
-            password,
-        })
-    }
-}
-
 /// Duration to maintain database pool caches (48h)
 const DB_CACHE_DURATION: Duration = Duration::from_secs(60 * 60 * 48);
 
 /// Duration to cache database credentials for (12h)
 const DB_CONNECT_INFO_CACHE_DURATION: Duration = Duration::from_secs(60 * 60 * 12);
 
+/// Name of the root database
+pub const ROOT_DATABASE_NAME: &str = "docbox";
+
 /// Cache for database pools
 pub struct DatabasePoolCache<S: DbSecretManager> {
+    /// Database host
+    host: String,
+
+    /// Database port
+    port: u16,
+
+    /// Name of the secrets manager secret that contains
+    /// the credentials for the root "docbox" database
+    root_secret_name: String,
+
     /// Cache from the database name to the pool for that database
     cache: Cache<String, DbPool>,
 
     /// Cache for the connection info details, stores the last known
     /// credentials and the instant that they were obtained at
-    connect_info_cache: Cache<String, DbConnectInfo>,
+    connect_info_cache: Cache<String, DbSecrets>,
 
     /// Secrets manager access to load credentials
     secrets_manager: S,
 }
 
+/// Username and password for a specific database
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DbSecrets {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Error)]
+pub enum DbConnectErr {
+    #[error("database credentials not found in secrets manager")]
+    MissingCredentials,
+
+    #[error(transparent)]
+    SecretsManager(Box<dyn Error + Send + Sync + 'static>),
+
+    #[error(transparent)]
+    Db(#[from] DbErr),
+}
+
 #[async_trait]
 pub trait DbSecretManager: Send + Sync {
-    async fn get_secret(&self, name: &str) -> anyhow::Result<DbSecrets>;
+    async fn get_secret(&self, name: &str) -> Result<Option<DbSecrets>, DbConnectErr>;
 }
 
 impl<S> DatabasePoolCache<S>
 where
     S: DbSecretManager,
 {
-    pub fn new(secrets_manager: S) -> Self {
+    pub fn new(host: String, port: u16, root_secret_name: String, secrets_manager: S) -> Self {
         let cache = Cache::builder()
             .time_to_idle(DB_CACHE_DURATION)
             .max_capacity(50)
@@ -111,10 +102,24 @@ where
             .build();
 
         Self {
+            host,
+            port,
+            root_secret_name,
             cache,
             connect_info_cache,
             secrets_manager,
         }
+    }
+
+    /// Request a database pool for the root database
+    pub async fn get_root_pool(&self) -> Result<PgPool, DbConnectErr> {
+        self.get_pool(ROOT_DATABASE_NAME, &self.root_secret_name)
+            .await
+    }
+
+    /// Request a database pool for a specific tenant
+    pub async fn get_tenant_pool(&self, tenant: &Tenant) -> Result<PgPool, DbConnectErr> {
+        self.get_pool(&tenant.db_name, &tenant.db_secret_name).await
     }
 
     /// Empties all the caches
@@ -125,7 +130,7 @@ where
     }
 
     /// Obtains a database pool connection to the database with the provided name
-    pub async fn get_pool(&self, db_name: &str, secret_name: &str) -> anyhow::Result<PgPool> {
+    async fn get_pool(&self, db_name: &str, secret_name: &str) -> Result<PgPool, DbConnectErr> {
         let cache_key = format!("{}-{}", db_name, secret_name);
 
         if let Some(pool) = self.cache.get(&cache_key).await {
@@ -139,34 +144,37 @@ where
     }
 
     /// Obtains database connection info
-    async fn get_connect_info(&self, secret_name: &str) -> anyhow::Result<DbConnectInfo> {
+    async fn get_credentials(&self, secret_name: &str) -> Result<DbSecrets, DbConnectErr> {
         if let Some(connect_info) = self.connect_info_cache.get(secret_name).await {
             return Ok(connect_info);
         }
 
         // Load new credentials
-        let connect_info = DbConnectInfo::load(&self.secrets_manager, secret_name)
+        let credentials = self
+            .secrets_manager
+            .get_secret(secret_name)
             .await
-            .context("failed to load database credentials")?;
+            .map_err(|err| DbConnectErr::SecretsManager(err.into()))?
+            .ok_or(DbConnectErr::MissingCredentials)?;
 
         // Cache the credential
         self.connect_info_cache
-            .insert(secret_name.to_string(), connect_info.clone())
+            .insert(secret_name.to_string(), credentials.clone())
             .await;
 
-        Ok(connect_info)
+        Ok(credentials)
     }
 
     /// Creates a database pool connection
-    async fn create_pool(&self, db_name: &str, secret_name: &str) -> anyhow::Result<PgPool> {
+    async fn create_pool(&self, db_name: &str, secret_name: &str) -> Result<PgPool, DbConnectErr> {
         debug!(?db_name, ?secret_name, "creating db pool connection");
 
-        let connect_info = self.get_connect_info(secret_name).await?;
+        let credentials = self.get_credentials(secret_name).await?;
         let options = PgConnectOptions::new()
-            .host(&connect_info.host)
-            .port(connect_info.port)
-            .username(&connect_info.user)
-            .password(&connect_info.password)
+            .host(&self.host)
+            .port(self.port)
+            .username(&credentials.username)
+            .password(&credentials.password)
             .database(db_name);
 
         match PgPoolOptions::new().connect_with(options).await {
@@ -175,35 +183,8 @@ where
             Err(err) => {
                 // Drop the connect info cache incase the credentials were wrong
                 self.connect_info_cache.remove(secret_name).await;
-                Err(anyhow::Error::new(err).context("failed to connect to database"))
+                Err(DbConnectErr::Db(err))
             }
         }
     }
-}
-
-pub const ROOT_DATABASE_NAME: &str = "docbox";
-
-/// Get a [PgPool] to the root docbox database. This is the "docbox" database, which contains
-/// the tenants table.
-pub async fn connect_root_database<S>(cache: &DatabasePoolCache<S>) -> anyhow::Result<PgPool>
-where
-    S: DbSecretManager,
-{
-    let root_credential = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
-        .context("missing environment variable DOCBOX_DB_CREDENTIAL_NAME")?;
-
-    cache.get_pool(ROOT_DATABASE_NAME, &root_credential).await
-}
-
-/// Get a [PgPool] database connection for a specific tenant database
-pub async fn connect_tenant_database<S>(
-    cache: &DatabasePoolCache<S>,
-    tenant: &Tenant,
-) -> anyhow::Result<DbPool>
-where
-    S: DbSecretManager,
-{
-    cache
-        .get_pool(&tenant.db_name, &tenant.db_secret_name)
-        .await
 }

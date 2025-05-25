@@ -12,7 +12,7 @@ mock-browser = []
 tokio = { version = "1", features = ["full"] }
 
 # Error handling
-anyhow = { workspace = true }
+thiserror = { workspace = true }
 
 # Serialization and JSON
 serde = { workspace = true }

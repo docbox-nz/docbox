@@ -1,4 +1,8 @@
-use anyhow::{bail, Context};
+use aws_sdk_secretsmanager::{
+    error::SdkError,
+    operation::{create_secret::CreateSecretError, get_secret_value::GetSecretValueError},
+};
+use thiserror::Error;
 
 use crate::aws::SecretsManagerClient;
 
@@ -14,25 +18,33 @@ impl AwsSecretManager {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum AwsSecretError {
+    #[error(transparent)]
+    GetSecretValue(SdkError<GetSecretValueError>),
+    #[error(transparent)]
+    CreateSecret(SdkError<CreateSecretError>),
+}
+
 impl SecretManager for AwsSecretManager {
-    async fn get_secret(&self, name: &str) -> anyhow::Result<super::Secret> {
+    async fn get_secret(&self, name: &str) -> anyhow::Result<Option<super::Secret>> {
         let result = self
             .client
             .get_secret_value()
             .secret_id(name)
             .send()
             .await
-            .with_context(|| format!("failed to get secret: {name}"))?;
+            .map_err(AwsSecretError::GetSecretValue)?;
 
         if let Some(value) = result.secret_string {
-            return Ok(Secret::String(value));
+            return Ok(Some(Secret::String(value)));
         }
 
         if let Some(value) = result.secret_binary {
-            return Ok(Secret::Binary(value.into_inner()));
+            return Ok(Some(Secret::Binary(value.into_inner())));
         }
 
-        bail!("secret has no value")
+        Ok(None)
     }
 
     async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
@@ -41,7 +53,8 @@ impl SecretManager for AwsSecretManager {
             .secret_string(value)
             .name(name)
             .send()
-            .await?;
+            .await
+            .map_err(AwsSecretError::CreateSecret)?;
 
         Ok(())
     }

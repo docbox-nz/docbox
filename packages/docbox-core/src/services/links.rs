@@ -33,7 +33,7 @@ pub enum CreateLinkError {
 
     /// Failed to create the link database row
     #[error("failed to create link: {0}")]
-    CreateLink(anyhow::Error),
+    CreateLink(DbErr),
 
     /// Failed to create the search index
     #[error("failed to create link search index: {0}")]

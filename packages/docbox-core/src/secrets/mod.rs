@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use aws::AwsSecretManager;
-use docbox_database::{DbSecretManager, DbSecrets};
+use docbox_database::{DbConnectErr, DbSecretManager, DbSecrets};
 use memory::MemorySecretManager;
 use serde::de::DeserializeOwned;
 
@@ -13,7 +13,7 @@ pub enum AppSecretManager {
 }
 
 impl AppSecretManager {
-    pub async fn get_secret(&self, name: &str) -> anyhow::Result<Secret> {
+    pub async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>> {
         match self {
             AppSecretManager::Aws(inner) => inner.get_secret(name).await,
             AppSecretManager::Memory(inner) => inner.get_secret(name).await,
@@ -28,13 +28,19 @@ impl AppSecretManager {
     }
 
     /// Obtains a secret parsing it as JSON of type [D]
-    pub async fn parsed_secret<D: DeserializeOwned>(&self, name: &str) -> anyhow::Result<D> {
-        let secret = self.get_secret(name).await?;
+    pub async fn parsed_secret<D: DeserializeOwned>(
+        &self,
+        name: &str,
+    ) -> anyhow::Result<Option<D>> {
+        let secret = match self.get_secret(name).await? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
         let value: D = match secret {
             Secret::String(value) => serde_json::from_str(&value)?,
             Secret::Binary(value) => serde_json::from_slice(value.as_ref())?,
         };
-        Ok(value)
+        Ok(Some(value))
     }
 }
 
@@ -45,14 +51,16 @@ pub enum Secret {
 }
 
 pub(crate) trait SecretManager: Send + Sync {
-    async fn get_secret(&self, name: &str) -> anyhow::Result<Secret>;
+    async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>>;
 
     async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()>;
 }
 
 #[async_trait]
 impl DbSecretManager for AppSecretManager {
-    async fn get_secret(&self, name: &str) -> anyhow::Result<DbSecrets> {
-        self.parsed_secret(name).await
+    async fn get_secret(&self, name: &str) -> Result<Option<DbSecrets>, DbConnectErr> {
+        self.parsed_secret(name)
+            .await
+            .map_err(|err| DbConnectErr::SecretsManager(err.into()))
     }
 }

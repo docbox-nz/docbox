@@ -117,7 +117,7 @@ impl Link {
             folder_id,
             created_by,
         }: CreateLink,
-    ) -> anyhow::Result<Link> {
+    ) -> DbResult<Link> {
         let id = Uuid::new_v4();
         let created_at = Utc::now();
 
@@ -167,29 +167,25 @@ impl Link {
         Ok(self)
     }
 
-    pub async fn rename(mut self, db: impl DbExecutor<'_>, name: String) -> anyhow::Result<Link> {
+    pub async fn rename(mut self, db: impl DbExecutor<'_>, name: String) -> DbResult<Link> {
         sqlx::query(r#"UPDATE "docbox_links" SET "name" = $1 WHERE "id" = $2"#)
             .bind(name.as_str())
             .bind(self.id)
             .execute(db)
             .await?;
 
-        self.name = name.clone();
+        self.name = name;
         Ok(self)
     }
 
-    pub async fn update_value(
-        mut self,
-        db: impl DbExecutor<'_>,
-        value: String,
-    ) -> anyhow::Result<Link> {
+    pub async fn update_value(mut self, db: impl DbExecutor<'_>, value: String) -> DbResult<Link> {
         sqlx::query(r#"UPDATE "docbox_links" SET "value" = $1 WHERE "id" = $2"#)
             .bind(value.as_str())
             .bind(self.id)
             .execute(db)
             .await?;
 
-        self.value = value.clone();
+        self.value = value;
 
         Ok(self)
     }

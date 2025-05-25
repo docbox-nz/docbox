@@ -1,5 +1,4 @@
 use super::{Secret, SecretManager};
-use anyhow::bail;
 use std::collections::HashMap;
 
 /// In memory secret manager
@@ -15,16 +14,16 @@ impl MemorySecretManager {
 }
 
 impl SecretManager for MemorySecretManager {
-    async fn get_secret(&self, name: &str) -> anyhow::Result<super::Secret> {
+    async fn get_secret(&self, name: &str) -> anyhow::Result<Option<super::Secret>> {
         if let Some(value) = self.data.get(name) {
-            return Ok(value.clone());
+            return Ok(Some(value.clone()));
         }
 
         if let Some(value) = self.default.as_ref() {
-            return Ok(value.clone());
+            return Ok(Some(value.clone()));
         }
 
-        bail!("secret has no value")
+        Ok(None)
     }
 
     async fn create_secret(&self, _name: &str, _value: &str) -> anyhow::Result<()> {

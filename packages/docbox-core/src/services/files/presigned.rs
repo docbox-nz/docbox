@@ -9,7 +9,6 @@ use crate::{
 use chrono::Utc;
 use docbox_database::models::{file::FileId, presigned_upload_task::PresignedUploadTaskId};
 use docbox_database::{
-    connect_root_database, connect_tenant_database,
     models::{
         document_box::DocumentBoxScope,
         folder::Folder,
@@ -340,13 +339,13 @@ pub async fn purge_expired_presigned_tasks(
     db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
     storage: StorageLayerFactory,
 ) -> anyhow::Result<()> {
-    let db = connect_root_database(&db_cache).await?;
+    let db = db_cache.get_root_pool().await?;
     let tenants = Tenant::all(&db).await?;
     drop(db);
 
     for tenant in tenants {
         // Create the database connection pool
-        let db = connect_tenant_database(&db_cache, &tenant).await?;
+        let db = db_cache.get_tenant_pool(&tenant).await?;
         let storage = storage.create_storage_layer(&tenant);
 
         if let Err(cause) = purge_expired_presigned_tasks_tenant(&db, &storage).await {

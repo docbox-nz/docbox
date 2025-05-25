@@ -17,10 +17,7 @@ use docbox_core::{
     secrets::AppSecretManager,
     storage::{StorageLayerFactory, TenantStorageLayer},
 };
-use docbox_database::{
-    connect_root_database, connect_tenant_database, models::tenant::Tenant, DatabasePoolCache,
-    DbPool,
-};
+use docbox_database::{models::tenant::Tenant, DatabasePoolCache, DbPool};
 use thiserror::Error;
 use utoipa::IntoParams;
 use uuid::Uuid;
@@ -127,7 +124,7 @@ pub async fn extract_tenant(
     #[cfg(not(feature = "mock-browser"))]
     let env = get_tenant_env(headers)?;
 
-    let db = connect_root_database(db_cache).await.map_err(|cause| {
+    let db = db_cache.get_root_pool().await.map_err(|cause| {
         tracing::error!(?cause, "failed to connect to root database");
         HttpCommonError::ServerError
     })?;
@@ -168,12 +165,10 @@ where
             })?;
 
         // Create the database connection pool
-        let db = connect_tenant_database(db_cache, tenant)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to connect to root database");
-                HttpCommonError::ServerError
-            })?;
+        let db = db_cache.get_tenant_pool(tenant).await.map_err(|cause| {
+            tracing::error!(?cause, "failed to connect to root database");
+            HttpCommonError::ServerError
+        })?;
 
         Ok(TenantDb(db))
     }

@@ -65,18 +65,12 @@ pub async fn background_task<Fut>(
     db: DbPool,
     scope: DocumentBoxScope,
     future: Fut,
-) -> anyhow::Result<(TaskId, DateTime<Utc>)>
+) -> DbResult<(TaskId, DateTime<Utc>)>
 where
     Fut: Future<Output = (TaskStatus, serde_json::Value)> + Send + 'static,
 {
     // Create task for progression
-    let task = match Task::create(&db, scope).await {
-        Ok(value) => value,
-        Err(cause) => {
-            tracing::error!(?cause, "failed to create upload task");
-            anyhow::bail!("failed to create upload task")
-        }
-    };
+    let task = Task::create(&db, scope).await?;
 
     let task_id = task.id;
     let created_at = task.created_at;

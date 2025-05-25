@@ -12,7 +12,6 @@ use crate::{
     services::files::presigned::{safe_complete_presigned, CompletePresigned},
 };
 use docbox_database::{
-    connect_root_database, connect_tenant_database,
     models::{folder::Folder, presigned_upload_task::PresignedUploadTask, tenant::Tenant},
     DatabasePoolCache,
 };
@@ -104,11 +103,11 @@ pub async fn handle_file_uploaded(
     object_key: String,
 ) -> anyhow::Result<()> {
     let tenant = {
-        let db = connect_root_database(&data.db_cache).await?;
+        let db = data.db_cache.get_root_pool().await?;
         match Tenant::find_by_bucket(&db, &bucket_name).await? {
             Some(value) => value,
             None => {
-                tracing::warn!(?bucket_name, ?object_key,"file was uploaded into a bucket sqs is listening to but there was no matching tenant");
+                tracing::warn!(?bucket_name, ?object_key, "file was uploaded into a bucket sqs is listening to but there was no matching tenant");
                 return Ok(());
             }
         }
@@ -127,7 +126,7 @@ pub async fn handle_file_uploaded(
         }
     };
 
-    let db = connect_tenant_database(&data.db_cache, &tenant).await?;
+    let db = data.db_cache.get_tenant_pool(&tenant).await?;
 
     // Locate a pending upload task for the uploaded file
     let task = match PresignedUploadTask::find_by_file_key(&db, &object_key).await {
