@@ -14,11 +14,13 @@ use bytes::Bytes;
 use http::{HeaderMap, HeaderValue};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
-use reqwest::{header::CONTENT_TYPE, Proxy, Url};
+use reqwest::{header::CONTENT_TYPE, Url};
 use serde::Serialize;
 use std::{str::FromStr, time::Duration};
 use tracing::{debug, error};
-use url::Host;
+use url_validation::{is_allowed_url, TokioDomainResolver};
+
+mod url_validation;
 
 pub type OgpHttpClient = reqwest::Client;
 
@@ -37,16 +39,6 @@ const METADATA_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Time to wait while downloading a resource before timing out (between each read of data)
 const METADATA_READ_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Environment variable to use for the server address
-const HTTP_PROXY_ENV: &str = "HTTP_PROXY";
-
-/// Checks if the provided URL uses an IP address instead of a
-/// domain. We disallow these explicitly when fetching metadata
-pub fn is_url_ip(url: &Url) -> bool {
-    url.host()
-        .is_some_and(|value| matches!(value, Host::Ipv4(_) | Host::Ipv6(_)))
-}
-
 impl WebsiteMetaService {
     /// Creates a new instance of the service, this initializes the HTTP
     /// client and creates the cache
@@ -54,26 +46,25 @@ impl WebsiteMetaService {
         let mut headers = HeaderMap::new();
         headers.insert("user-agent", HeaderValue::from_static("DocboxLinkBot"));
 
-        let proxy = Proxy::all(
-            std::env::var(HTTP_PROXY_ENV).context("missing HTTP_PROXY environment variable")?,
-        )
-        .context("failed to create proxy")?;
-
         let client = reqwest::Client::builder()
-            .proxy(proxy)
             .default_headers(headers)
             .connect_timeout(METADATA_CONNECT_TIMEOUT)
             .read_timeout(METADATA_READ_TIMEOUT)
             .build()
             .context("failed to build http client")?;
 
+        Ok(Self::from_client(client))
+    }
+
+    /// Create a web scraper from the provided client
+    pub fn from_client(client: reqwest::Client) -> Self {
         let cache = Cache::builder()
             .time_to_idle(METADATA_CACHE_DURATION)
             .max_capacity(100)
             .eviction_policy(EvictionPolicy::tiny_lfu())
             .build();
 
-        Ok(Self { client, cache })
+        Self { client, cache }
     }
 
     /// Resolves the metadata for the website at the provided URL
@@ -83,14 +74,21 @@ impl WebsiteMetaService {
             return Ok(cached);
         }
 
+        let url = reqwest::Url::parse(url).context("invalid resource url")?;
+
+        // Assert we are allowed to access the URL
+        if !is_allowed_url::<TokioDomainResolver>(&url).await {
+            return Err(anyhow!("illegal url access"));
+        }
+
         // Get the website metadata
-        let res = get_website_metadata(&self.client, url).await?;
+        let res = get_website_metadata(&self.client, &url).await?;
         let best_favicon = determine_best_favicon(&res.favicons);
 
         // Download the favicon
         let favicon = match best_favicon {
             Some(best_favicon) => {
-                let result = download_remote_img(&self.client, url, &best_favicon.href)
+                let result = download_remote_img(&self.client, &url, &best_favicon.href)
                     .await
                     .context("failed to load favicon")
                     .map(|option| {
@@ -114,7 +112,7 @@ impl WebsiteMetaService {
         // Download the OGP image
         let image = match res.og_image.as_ref() {
             Some(og_image) => {
-                let result = download_remote_img(&self.client, url, og_image)
+                let result = download_remote_img(&self.client, &url, og_image)
                     .await
                     .context("failed to load ogp image")
                     .map(|option| {
@@ -210,9 +208,9 @@ fn determine_best_favicon(favicons: &[Favicon]) -> Option<&Favicon> {
 /// required from the <head/> element
 async fn get_website_metadata(
     client: &OgpHttpClient,
-    url: &str,
+    url: &Url,
 ) -> anyhow::Result<WebsiteMetadata> {
-    let mut url = reqwest::Url::parse(url).context("invalid resource url")?;
+    let mut url = url.clone();
 
     // Get the path from the URL
     let path = url.path();
@@ -425,7 +423,7 @@ fn parse_data_url(data_url: &str) -> anyhow::Result<(Bytes, Mime)> {
 /// the image could be loaded but was invalid (data urls)
 pub async fn download_remote_img(
     client: &OgpHttpClient,
-    base_url: &str,
+    base_url: &Url,
     href: &str,
 ) -> anyhow::Result<Option<(Bytes, Mime)>> {
     // Handle data urls
@@ -435,9 +433,6 @@ pub async fn download_remote_img(
 
     // Replace & encoding for query params
     let href = href.replace("&amp;", "&");
-    let base_url = base_url.replace("&amp;", "&");
-
-    let base_url = reqwest::Url::parse(&base_url).context("invalid resource url")?;
 
     debug!(%href, %base_url, "requesting remote image");
 
@@ -451,7 +446,8 @@ pub async fn download_remote_img(
     }
     .context("failed to parse icon url")?;
 
-    if is_url_ip(&favicon_url) {
+    // Assert we are allowed to access the URL
+    if !is_allowed_url::<TokioDomainResolver>(&favicon_url).await {
         return Err(anyhow!("illegal url access"));
     }
 
@@ -488,6 +484,7 @@ pub async fn download_remote_img(
 mod test {
     use http::{HeaderMap, HeaderValue};
     use reqwest::Client;
+    use url::Url;
 
     use super::{determine_best_favicon, download_remote_img, get_website_metadata};
 
@@ -502,8 +499,10 @@ mod test {
             .build()
             .unwrap();
 
-        let base_url = "https://www.youtube.com/watch?v=suhEIUapSJQ";
-        let res = get_website_metadata(&client, base_url).await.unwrap();
+        let base_url: Url = "https://www.youtube.com/watch?v=suhEIUapSJQ"
+            .parse()
+            .unwrap();
+        let res = get_website_metadata(&client, &base_url).await.unwrap();
         let best_favicon = determine_best_favicon(&res.favicons).unwrap();
 
         // let _bytes = download_remote_img(&client, base_url, &best_favicon.href)
@@ -520,7 +519,7 @@ mod test {
     async fn test_base64_data_url() {
         let client = Client::default();
 
-        let _bytes = download_remote_img(&client, "", "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAB0lEQVR42mP8/wcAAwAB/8I+gQAAAABJRU5ErkJggg==").await.unwrap();
+        let _bytes = download_remote_img(&client, &"http://example.com".parse().unwrap(), "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAB0lEQVR42mP8/wcAAwAB/8I+gQAAAABJRU5ErkJggg==").await.unwrap();
 
         dbg!(&_bytes);
     }

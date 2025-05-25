@@ -7,6 +7,9 @@ edition = "2021"
 # HTML parser for OGP metadata
 tl = "0.7.8"
 
+# DNS resolution
+tokio = { version = "1", features = ["net", "macros"] }
+
 # Logging
 tracing = { workspace = true }
 
@@ -36,6 +39,3 @@ base64 = "0.22.1"
 
 # HTTP primitives
 http = { workspace = true }
-
-[dev-dependencies]
-tokio = { version = "1", features = ["macros"] }
