@@ -23,7 +23,7 @@ use std::{
     sync::Arc,
 };
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
-use tracing::debug;
+use tracing::{debug, Level};
 use tracing_subscriber::{
     fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
 };
@@ -84,7 +84,23 @@ fn main() -> anyhow::Result<()> {
             tracing_subscriber::registry()
                 .with(filter)
                 .with(fmt_layer)
-                .with(sentry_tracing::layer())
+                .with(sentry_tracing::layer().event_filter(|event| {
+                    match event.level() {
+                        &Level::ERROR => {
+                            // Ignore errors emitted from the docbox_web_scraper when emitting
+                            // errors to sentry (These are errors caused by the upstream site)
+                            if let Some(module_path) = event.module_path() {
+                                if module_path.starts_with("docbox_web_scraper") {
+                                    return sentry_tracing::EventFilter::Ignore;
+                                }
+                            }
+
+                            sentry_tracing::EventFilter::Event
+                        }
+                        &Level::WARN | &Level::INFO => sentry_tracing::EventFilter::Breadcrumb,
+                        &Level::DEBUG | &Level::TRACE => sentry_tracing::EventFilter::Ignore,
+                    }
+                }))
                 .init();
 
             Some(sentry)
