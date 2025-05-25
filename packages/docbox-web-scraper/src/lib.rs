@@ -11,27 +11,21 @@
 
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
-use data_uri::parse_data_uri;
+use download_image::download_image_href;
 use http::{HeaderMap, HeaderValue};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
-use reqwest::{header::CONTENT_TYPE, Url};
+use reqwest::Url;
 use serde::Serialize;
 use std::{str::FromStr, time::Duration};
-use tracing::{debug, error};
+use tracing::error;
 use url_validation::{is_allowed_url, TokioDomainResolver};
 
 mod data_uri;
+mod download_image;
 mod url_validation;
 
 pub type OgpHttpClient = reqwest::Client;
-
-/// Service for looking up website metadata and storing a cached value
-#[derive(Clone)]
-pub struct WebsiteMetaService {
-    client: OgpHttpClient,
-    cache: Cache<String, ResolvedWebsiteMetadata>,
-}
 
 /// Duration to maintain site metadata for (48h)
 const METADATA_CACHE_DURATION: Duration = Duration::from_secs(60 * 60 * 48);
@@ -40,6 +34,33 @@ const METADATA_CACHE_DURATION: Duration = Duration::from_secs(60 * 60 * 48);
 const METADATA_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Time to wait while downloading a resource before timing out (between each read of data)
 const METADATA_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Service for looking up website metadata and storing a cached value
+#[derive(Clone)]
+pub struct WebsiteMetaService {
+    client: OgpHttpClient,
+    cache: Cache<String, ResolvedWebsiteMetadata>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct ResolvedWebsiteMetadata {
+    pub title: Option<String>,
+    pub og_title: Option<String>,
+    pub og_description: Option<String>,
+
+    #[serde(skip)]
+    pub og_image: Option<ResolvedImage>,
+    #[serde(skip)]
+    pub favicon: Option<ResolvedImage>,
+}
+
+/// Represents an image that has been resolved where the
+/// contents are now know and the content type as well
+#[derive(Debug, Clone)]
+pub struct ResolvedImage {
+    pub content_type: Mime,
+    pub bytes: Bytes,
+}
 
 impl WebsiteMetaService {
     /// Creates a new instance of the service, this initializes the HTTP
@@ -89,49 +110,33 @@ impl WebsiteMetaService {
 
         // Download the favicon
         let favicon = match best_favicon {
-            Some(best_favicon) => {
-                let result = download_remote_img(&self.client, &url, &best_favicon.href)
-                    .await
-                    .context("failed to load favicon")
-                    .map(|option| {
-                        option.map(|(favicon_bytes, favicon_mime)| ResolvedImage {
-                            bytes: favicon_bytes,
-                            content_type: favicon_mime,
-                        })
-                    });
-
-                match result {
-                    Ok(value) => value,
-                    Err(cause) => {
-                        error!(%url, ?cause, "failed to resolve favicon");
-                        None
-                    }
-                }
-            }
+            Some(best_favicon) => download_image_href(&self.client, &url, &best_favicon.href)
+                .await
+                .context("failed to load favicon")
+                .map(|(bytes, content_type)| ResolvedImage {
+                    bytes,
+                    content_type,
+                })
+                .inspect_err(|cause| {
+                    error!(%url, ?cause, "failed to resolve favicon");
+                })
+                .ok(),
             None => None,
         };
 
         // Download the OGP image
         let image = match res.og_image.as_ref() {
-            Some(og_image) => {
-                let result = download_remote_img(&self.client, &url, og_image)
-                    .await
-                    .context("failed to load ogp image")
-                    .map(|option| {
-                        option.map(|(image_bytes, image_mime)| ResolvedImage {
-                            bytes: image_bytes,
-                            content_type: image_mime,
-                        })
-                    });
-
-                match result {
-                    Ok(value) => value,
-                    Err(cause) => {
-                        error!(%url, ?cause, "failed to resolve og image");
-                        None
-                    }
-                }
-            }
+            Some(og_image) => download_image_href(&self.client, &url, og_image)
+                .await
+                .context("failed to load ogp image")
+                .map(|(bytes, content_type)| ResolvedImage {
+                    bytes,
+                    content_type,
+                })
+                .inspect_err(|cause| {
+                    error!(%url, ?cause, "failed to resolve valid ogp metadata image");
+                })
+                .ok(),
             None => None,
         };
 
@@ -148,26 +153,6 @@ impl WebsiteMetaService {
 
         Ok(resolved)
     }
-}
-
-#[derive(Clone, Serialize)]
-pub struct ResolvedWebsiteMetadata {
-    pub title: Option<String>,
-    pub og_title: Option<String>,
-    pub og_description: Option<String>,
-
-    #[serde(skip)]
-    pub og_image: Option<ResolvedImage>,
-    #[serde(skip)]
-    pub favicon: Option<ResolvedImage>,
-}
-
-/// Represents an image that has been resolved where the
-/// contents are now know and the content type as well
-#[derive(Debug, Clone)]
-pub struct ResolvedImage {
-    pub content_type: Mime,
-    pub bytes: Bytes,
 }
 
 /// Metadata extracted from a website
@@ -379,81 +364,13 @@ async fn get_website_metadata(
     })
 }
 
-/// Downloads an image from a remote URL, handles resolving the URL path for
-/// relative and absolute URLs
-///
-/// Has additional access control checks:
-/// - Prevents direct IP access
-/// - Aborts if the content type is not an image
-///
-/// Returns an option with [Some] when the image is valid and [None] when
-/// the image could be loaded but was invalid (data urls)
-pub async fn download_remote_img(
-    client: &OgpHttpClient,
-    base_url: &Url,
-    href: &str,
-) -> anyhow::Result<Option<(Bytes, Mime)>> {
-    // Handle data urls
-    if href.starts_with("data:") {
-        return Ok(parse_data_uri(href).map(Some)?);
-    }
-
-    // Replace & encoding for query params
-    let href = href.replace("&amp;", "&");
-
-    debug!(%href, %base_url, "requesting remote image");
-
-    // Resolve the full URL
-    let favicon_url = if href.starts_with("http") {
-        // If href is an absolute URL, use it directly
-        Url::parse(&href)
-    } else {
-        // If href is a relative URL, resolve it against the base URL
-        base_url.join(&href)
-    }
-    .context("failed to parse icon url")?;
-
-    // Assert we are allowed to access the URL
-    if !is_allowed_url::<TokioDomainResolver>(&favicon_url).await {
-        return Err(anyhow!("illegal url access"));
-    }
-
-    // Request page at URL
-    let response = client
-        .get(favicon_url)
-        .send()
-        .await
-        .context("failed to request resource")?
-        .error_for_status()
-        .context("resource responded with error")?;
-
-    let headers = response.headers();
-    let content_type = headers
-        .get(CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<Mime>().ok())
-        .context("remote image invalid or missing content type")?;
-
-    if content_type.type_() != mime::IMAGE {
-        return Err(anyhow!("remote image invalid content type"));
-    }
-
-    // Read response text
-    let bytes = response
-        .bytes()
-        .await
-        .context("failed to read resource response")?;
-
-    Ok(Some((bytes, content_type)))
-}
-
 #[cfg(test)]
 mod test {
     use http::{HeaderMap, HeaderValue};
     use reqwest::Client;
     use url::Url;
 
-    use super::{determine_best_favicon, download_remote_img, get_website_metadata};
+    use super::{determine_best_favicon, download_image_href, get_website_metadata};
 
     #[tokio::test]
     #[ignore]
@@ -486,7 +403,7 @@ mod test {
     async fn test_base64_data_url() {
         let client = Client::default();
 
-        let _bytes = download_remote_img(&client, &"http://example.com".parse().unwrap(), "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAB0lEQVR42mP8/wcAAwAB/8I+gQAAAABJRU5ErkJggg==").await.unwrap();
+        let _bytes = download_image_href(&client, &"http://example.com".parse().unwrap(), "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAB0lEQVR42mP8/wcAAwAB/8I+gQAAAABJRU5ErkJggg==").await.unwrap();
 
         dbg!(&_bytes);
     }
