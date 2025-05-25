@@ -1,10 +1,5 @@
 use tracing::Level;
-use tracing_subscriber::{
-    fmt::{format::FmtSpan, Layer},
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    EnvFilter,
-};
+use tracing_subscriber::{fmt::Layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 pub fn init_logging_with_sentry(dsn: String) -> anyhow::Result<sentry::ClientInitGuard> {
     let options = sentry::ClientOptions {
@@ -52,8 +47,6 @@ pub fn init_logging() -> anyhow::Result<()> {
 
 pub fn fmt_layer<S>() -> Layer<S> {
     tracing_subscriber::fmt::layer()
-        // Include starting and stopping of spans
-        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         // Display source code file paths
         .with_file(true)
         // Display source code line numbers
