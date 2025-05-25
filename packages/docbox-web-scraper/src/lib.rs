@@ -11,17 +11,19 @@
 
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
+use document::{determine_best_favicon, parse_website_metadata, WebsiteMetadata};
 use download_image::download_image_href;
 use http::{HeaderMap, HeaderValue};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
 use reqwest::Url;
 use serde::Serialize;
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 use tracing::error;
 use url_validation::{is_allowed_url, TokioDomainResolver};
 
 mod data_uri;
+mod document;
 mod download_image;
 mod url_validation;
 
@@ -155,42 +157,6 @@ impl WebsiteMetaService {
     }
 }
 
-/// Metadata extracted from a website
-#[derive(Debug)]
-struct WebsiteMetadata {
-    title: Option<String>,
-    og_title: Option<String>,
-    og_description: Option<String>,
-    og_image: Option<String>,
-    favicons: Vec<Favicon>,
-}
-
-/// Favicon extracted from a website
-#[derive(Debug, Clone)]
-struct Favicon {
-    ty: Mime,
-    _sizes: Option<String>,
-    href: String,
-}
-
-/// Determines which favicon to use from the provided list
-///
-/// Prefers .ico format currently then defaulting to first
-/// available. At a later date might want to check the sizes
-/// field
-fn determine_best_favicon(favicons: &[Favicon]) -> Option<&Favicon> {
-    // Search for an ico first
-    if let Some(ico) = favicons
-        .iter()
-        .find(|favicon| favicon.ty.essence_str().eq("image/x-icon"))
-    {
-        return Some(ico);
-    }
-
-    // Fallback to whatever is first
-    favicons.first()
-}
-
 /// Connects to a website reading the HTML contents, extracts the metadata
 /// required from the <head/> element
 async fn get_website_metadata(
@@ -223,145 +189,7 @@ async fn get_website_metadata(
         .await
         .context("failed to read resource response")?;
 
-    let dom = tl::parse(&text, tl::ParserOptions::default())
-        .context("failed to parse resource response")?;
-
-    let parser = dom.parser();
-
-    // Find the head element
-    let head = dom
-        .query_selector("head")
-        .context("failed to query page head")?
-        .next()
-        .context("page missing head")?
-        .get(parser)
-        .context("failed to parse head")?;
-
-    let mut title: Option<String> = None;
-    let mut description: Option<String> = None;
-    let mut og_title: Option<String> = None;
-    let mut og_description: Option<String> = None;
-    let mut og_image: Option<String> = None;
-    let mut favicons: Vec<Favicon> = Vec::new();
-
-    let children = head.children().context("head missing children")?;
-    for child in children.all(parser) {
-        let tag = match child.as_tag() {
-            Some(tag) => tag,
-            None => continue,
-        };
-
-        match tag.name().as_bytes() {
-            // Extract page title tag
-            b"title" => {
-                let value = tag.inner_text(parser);
-                title = Some(value.to_string());
-            }
-
-            // Extract metadata
-            b"meta" => {
-                let attributes = tag.attributes();
-                let property = match attributes.get("property").flatten() {
-                    Some(value) => value.as_bytes(),
-                    None => match attributes.get("name").flatten() {
-                        Some(value) => value.as_bytes(),
-                        None => continue,
-                    },
-                };
-
-                const DESCRIPTION: &[u8] = b"description";
-                const OG_TITLE: &[u8] = b"og:title";
-                const OG_DESCRIPTION: &[u8] = b"og:description";
-                const OG_IMAGE: &[u8] = b"og:image";
-
-                // Only work with the tags we use
-                if !matches!(property, DESCRIPTION | OG_TITLE | OG_DESCRIPTION | OG_IMAGE) {
-                    continue;
-                }
-
-                let content = match attributes.get("content").flatten() {
-                    Some(value) => value.as_utf8_str(),
-                    None => continue,
-                };
-
-                match property {
-                    DESCRIPTION => {
-                        description = Some(content.to_string());
-                    }
-                    OG_TITLE => {
-                        og_title = Some(content.to_string());
-                    }
-                    OG_DESCRIPTION => {
-                        og_description = Some(content.to_string());
-                    }
-                    OG_IMAGE => og_image = Some(content.to_string()),
-                    _ => {}
-                }
-            }
-
-            // Extract favicons
-            b"link" => {
-                let attributes = tag.attributes();
-
-                let rel = attributes
-                    .get("rel")
-                    .flatten()
-                    .map(|value| value.as_bytes());
-
-                // Only match icon link
-                if !matches!(rel, Some(b"icon" | b"shortcut icon")) {
-                    continue;
-                }
-
-                let mime = attributes
-                    .get("type")
-                    .flatten()
-                    .and_then(|value| Mime::from_str(value.as_utf8_str().as_ref()).ok());
-
-                // Ignore missing or invalid mimes
-                let ty = match mime {
-                    Some(value) => value,
-                    None => continue,
-                };
-
-                let href = attributes
-                    .get("href")
-                    .flatten()
-                    .map(|value| value.as_utf8_str().to_string());
-
-                // Ignore missing href
-                let href = match href {
-                    Some(value) => value,
-                    None => continue,
-                };
-
-                let sizes = attributes
-                    .get("sizes")
-                    .flatten()
-                    .map(|value| value.as_utf8_str().to_string());
-
-                favicons.push(Favicon {
-                    ty,
-                    href,
-                    _sizes: sizes,
-                })
-            }
-
-            // Ignore other tags
-            _ => {}
-        }
-    }
-
-    // Fallback to description
-    let og_description = og_description.or(description);
-
-    Ok(WebsiteMetadata {
-        title,
-        og_title,
-        og_description,
-        og_image,
-        favicons,
-    })
+    parse_website_metadata(&text)
 }
 
 #[cfg(test)]

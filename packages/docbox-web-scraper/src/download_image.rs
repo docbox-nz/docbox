@@ -1,3 +1,7 @@
+//! # Download Image
+//!
+//! Logic around downloading and resolving remote images
+
 use crate::data_uri::{parse_data_uri, DataUriError};
 use crate::url_validation::{is_allowed_url, TokioDomainResolver};
 use bytes::Bytes;
