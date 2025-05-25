@@ -8,6 +8,7 @@ use std::str::FromStr;
 use anyhow::Context;
 use mime::Mime;
 use tl::{HTMLTag, Parser};
+use url::Url;
 
 /// Metadata extracted from a website
 #[derive(Debug)]
@@ -37,18 +38,39 @@ struct WebsiteDocumentState {
     favicons: Vec<Favicon>,
 }
 
-/// Determines which favicon to use from the provided list
-///
-/// Prefers .ico format currently then defaulting to first
-/// available. At a later date might want to check the sizes
-/// field
-pub fn determine_best_favicon(favicons: &[Favicon]) -> Option<&Favicon> {
-    favicons
-        .iter()
-        // Search for an ico first
-        .find(|favicon| favicon.ty.essence_str().eq("image/x-icon"))
-        // Fallback to whatever is first
-        .or_else(|| favicons.first())
+/// Connects to a website reading the HTML contents, extracts the metadata
+/// required from the <head/> element
+pub async fn get_website_metadata(
+    client: &reqwest::Client,
+    url: &Url,
+) -> anyhow::Result<WebsiteMetadata> {
+    let mut url = url.clone();
+
+    // Get the path from the URL
+    let path = url.path();
+
+    // Check if the path ends with a common HTML extension or if it is empty
+    if !path.ends_with(".html") && !path.ends_with(".htm") && path.is_empty() {
+        // Append /index.html if needed
+        url.set_path("/index.html");
+    }
+
+    // Request page at URL
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .context("failed to request resource")?
+        .error_for_status()
+        .context("resource responded with error")?;
+
+    // Read response text
+    let text = response
+        .text()
+        .await
+        .context("failed to read resource response")?;
+
+    parse_website_metadata(&text)
 }
 
 pub fn parse_website_metadata(html: &str) -> anyhow::Result<WebsiteMetadata> {
@@ -97,6 +119,20 @@ pub fn parse_website_metadata(html: &str) -> anyhow::Result<WebsiteMetadata> {
         og_image: state.og_image,
         favicons: state.favicons,
     })
+}
+
+/// Determines which favicon to use from the provided list
+///
+/// Prefers .ico format currently then defaulting to first
+/// available. At a later date might want to check the sizes
+/// field
+pub fn determine_best_favicon(favicons: &[Favicon]) -> Option<&Favicon> {
+    favicons
+        .iter()
+        // Search for an ico first
+        .find(|favicon| favicon.ty.essence_str().eq("image/x-icon"))
+        // Fallback to whatever is first
+        .or_else(|| favicons.first())
 }
 
 /// Visit <title/> tags in the document

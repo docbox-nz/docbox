@@ -112,7 +112,8 @@ async fn server() -> anyhow::Result<()> {
     };
 
     // Create website scraping service
-    let website_meta_service = Arc::new(WebsiteMetaService::new()?);
+    let website_meta_service =
+        Arc::new(WebsiteMetaService::new().context("failed to build web scraper http client")?);
 
     // Load AWS configuration
     let aws_config = aws_config().await;

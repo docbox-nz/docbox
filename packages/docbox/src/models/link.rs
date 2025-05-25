@@ -60,6 +60,9 @@ pub enum HttpLinkError {
     #[error("unknown link")]
     UnknownLink,
 
+    #[error("invalid link url")]
+    InvalidLinkUrl,
+
     /// Failed to create the link
     #[error(transparent)]
     CreateError(CreateLinkError),
@@ -83,6 +86,7 @@ impl HttpError for HttpLinkError {
             | HttpLinkError::NoFavicon
             | HttpLinkError::NoImage
             | HttpLinkError::FailedResolve => StatusCode::NOT_FOUND,
+            HttpLinkError::InvalidLinkUrl => StatusCode::BAD_REQUEST,
             HttpLinkError::CreateError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

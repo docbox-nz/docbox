@@ -184,19 +184,21 @@ pub async fn get_metadata(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let resolved = website_service
-        .resolve_website(&link.value)
-        .await
-        .map_err(|cause| {
-            tracing::warn!(?cause, "failed to resolve link site metadata");
-            HttpLinkError::FailedResolve
-        })?;
+    let url = docbox_web_scraper::Url::parse(&link.value).map_err(|cause| {
+        tracing::warn!(?cause, "invalid website");
+        HttpLinkError::InvalidLinkUrl
+    })?;
+
+    let resolved = website_service.resolve_website(&url).await.ok_or_else(|| {
+        tracing::warn!("failed to resolve link site metadata");
+        HttpLinkError::FailedResolve
+    })?;
 
     Ok(Json(LinkMetadataResponse {
         title: resolved.title,
         og_title: resolved.og_title,
         og_description: resolved.og_description,
-        favicon: resolved.favicon.is_some(),
+        favicon: resolved.best_favicon.is_some(),
         image: resolved.og_image.is_some(),
     }))
 }
@@ -237,14 +239,15 @@ pub async fn get_favicon(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let resolved = website_service
-        .resolve_website(&link.value)
+    let url = docbox_web_scraper::Url::parse(&link.value).map_err(|cause| {
+        tracing::warn!(?cause, "invalid website");
+        HttpLinkError::InvalidLinkUrl
+    })?;
+
+    let favicon = website_service
+        .resolve_website_favicon(&url)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to resolve website");
-            HttpCommonError::ServerError
-        })?;
-    let favicon = resolved.favicon.ok_or(HttpLinkError::NoFavicon)?;
+        .ok_or(HttpLinkError::NoFavicon)?;
     let body = axum::body::Body::from(favicon.bytes);
 
     Ok(Response::builder()
@@ -289,14 +292,15 @@ pub async fn get_image(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let resolved = website_service
-        .resolve_website(&link.value)
+    let url = docbox_web_scraper::Url::parse(&link.value).map_err(|cause| {
+        tracing::warn!(?cause, "invalid website");
+        HttpLinkError::InvalidLinkUrl
+    })?;
+
+    let og_image = website_service
+        .resolve_website_image(&url)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to resolve website");
-            HttpCommonError::ServerError
-        })?;
-    let og_image = resolved.og_image.ok_or(HttpLinkError::NoImage)?;
+        .ok_or(HttpLinkError::NoImage)?;
     let body = axum::body::Body::from(og_image.bytes);
 
     Ok(Response::builder()

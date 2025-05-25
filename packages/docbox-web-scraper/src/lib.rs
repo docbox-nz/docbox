@@ -1,25 +1,15 @@
-//! Service that handles scraping websites.
+//! # Docbox Web Scraper
 //!
-//! The service obtains the following:
-//! - Favicon
-//! - Page title
-//! - OGP/Social Metadata (https://ogp.me/)
-//!
-//! It downloads the desired thumbnail and an OGP image if available
-//! and stores it as [Bytes] in memory. Keeps an in-memory cache for
-//! 48h of already visited websites
+//! Web-scraping client for getting website metadata, favicon, ...etc and
+//! maintaining an internal cache
 
-use anyhow::{anyhow, Context};
 use bytes::Bytes;
-use document::{determine_best_favicon, parse_website_metadata, WebsiteMetadata};
-use download_image::download_image_href;
-use http::{HeaderMap, HeaderValue};
+use document::{determine_best_favicon, get_website_metadata, Favicon};
+use download_image::{download_image_href, resolve_full_url, ResolvedUri};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
-use reqwest::Url;
 use serde::Serialize;
 use std::time::Duration;
-use tracing::error;
 use url_validation::{is_allowed_url, TokioDomainResolver};
 
 mod data_uri;
@@ -27,10 +17,19 @@ mod document;
 mod download_image;
 mod url_validation;
 
+pub use reqwest::Url;
+
 pub type OgpHttpClient = reqwest::Client;
 
 /// Duration to maintain site metadata for (48h)
 const METADATA_CACHE_DURATION: Duration = Duration::from_secs(60 * 60 * 48);
+/// Maximum number of site metadata to maintain in the cache
+const METADATA_CACHE_CAPACITY: u64 = 50;
+
+/// Duration to maintain resolved images for (1h)
+const IMAGE_CACHE_DURATION: Duration = Duration::from_secs(60 * 60);
+/// Maximum number of images to maintain in the cache
+const IMAGE_CACHE_CAPACITY: u64 = 50;
 
 /// Time to wait when attempting to fetch resource before timing out
 const METADATA_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -38,10 +37,19 @@ const METADATA_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const METADATA_READ_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Service for looking up website metadata and storing a cached value
-#[derive(Clone)]
 pub struct WebsiteMetaService {
     client: OgpHttpClient,
-    cache: Cache<String, ResolvedWebsiteMetadata>,
+    /// Cache for website metadata
+    cache: Cache<String, Option<ResolvedWebsiteMetadata>>,
+    /// Cache for resolved images will contain [None] for images that failed to load
+    image_cache: Cache<(String, ImageCacheKey), Option<ResolvedImage>>,
+}
+
+/// Cache key for image cache value types
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ImageCacheKey {
+    Favicon,
+    Image,
 }
 
 #[derive(Clone, Serialize)]
@@ -50,10 +58,13 @@ pub struct ResolvedWebsiteMetadata {
     pub og_title: Option<String>,
     pub og_description: Option<String>,
 
+    /// Best determined image
     #[serde(skip)]
-    pub og_image: Option<ResolvedImage>,
+    pub og_image: Option<String>,
+
+    /// Best determined favicon
     #[serde(skip)]
-    pub favicon: Option<ResolvedImage>,
+    pub best_favicon: Option<Favicon>,
 }
 
 /// Represents an image that has been resolved where the
@@ -67,172 +78,111 @@ pub struct ResolvedImage {
 impl WebsiteMetaService {
     /// Creates a new instance of the service, this initializes the HTTP
     /// client and creates the cache
-    pub fn new() -> anyhow::Result<Self> {
-        let mut headers = HeaderMap::new();
-        headers.insert("user-agent", HeaderValue::from_static("DocboxLinkBot"));
-
+    pub fn new() -> reqwest::Result<Self> {
         let client = reqwest::Client::builder()
-            .default_headers(headers)
+            .user_agent("DocboxLinkBot")
             .connect_timeout(METADATA_CONNECT_TIMEOUT)
             .read_timeout(METADATA_READ_TIMEOUT)
-            .build()
-            .context("failed to build http client")?;
+            .build()?;
 
         Ok(Self::from_client(client))
     }
 
     /// Create a web scraper from the provided client
     pub fn from_client(client: reqwest::Client) -> Self {
+        // Cache for metadata
         let cache = Cache::builder()
             .time_to_idle(METADATA_CACHE_DURATION)
-            .max_capacity(100)
+            .max_capacity(METADATA_CACHE_CAPACITY)
             .eviction_policy(EvictionPolicy::tiny_lfu())
             .build();
 
-        Self { client, cache }
+        // Cache for loaded images
+        let image_cache = Cache::builder()
+            .time_to_idle(IMAGE_CACHE_DURATION)
+            .max_capacity(IMAGE_CACHE_CAPACITY)
+            .eviction_policy(EvictionPolicy::tiny_lfu())
+            .build();
+
+        Self {
+            client,
+            cache,
+            image_cache,
+        }
     }
 
     /// Resolves the metadata for the website at the provided URL
-    pub async fn resolve_website(&self, url: &str) -> anyhow::Result<ResolvedWebsiteMetadata> {
-        // Cache hit
-        if let Some(cached) = self.cache.get(url).await {
-            return Ok(cached);
-        }
+    pub async fn resolve_website(&self, url: &Url) -> Option<ResolvedWebsiteMetadata> {
+        self.cache
+            .get_with(url.to_string(), async move {
+                // Check if we are allowed to access the URL
+                if !is_allowed_url::<TokioDomainResolver>(url).await {
+                    return None;
+                }
 
-        let url = reqwest::Url::parse(url).context("invalid resource url")?;
+                // Get the website metadata
+                let res = match get_website_metadata(&self.client, url).await {
+                    Ok(value) => value,
+                    Err(cause) => {
+                        tracing::error!(?cause, "failed to get website metadata");
+                        return None;
+                    }
+                };
 
-        // Assert we are allowed to access the URL
-        if !is_allowed_url::<TokioDomainResolver>(&url).await {
-            return Err(anyhow!("illegal url access"));
-        }
+                let best_favicon = determine_best_favicon(&res.favicons).cloned();
 
-        // Get the website metadata
-        let res = get_website_metadata(&self.client, &url).await?;
-        let best_favicon = determine_best_favicon(&res.favicons);
+                Some(ResolvedWebsiteMetadata {
+                    title: res.title,
+                    og_title: res.og_title,
+                    og_description: res.og_description,
+                    og_image: res.og_image,
+                    best_favicon,
+                })
+            })
+            .await
+    }
 
-        // Download the favicon
-        let favicon = match best_favicon {
-            Some(best_favicon) => download_image_href(&self.client, &url, &best_favicon.href)
-                .await
-                .context("failed to load favicon")
-                .map(|(bytes, content_type)| ResolvedImage {
+    pub async fn resolve_website_favicon(&self, url: &Url) -> Option<ResolvedImage> {
+        let website = self.resolve_website(url).await?;
+        let favicon = website.best_favicon?.href;
+
+        self.resolve_image(url, ImageCacheKey::Favicon, favicon)
+            .await
+    }
+
+    pub async fn resolve_website_image(&self, url: &Url) -> Option<ResolvedImage> {
+        let website = self.resolve_website(url).await?;
+        let og_image = website.og_image?;
+
+        self.resolve_image(url, ImageCacheKey::Image, og_image)
+            .await
+    }
+
+    async fn resolve_image(
+        &self,
+        url: &Url,
+        cache_key: ImageCacheKey,
+        image: String,
+    ) -> Option<ResolvedImage> {
+        self.image_cache
+            .get_with((url.to_string(), cache_key), async move {
+                let image_url = resolve_full_url(url, &image).ok()?;
+
+                // Check we are allowed to access the URL if its absolute
+                if let ResolvedUri::Absolute(image_url) = &image_url {
+                    if !is_allowed_url::<TokioDomainResolver>(image_url).await {
+                        return None;
+                    }
+                }
+
+                let (bytes, content_type) =
+                    download_image_href(&self.client, image_url).await.ok()?;
+
+                Some(ResolvedImage {
                     bytes,
                     content_type,
                 })
-                .inspect_err(|cause| {
-                    error!(%url, ?cause, "failed to resolve favicon");
-                })
-                .ok(),
-            None => None,
-        };
-
-        // Download the OGP image
-        let image = match res.og_image.as_ref() {
-            Some(og_image) => download_image_href(&self.client, &url, og_image)
-                .await
-                .context("failed to load ogp image")
-                .map(|(bytes, content_type)| ResolvedImage {
-                    bytes,
-                    content_type,
-                })
-                .inspect_err(|cause| {
-                    error!(%url, ?cause, "failed to resolve valid ogp metadata image");
-                })
-                .ok(),
-            None => None,
-        };
-
-        let resolved = ResolvedWebsiteMetadata {
-            title: res.title,
-            og_title: res.og_title,
-            og_description: res.og_description,
-            og_image: image,
-            favicon,
-        };
-
-        // Cache the response
-        self.cache.insert(url.to_string(), resolved.clone()).await;
-
-        Ok(resolved)
-    }
-}
-
-/// Connects to a website reading the HTML contents, extracts the metadata
-/// required from the <head/> element
-async fn get_website_metadata(
-    client: &OgpHttpClient,
-    url: &Url,
-) -> anyhow::Result<WebsiteMetadata> {
-    let mut url = url.clone();
-
-    // Get the path from the URL
-    let path = url.path();
-
-    // Check if the path ends with a common HTML extension or if it is empty
-    if !path.ends_with(".html") && !path.ends_with(".htm") && path.is_empty() {
-        // Append /index.html if needed
-        url.set_path("/index.html");
-    }
-
-    // Request page at URL
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .context("failed to request resource")?
-        .error_for_status()
-        .context("resource responded with error")?;
-
-    // Read response text
-    let text = response
-        .text()
-        .await
-        .context("failed to read resource response")?;
-
-    parse_website_metadata(&text)
-}
-
-#[cfg(test)]
-mod test {
-    use http::{HeaderMap, HeaderValue};
-    use reqwest::Client;
-    use url::Url;
-
-    use super::{determine_best_favicon, download_image_href, get_website_metadata};
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_google_ogp() {
-        let mut headers = HeaderMap::new();
-        headers.insert("user-agent", HeaderValue::from_static("DocboxLinkBot"));
-
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .unwrap();
-
-        let base_url: Url = "https://www.youtube.com/watch?v=suhEIUapSJQ"
-            .parse()
-            .unwrap();
-        let res = get_website_metadata(&client, &base_url).await.unwrap();
-        let best_favicon = determine_best_favicon(&res.favicons).unwrap();
-
-        // let _bytes = download_remote_img(&client, base_url, &best_favicon.href)
-        //     .await
-        //     .unwrap();
-        // let _bytes = download_remote_img(&client, base_url, &res.og_image.clone().unwrap())
-        //     .await
-        //     .unwrap();
-
-        dbg!(&res, &best_favicon);
-    }
-    #[tokio::test]
-    #[ignore]
-    async fn test_base64_data_url() {
-        let client = Client::default();
-
-        let _bytes = download_image_href(&client, &"http://example.com".parse().unwrap(), "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAB0lEQVR42mP8/wcAAwAB/8I+gQAAAABJRU5ErkJggg==").await.unwrap();
-
-        dbg!(&_bytes);
+            })
+            .await
     }
 }

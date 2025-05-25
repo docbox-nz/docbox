@@ -246,8 +246,6 @@ impl Stream for AwsFileStream {
     ) -> std::task::Poll<Option<Self::Item>> {
         let this = self.get_mut();
         let inner = std::pin::Pin::new(&mut this.inner);
-        inner
-            .poll_next(cx)
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+        inner.poll_next(cx).map_err(std::io::Error::other)
     }
 }

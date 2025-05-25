@@ -3,7 +3,6 @@
 //! Logic around downloading and resolving remote images
 
 use crate::data_uri::{parse_data_uri, DataUriError};
-use crate::url_validation::{is_allowed_url, TokioDomainResolver};
 use bytes::Bytes;
 use mime::Mime;
 use reqwest::{header::CONTENT_TYPE, Url};
@@ -31,45 +30,24 @@ pub enum DownloadImageError {
     /// Error related to a data uri
     #[error(transparent)]
     DataUri(DataUriError),
-
-    /// Failed to create the full URL from its href
-    #[error("invalid request url")]
-    InvalidUrl,
-
-    /// Requested URL was disallowed under the security requirements
-    #[error("request url is not allowed")]
-    DisallowedUrl,
 }
 
-/// Downloads an image file from a href relative to the `base_url`
-pub async fn download_image_href(
-    client: &reqwest::Client,
-    base_url: &Url,
-    href: &str,
-) -> Result<(Bytes, Mime), DownloadImageError> {
-    // Handle data URIs
-    if href.starts_with("data:") {
-        return parse_data_uri(href)
-            .map_err(DownloadImageError::DataUri)
-            .and_then(|(bytes, mime)| {
-                // Ensure a valid mime type is present
-                if mime.type_() != mime::IMAGE {
-                    return Err(DownloadImageError::InvalidMimeType);
-                }
+pub enum ResolvedUri<'a> {
+    /// Uri is a data URI
+    Data(&'a str),
 
-                Ok((bytes, mime))
-            });
+    /// Full absolute URL
+    Absolute(Url),
+}
+
+pub fn resolve_full_url<'a>(
+    base_url: &Url,
+    href: &'a str,
+) -> Result<ResolvedUri<'a>, url::ParseError> {
+    if href.starts_with("data:") {
+        return Ok(ResolvedUri::Data(href));
     }
 
-    let image_url = resolve_image_href(base_url, href).await?;
-    debug!(%base_url, %href, "requesting remote image");
-    download_image(client, image_url).await
-}
-
-/// Turns a image href into the full destination URL
-/// handles absolute URLs and validates whether the
-/// URL is allowed
-async fn resolve_image_href(base_url: &Url, href: &str) -> Result<Url, DownloadImageError> {
     // Replace & encoding for query params
     let href = href.replace("&amp;", "&");
 
@@ -80,15 +58,34 @@ async fn resolve_image_href(base_url: &Url, href: &str) -> Result<Url, DownloadI
     } else {
         // If href is a relative URL, resolve it against the base URL
         base_url.join(&href)
-    }
-    .map_err(|_| DownloadImageError::InvalidUrl)?;
+    }?;
 
-    // Assert we are allowed to access the URL
-    if !is_allowed_url::<TokioDomainResolver>(&url).await {
-        return Err(DownloadImageError::DisallowedUrl);
-    }
+    Ok(ResolvedUri::Absolute(url))
+}
 
-    Ok(url)
+/// Downloads an image file from a href relative to the `base_url`
+pub async fn download_image_href(
+    client: &reqwest::Client,
+    url: ResolvedUri<'_>,
+) -> Result<(Bytes, Mime), DownloadImageError> {
+    match url {
+        // Handle data URIs
+        ResolvedUri::Data(data_uri) => parse_data_uri(data_uri)
+            .map_err(DownloadImageError::DataUri)
+            .and_then(|(bytes, mime)| {
+                // Ensure a valid mime type is present
+                if mime.type_() != mime::IMAGE {
+                    return Err(DownloadImageError::InvalidMimeType);
+                }
+
+                Ok((bytes, mime))
+            }),
+
+        ResolvedUri::Absolute(url) => {
+            debug!(%url, "requesting remote image");
+            download_image(client, url).await
+        }
+    }
 }
 
 /// Downloads an image from a `url` ensures the returned content-type
