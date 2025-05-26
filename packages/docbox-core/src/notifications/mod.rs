@@ -17,12 +17,19 @@ use docbox_database::{
 };
 use std::sync::Arc;
 
+mod mpsc;
 mod noop;
 mod sqs;
+
+pub use mpsc::MpscNotificationQueueSender;
+
+// Pretty common utility function
+pub use sqs::parse_bucket_message;
 
 pub enum AppNotificationQueue {
     Sqs(sqs::SqsNotificationQueue),
     Noop(noop::NoopNotificationQueue),
+    Mpsc(mpsc::MpscNotificationQueue),
 }
 
 impl AppNotificationQueue {
@@ -34,10 +41,16 @@ impl AppNotificationQueue {
         AppNotificationQueue::Sqs(sqs::SqsNotificationQueue::create(sqs_client, queue_url))
     }
 
+    pub fn create_mpsc() -> (Self, MpscNotificationQueueSender) {
+        let (queue, tx) = mpsc::MpscNotificationQueue::create();
+        (AppNotificationQueue::Mpsc(queue), tx)
+    }
+
     pub async fn next_message(&mut self) -> Option<NotificationQueueMessage> {
         match self {
             AppNotificationQueue::Sqs(queue) => queue.next_message().await,
             AppNotificationQueue::Noop(queue) => queue.next_message().await,
+            AppNotificationQueue::Mpsc(queue) => queue.next_message().await,
         }
     }
 }

@@ -1,5 +1,5 @@
 use anyhow::Context;
-use axum::{extract::DefaultBodyLimit, Extension};
+use axum::{extract::DefaultBodyLimit, routing::post, Extension};
 use docbox_core::{
     aws::{aws_config, s3_client_from_env, SecretsManagerClient, SqsClient},
     background::{perform_background_tasks, BackgroundTaskData},
@@ -128,6 +128,9 @@ async fn server() -> anyhow::Result<()> {
     let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
         .context("missing environment variable DOCBOX_DB_CREDENTIAL_NAME")?;
 
+    // Setup router
+    let mut app = router();
+
     // Setup database cache / connector
     let db_cache = DatabasePoolCache::new(db_host, db_port, db_root_secret_name, secrets);
     let db_cache = Arc::new(db_cache);
@@ -153,16 +156,27 @@ async fn server() -> anyhow::Result<()> {
     let storage_factory = StorageLayerFactory::new(s3_storage_factory);
 
     // Setup notification queue
-    let notification_queue = match std::env::var("DOCBOX_SQS_URL") {
-        Ok(notification_queue_url) => {
+    let notification_queue = match (
+        std::env::var("DOCBOX_MPSC_QUEUE"),
+        std::env::var("DOCBOX_SQS_URL"),
+    ) {
+        (Ok(_), _) => {
+            tracing::debug!("DOCBOX_MPSC_QUEUE is set using local webhook notification queue");
+            let (queue, tx) = AppNotificationQueue::create_mpsc();
+
+            // Append the webhook handling endpoint and sender extension
+            app = app
+                .route("/webhook/s3", post(routes::utils::webhook_s3))
+                .layer(Extension(tx));
+
+            queue
+        }
+        (_, Ok(notification_queue_url)) => {
             tracing::debug!(queue_url = %notification_queue_url, "using SQS notification queue");
             AppNotificationQueue::create_sqs(sqs_client, notification_queue_url)
         }
-        Err(cause) => {
-            tracing::warn!(
-                ?cause,
-                "DOCBOX_SQS_URL queue not specified, falling back to no-op queue"
-            );
+        _ => {
+            tracing::warn!("queue not specified, falling back to no-op queue");
             AppNotificationQueue::create_noop()
         }
     };
@@ -195,7 +209,8 @@ async fn server() -> anyhow::Result<()> {
         })
         .unwrap_or(DEFAULT_SERVER_ADDRESS);
 
-    let app = router()
+    // Setup app layers and extension
+    let app = app
         .layer(Extension(search_index_factory))
         .layer(Extension(storage_factory))
         .layer(Extension(db_cache))

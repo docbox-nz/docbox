@@ -46,7 +46,6 @@ pub fn s3_client_from_env(config: &SdkConfig) -> anyhow::Result<S3Client> {
             );
 
             // Enforces the "path" style for S3 bucket access
-            // https://github.com/adobe/S3Mock#path-style-vs-domain-style-access since it does
             let config = aws_sdk_s3::config::Builder::from(config)
                 .force_path_style(true)
                 .endpoint_url(endpoint_url)

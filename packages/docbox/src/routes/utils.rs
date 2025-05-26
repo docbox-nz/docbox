@@ -1,7 +1,14 @@
-use axum::Json;
-use docbox_core::utils::validation::ALLOWED_MIME_TYPES;
+use axum::{http::StatusCode, Extension, Json};
+use docbox_core::{
+    notifications::{parse_bucket_message, MpscNotificationQueueSender, NotificationQueueMessage},
+    utils::validation::ALLOWED_MIME_TYPES,
+};
 
-use crate::{models::document_box::DocumentBoxOptions, MAX_FILE_SIZE};
+use crate::{
+    error::{DynHttpError, HttpCommonError},
+    models::document_box::DocumentBoxOptions,
+    MAX_FILE_SIZE,
+};
 
 pub const UTILS_TAG: &str = "Utils";
 
@@ -22,4 +29,27 @@ pub async fn get_options() -> Json<DocumentBoxOptions> {
         allowed_mime_types: ALLOWED_MIME_TYPES,
         max_file_size: MAX_FILE_SIZE,
     })
+}
+
+/// POST /webhook/s3
+///
+/// Internal endpoint for handling requests from a webhook
+pub async fn webhook_s3(
+    Extension(tx): Extension<MpscNotificationQueueSender>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<StatusCode, DynHttpError> {
+    tracing::debug!(?req, "got webhook s3 event");
+
+    let (bucket_name, object_key) = parse_bucket_message(&req).ok_or_else(|| {
+        tracing::warn!("failed to handle webhook s3 event");
+        HttpCommonError::ServerError
+    })?;
+
+    tx.send(NotificationQueueMessage::FileCreated {
+        bucket_name,
+        object_key,
+    })
+    .await;
+
+    Ok(StatusCode::OK)
 }

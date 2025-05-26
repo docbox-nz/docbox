@@ -101,13 +101,15 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
       MINIO_NOTIFY_WEBHOOK_ENABLE_primary: "on"
-      MINIO_NOTIFY_WEBHOOK_ENDPOINT_primary: "http://docbox:8080/s3-events"
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_primary: "http://host.docker.internal:8080/webhook/s3"
       MINIO_NOTIFY_WEBHOOK_QUEUE_DIR: "/data/events"
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
     networks:
       - docbox
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   squid:
     image: sameersbn/squid:3.5.27-2
@@ -129,7 +131,7 @@ services:
       - docbox
     depends_on:
       - database
-      - s3mock
+      - minio
       - opensearch-node1
       - opensearch-node2
       - opensearch-dashboards
@@ -152,7 +154,6 @@ volumes:
   opensearch-data2:
   postgres_data:
   pgadmin-data:
-  locals3:
   minio-data:
 
 networks:
