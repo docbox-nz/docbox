@@ -73,7 +73,7 @@ fn apply_exif_orientation(img: DynamicImage, file_bytes: &[u8]) -> DynamicImage 
 
         // Failing to read the EXIF metadata is not considered a failure
         Err(cause) => {
-            tracing::error!(?cause, "failed to read exif metadata");
+            tracing::warn!(?cause, "failed to read exif metadata");
             return img;
         }
     };
