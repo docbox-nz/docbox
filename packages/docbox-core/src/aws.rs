@@ -1,4 +1,6 @@
-use aws_config::{meta::region::RegionProviderChain, SdkConfig};
+use anyhow::Context;
+use aws_config::{meta::region::RegionProviderChain, BehaviorVersion, SdkConfig};
+use aws_sdk_s3::config::Credentials;
 
 pub type SqsClient = aws_sdk_sqs::Client;
 pub type S3Client = aws_sdk_s3::Client;
@@ -14,26 +16,45 @@ pub async fn aws_config() -> SdkConfig {
     aws_config::from_env()
         // Setup the region provider
         .region(region_provider)
+        .behavior_version(BehaviorVersion::v2025_01_17())
         .load()
         .await
 }
 
-/// FOR LOCAL MOCK ONLY
-///
-/// Enforces the "path" style for S3 bucket access. Required for the local s3mock
-/// https://github.com/adobe/S3Mock#path-style-vs-domain-style-access since it does
-/// not support the domain style buckets.
-///
-/// Without this testing locally with s3mock will fail when attempting to create buckets
-pub fn create_s3_client_dev() -> S3Client {
-    let config = aws_sdk_s3::config::Builder::new()
-        .force_path_style(true)
-        .endpoint_url(std::env::var("AWS_ENDPOINT_URL_S3").unwrap())
-        .region(aws_config::Region::new(
-            std::env::var("AWS_REGION").unwrap(),
-        ))
-        .behavior_version(aws_config::BehaviorVersion::latest())
-        .build();
+pub fn s3_client_from_env(config: &SdkConfig) -> anyhow::Result<S3Client> {
+    match std::env::var("DOCBOX_S3_ENDPOINT") {
+        // Using a custom S3 endpoint
+        Ok(endpoint_url) => {
+            tracing::debug!(
+                ?endpoint_url,
+                "DOCBOX_S3_ENDPOINT is set, overriding S3 endpoint"
+            );
 
-    S3Client::from_conf(config)
+            let access_key_id = std::env::var("DOCBOX_S3_ACCESS_KEY_ID").context(
+                "cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_ID",
+            )?;
+            let access_key_secret = std::env::var("DOCBOX_S3_ACCESS_KEY_SECRET").context(
+                "cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_SECRET",
+            )?;
+
+            let credentials = Credentials::new(
+                access_key_id,
+                access_key_secret,
+                None,
+                None,
+                "docbox_key_provider",
+            );
+
+            // Enforces the "path" style for S3 bucket access
+            // https://github.com/adobe/S3Mock#path-style-vs-domain-style-access since it does
+            let config = aws_sdk_s3::config::Builder::from(config)
+                .force_path_style(true)
+                .endpoint_url(endpoint_url)
+                .credentials_provider(credentials)
+                .build();
+
+            Ok(S3Client::from_conf(config))
+        }
+        Err(_) => Ok(S3Client::new(config)),
+    }
 }

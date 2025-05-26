@@ -14,6 +14,7 @@ use aws_sdk_s3::{
 use bytes::Bytes;
 use chrono::{DateTime, TimeDelta, Utc};
 use futures::Stream;
+use reqwest::StatusCode;
 
 #[derive(Clone)]
 pub struct S3StorageLayerFactory {
@@ -169,7 +170,8 @@ impl StorageLayer for S3StorageLayer {
     }
 
     async fn add_bucket_cors(&self, origins: Vec<String>) -> anyhow::Result<()> {
-        self.client
+        if let Err(cause) = self
+            .client
             .put_bucket_cors()
             .bucket(&self.bucket_name)
             .cors_configuration(
@@ -185,7 +187,17 @@ impl StorageLayer for S3StorageLayer {
                     .build()?,
             )
             .send()
-            .await?;
+            .await
+        {
+            // Handle "NotImplemented" errors (Local minio testing server does not have CORS support)
+            if cause.raw_response().is_some_and(|response| {
+                response.status().as_u16() == StatusCode::NOT_IMPLEMENTED.as_u16()
+            }) {
+                return Ok(());
+            }
+
+            return Err(cause.into());
+        };
 
         Ok(())
     }

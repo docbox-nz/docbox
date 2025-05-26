@@ -90,18 +90,22 @@ services:
     networks:
       - docbox
 
-  # Local S3 compatible server for testing s3 backend
-  s3mock:
-    image: adobe/s3mock:latest
-    environment:
-      - debug=true
-      - retainFilesOnExit=true
-      - root=containers3root
+  # S3 compatible server
+  minio:
+    image: minio/minio:latest
+    container_name: minio
     ports:
-      - 9090:9090 # S3 API
-      - 9191:9191
+      - "9090:9000" # S3 API
+      - "9091:9001" # Web UI
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_NOTIFY_WEBHOOK_ENABLE_primary: "on"
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_primary: "http://docbox:8080/s3-events"
+      MINIO_NOTIFY_WEBHOOK_QUEUE_DIR: "/data/events"
+    command: server /data --console-address ":9001"
     volumes:
-      - locals3:/containers3root
+      - minio-data:/data
     networks:
       - docbox
 
@@ -149,6 +153,7 @@ volumes:
   postgres_data:
   pgadmin-data:
   locals3:
+  minio-data:
 
 networks:
   opensearch-net:

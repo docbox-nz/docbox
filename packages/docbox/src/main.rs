@@ -1,7 +1,7 @@
 use anyhow::Context;
 use axum::{extract::DefaultBodyLimit, Extension};
 use docbox_core::{
-    aws::{aws_config, create_s3_client_dev, S3Client, SecretsManagerClient, SqsClient},
+    aws::{aws_config, s3_client_from_env, SecretsManagerClient, SqsClient},
     background::{perform_background_tasks, BackgroundTaskData},
     events::{sqs::SqsEventPublisherFactory, EventPublisherFactory},
     notifications::{process_notification_queue, AppNotificationQueue, NotificationQueueData},
@@ -148,10 +148,7 @@ async fn server() -> anyhow::Result<()> {
     let search_index_factory = SearchIndexFactory::new(os_index_factory);
 
     // Setup storage factory
-    let s3_client = match cfg!(debug_assertions) {
-        true => create_s3_client_dev(),
-        false => S3Client::new(&aws_config),
-    };
+    let s3_client = s3_client_from_env(&aws_config)?;
     let s3_storage_factory = S3StorageLayerFactory::new(s3_client);
     let storage_factory = StorageLayerFactory::new(s3_storage_factory);
 
