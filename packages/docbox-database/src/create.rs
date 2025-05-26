@@ -29,10 +29,10 @@ CREATE TABLE IF NOT EXISTS "docbox_tenants"
     "os_index_name"   varchar NOT NULL UNIQUE,
     "env"             varchar NOT NULL,
     "event_queue_url" varchar NULL
-)
+);
 
 -- Index tenants across the id and environment (ID alone can be present across multiple tenants)
-CREATE UNIQUE INDEX IF NOT EXISTS "idx-tenant-id-env" ON "docbox_tenants" ("id", "env")
+CREATE UNIQUE INDEX IF NOT EXISTS "idx-tenant-id-env" ON "docbox_tenants" ("id", "env");
     "#,
     )
     .execute(db)

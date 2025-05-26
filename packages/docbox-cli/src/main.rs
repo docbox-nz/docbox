@@ -86,7 +86,7 @@ async fn main() -> eyre::Result<()> {
     // Start configuring a `fmt` subscriber
     let subscriber = tracing_subscriber::fmt()
         // Use the logging options from env variables
-        .with_env_filter("RUST_LOG=aws_sdk_secretsmanager=info,aws_runtime=info,aws_smithy_runtime=info,hyper_util=info,debug")
+        .with_env_filter("aws_sdk_secretsmanager=info,aws_runtime=info,aws_smithy_runtime=info,hyper_util=info,debug")
         // Display source code file paths
         .with_file(true)
         // Display source code line numbers

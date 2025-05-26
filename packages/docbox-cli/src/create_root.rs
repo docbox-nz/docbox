@@ -5,7 +5,7 @@ use crate::{connect_db, Credentials};
 
 /// Create and initialize the root docbox database
 pub async fn create_root() -> eyre::Result<()> {
-    let credentials_raw = tokio::fs::read("cli-credentials.json").await?;
+    let credentials_raw = tokio::fs::read("private/cli-credentials.json").await?;
     let credentials: Credentials = serde_json::from_slice(&credentials_raw)?;
 
     // Connect to the root postgres database
@@ -19,10 +19,17 @@ pub async fn create_root() -> eyre::Result<()> {
     .await
     .context("failed to connect to postgres database")?;
 
+    tracing::debug!(?credentials);
+
     // Create the tenant database
-    create_database(&db_root, "docbox")
-        .await
-        .context("failed to create docbox database")?;
+    if let Err(err) = create_database(&db_root, "docbox").await {
+        if !err
+            .as_database_error()
+            .is_some_and(|err| err.code().is_some_and(|code| code.to_string().eq("42P04")))
+        {
+            return Err(err.into());
+        }
+    }
 
     // Connect to the docbox database
     let db_docbox = connect_db(

@@ -13,7 +13,7 @@ pub async fn migrate(
     skip_failed: bool,
 ) -> eyre::Result<()> {
     // Load CLI credentials
-    let credentials_raw = tokio::fs::read("cli-credentials.json").await?;
+    let credentials_raw = tokio::fs::read("private/cli-credentials.json").await?;
     let credentials: Credentials = serde_json::from_slice(&credentials_raw)?;
 
     let root = match connect_db(

@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
 use docbox_core::{
-    aws::{aws_config, S3Client, SecretsManagerClient},
+    aws::{aws_config, s3_client_from_env, SecretsManagerClient},
     search::{
         os::{create_open_search_prod, OpenSearchIndexFactory},
         SearchIndexFactory,
     },
-    secrets::{aws::AwsSecretManager, AppSecretManager},
+    secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
     services::tenant::{initialize_tenant, rollback_tenant_error, InitTenantState},
     storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
 };
@@ -39,6 +39,12 @@ pub struct CreateTenant {
     pub db_role_name: String,
     pub db_password: String,
 
+    /// Skip secret creation (For local development)
+    #[serde(default)]
+    pub skip_secret_creation: bool,
+    #[serde(default)]
+    pub skip_role_creation: bool,
+
     /// Name of the tenant s3 bucket
     pub s3_name: String,
 
@@ -58,13 +64,15 @@ pub struct CreateTenant {
 
 pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
     // Load CLI credentials
-    let credentials_raw = tokio::fs::read("cli-credentials.json").await?;
+    let credentials_raw = tokio::fs::read("private/cli-credentials.json").await?;
     let credentials: Credentials = serde_json::from_slice(&credentials_raw)?;
 
     // Load the create tenant config
     let config_raw = tokio::fs::read(tenant_file).await?;
     let config: CreateTenant =
         serde_json::from_slice(&config_raw).context("failed to parse config")?;
+
+    tracing::debug!(?config, "creating tenant");
 
     // Load AWS configuration
     let aws_config = aws_config().await;
@@ -81,9 +89,15 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
     .context("failed to connect to docbox database")?;
 
     // Create the tenant database
-    create_database(&db_docbox, &config.db_name)
-        .await
-        .context("failed to create tenant database")?;
+    if let Err(err) = create_database(&db_docbox, &config.db_name).await {
+        if !err
+            .as_database_error()
+            .is_some_and(|err| err.code().is_some_and(|code| code.to_string().eq("42P04")))
+        {
+            return Err(err.into());
+        }
+    }
+
     tracing::info!("created tenant database");
 
     // Connect to the tenant database
@@ -97,20 +111,18 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
     .await
     .context("failed to connect to tenant database")?;
 
-    // Setup the tenant user
-    create_tenant_user(
-        &db_tenant,
-        &config.db_name,
-        &config.db_role_name,
-        &config.db_password,
-    )
-    .await
-    .context("failed to setup tenant user")?;
-    tracing::info!("created tenant user");
-
-    // Connect to secrets manager
-    let secrets_client = SecretsManagerClient::new(&aws_config);
-    let secrets = AppSecretManager::Aws(AwsSecretManager::new(secrets_client));
+    if !config.skip_role_creation {
+        // Setup the tenant user
+        create_tenant_user(
+            &db_tenant,
+            &config.db_name,
+            &config.db_role_name,
+            &config.db_password,
+        )
+        .await
+        .context("failed to setup tenant user")?;
+        tracing::info!("created tenant user");
+    }
 
     // Create and store the new database secret
     let secret_value = json!({
@@ -118,6 +130,25 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
         "password": config.db_password
     });
     let secret_value = serde_json::to_string(&secret_value)?;
+
+    // Connect to secrets manager
+    let secrets_client = SecretsManagerClient::new(&aws_config);
+    let secrets = match config.skip_secret_creation {
+        false => AppSecretManager::Aws(AwsSecretManager::new(secrets_client)),
+        true => AppSecretManager::Memory(MemorySecretManager::new(
+            [(
+                config.db_secret_name.to_string(),
+                Secret::String(serde_json::to_string(&json!({
+                    "username": config.db_role_name,
+                    "password": config.db_password
+                }))?),
+            )]
+            .into_iter()
+            .collect(),
+            None,
+        )),
+    };
+
     secrets
         .create_secret(&config.db_secret_name, &secret_value)
         .await
@@ -141,7 +172,8 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
     let search_factory = SearchIndexFactory::new(OpenSearchIndexFactory::new(open_search));
 
     // Setup S3 access
-    let s3_client = S3Client::new(&aws_config);
+    let s3_client =
+        s3_client_from_env(&aws_config).map_err(|err| eyre::Error::msg(err.to_string()))?;
     let storage_factory = StorageLayerFactory::new(S3StorageLayerFactory::new(s3_client));
 
     // Attempt to initialize the tenant

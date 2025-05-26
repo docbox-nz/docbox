@@ -1,21 +1,27 @@
+use tokio::sync::Mutex;
+
 use super::{Secret, SecretManager};
 use std::collections::HashMap;
 
 /// In memory secret manager
+#[derive(Default)]
 pub struct MemorySecretManager {
-    data: HashMap<String, Secret>,
+    data: Mutex<HashMap<String, Secret>>,
     default: Option<Secret>,
 }
 
 impl MemorySecretManager {
     pub fn new(data: HashMap<String, Secret>, default: Option<Secret>) -> Self {
-        Self { data, default }
+        Self {
+            data: Mutex::new(data),
+            default,
+        }
     }
 }
 
 impl SecretManager for MemorySecretManager {
     async fn get_secret(&self, name: &str) -> anyhow::Result<Option<super::Secret>> {
-        if let Some(value) = self.data.get(name) {
+        if let Some(value) = self.data.lock().await.get(name) {
             return Ok(Some(value.clone()));
         }
 
@@ -26,7 +32,11 @@ impl SecretManager for MemorySecretManager {
         Ok(None)
     }
 
-    async fn create_secret(&self, _name: &str, _value: &str) -> anyhow::Result<()> {
+    async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
+        self.data
+            .lock()
+            .await
+            .insert(name.to_string(), Secret::String(value.to_string()));
         Ok(())
     }
 }

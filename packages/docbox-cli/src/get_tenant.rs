@@ -5,7 +5,7 @@ use crate::{connect_db, Credentials};
 
 pub async fn get_tenant(env: String, tenant_id: TenantId) -> eyre::Result<()> {
     // Load CLI credentials
-    let credentials_raw = tokio::fs::read("cli-credentials.json").await?;
+    let credentials_raw = tokio::fs::read("private/cli-credentials.json").await?;
     let credentials: Credentials = serde_json::from_slice(&credentials_raw)?;
 
     // Connect to the docbox database
