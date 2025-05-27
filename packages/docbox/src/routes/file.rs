@@ -676,7 +676,7 @@ pub async fn get_raw(
     ),
     params(
         ("scope" = String, Path, description = "Scope the file resides within"),
-        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        ("file_id" = Uuid, Path, description = "ID of the file to delete"),
         TenantParams
     )
 )]
