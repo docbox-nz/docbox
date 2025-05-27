@@ -326,7 +326,7 @@ pub async fn create_presigned(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("task_id" = Uuid, Path, description = "ID of the task to query"),
         TenantParams
     )
@@ -385,7 +385,7 @@ pub async fn get_presigned(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -428,7 +428,7 @@ pub async fn get(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -471,7 +471,7 @@ pub async fn get_children(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -513,7 +513,7 @@ pub async fn get_edit_history(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams,
         UserParams
@@ -617,7 +617,7 @@ pub async fn update(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -675,7 +675,7 @@ pub async fn get_raw(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -722,7 +722,7 @@ pub async fn delete(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
         TenantParams
@@ -759,7 +759,7 @@ pub async fn get_generated(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = String, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
         TenantParams
