@@ -38,8 +38,8 @@ impl TryFrom<String> for EditHistoryType {
 pub enum EditHistoryMetadata {
     MoveToFolder {
         /// Folder moved from
-        #[schema(value_type = Option<Uuid>)]
-        original_id: Option<FolderId>,
+        #[schema(value_type = Uuid)]
+        original_id: FolderId,
         /// Folder moved to
         #[schema(value_type = Uuid)]
         target_id: FolderId,

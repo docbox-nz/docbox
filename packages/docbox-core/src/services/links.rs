@@ -195,7 +195,7 @@ pub async fn move_link(
             ty: CreateEditHistoryType::Link(link.id),
             user_id: user_id.clone(),
             metadata: EditHistoryMetadata::MoveToFolder {
-                original_id: Some(link.folder_id),
+                original_id: link.folder_id,
                 target_id: target_folder.id,
             },
         },

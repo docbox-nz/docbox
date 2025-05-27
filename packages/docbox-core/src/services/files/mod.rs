@@ -176,7 +176,7 @@ pub async fn move_file(
             ty: CreateEditHistoryType::File(file.id),
             user_id: user_id.clone(),
             metadata: EditHistoryMetadata::MoveToFolder {
-                original_id: Some(file.folder_id),
+                original_id: file.folder_id,
                 target_id: target_folder.id,
             },
         },

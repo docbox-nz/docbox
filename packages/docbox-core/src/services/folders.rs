@@ -247,6 +247,11 @@ pub async fn move_folder(
     folder: Folder,
     target_folder: Folder,
 ) -> anyhow::Result<Folder> {
+    let folder_id = match folder.folder_id {
+        Some(value) => value,
+        None => anyhow::bail!("cannot move root file"),
+    };
+
     // Track the edit history
     EditHistory::create(
         db.deref_mut(),
@@ -254,7 +259,7 @@ pub async fn move_folder(
             ty: CreateEditHistoryType::Folder(folder.id),
             user_id: user_id.clone(),
             metadata: EditHistoryMetadata::MoveToFolder {
-                original_id: folder.folder_id,
+                original_id: folder_id,
                 target_id: target_folder.id,
             },
         },
