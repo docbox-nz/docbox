@@ -23,7 +23,6 @@ pub mod email;
 pub mod image;
 pub mod office;
 pub mod pdf;
-pub mod thumbnail;
 
 #[derive(Debug, Error)]
 pub enum ProcessingError {

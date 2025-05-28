@@ -1,15 +1,17 @@
-use super::thumbnail::generate_pdf_images_async;
 use crate::{
+    image::create_img_bytes,
     processing::{ProcessingError, ProcessingIndexMetadata, ProcessingOutput},
     search::models::DocumentPage,
     services::generated::QueuedUpload,
 };
+use anyhow::Context;
 use docbox_database::models::generated_file::GeneratedFileType;
 use futures::TryFutureExt;
+use image::{DynamicImage, ImageFormat};
 use mime::Mime;
 use pdf_process::{
-    pdf_info, text::PAGE_END_CHARACTER, text_all_pages_split, PdfInfoArgs, PdfInfoError,
-    PdfTextArgs,
+    pdf_info, render_single_page, text::PAGE_END_CHARACTER, text_all_pages_split, OutputFormat,
+    PdfInfo, PdfInfoArgs, PdfInfoError, PdfTextArgs, RenderArgs,
 };
 
 /// Processes a PDF compatible file producing index data and generated files such as
@@ -117,4 +119,62 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
 #[inline]
 pub fn is_pdf_file(mime: &Mime) -> bool {
     mime.eq(&mime::APPLICATION_PDF)
+}
+
+/// Renders the cover page for a PDF file
+async fn render_pdf_cover(pdf_info: &PdfInfo, pdf: &[u8]) -> anyhow::Result<DynamicImage> {
+    let args = RenderArgs::default();
+
+    // Render the pdf cover page
+    let page = render_single_page(pdf, pdf_info, OutputFormat::Jpeg, 1, &args)
+        .await
+        .context("failed to render pdf page")?;
+
+    Ok(page)
+}
+
+pub struct GeneratedPdfImages {
+    /// Rendered full sized first page
+    pub cover_page_jpeg: Vec<u8>,
+    /// Small 64x64 file thumbnail
+    pub thumbnail_jpeg: Vec<u8>,
+    /// Smaller 385x385 version of first page
+    /// (Not actually 385x385 fits whatever the image aspect ratio inside those dimensions)
+    pub large_thumbnail_jpeg: Vec<u8>,
+}
+
+async fn generate_pdf_images_async(
+    pdf_info: &PdfInfo,
+    pdf: &[u8],
+) -> anyhow::Result<GeneratedPdfImages> {
+    tracing::debug!("rendering pdf cover");
+    let page = render_pdf_cover(pdf_info, pdf).await?;
+
+    tracing::debug!("rendering pdf image variants");
+    tokio::task::spawn_blocking(move || generate_pdf_images_variants(page))
+        .await
+        .context("failed to process image preview")
+        .and_then(|value| value)
+}
+
+/// Generates the various versions of the PDF cover images
+fn generate_pdf_images_variants(cover_page: DynamicImage) -> anyhow::Result<GeneratedPdfImages> {
+    tracing::debug!("rendering pdf image variants");
+    let cover_page_jpeg = create_img_bytes(&cover_page, ImageFormat::Jpeg)?;
+
+    let thumbnail_jpeg = {
+        let thumbnail = cover_page.thumbnail(64, 64);
+        create_img_bytes(&thumbnail, ImageFormat::Jpeg)?
+    };
+
+    let large_thumbnail_jpeg = {
+        let cover_page_preview = cover_page.resize(512, 512, image::imageops::FilterType::Triangle);
+        create_img_bytes(&cover_page_preview, ImageFormat::Jpeg)?
+    };
+
+    Ok(GeneratedPdfImages {
+        cover_page_jpeg,
+        thumbnail_jpeg,
+        large_thumbnail_jpeg,
+    })
 }
