@@ -77,3 +77,6 @@ sentry = { version = "0.38.1", default-features = false, features = [
     "rustls",
 ] }
 sentry-tracing = "0.38.1"
+
+# URLs
+url = { workspace = true }

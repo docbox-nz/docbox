@@ -18,6 +18,7 @@ use docbox_database::{
 use eyre::Context;
 use serde::Deserialize;
 use serde_json::json;
+use url::Url;
 
 use crate::{connect_db, Credentials};
 
@@ -167,8 +168,13 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
     );
 
     // Setup the search index
-    let open_search =
-        create_open_search_prod(&aws_config).map_err(|err| eyre::Error::msg(err.to_string()))?;
+    let open_search_url = std::env::var("OPENSEARCH_URL")
+        // Map the error to an anyhow type
+        .context("missing OPENSEARCH_URL env")
+        // Parse the URL
+        .and_then(|url| Url::parse(&url).context("failed to parse OPENSEARCH_URL"))?;
+    let open_search = create_open_search_prod(&aws_config, open_search_url)
+        .map_err(|err| eyre::Error::msg(err.to_string()))?;
     let search_factory = SearchIndexFactory::new(OpenSearchIndexFactory::new(open_search));
 
     // Setup S3 access

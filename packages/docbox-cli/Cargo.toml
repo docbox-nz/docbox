@@ -55,3 +55,6 @@ sqlx = { version = "0.8", default-features = false, features = [
     # JSON support
     "json",
 ] }
+
+# URLs
+url = { workspace = true }

@@ -69,26 +69,17 @@ impl TenantSearchIndexName {
     }
 }
 
-/// Environment variable to use for the server address
-const OPENSEARCH_URL_ENV: &str = "OPENSEARCH_URL";
-
 /// Create instance of [OpenSearch] from the environment
-pub fn create_open_search(aws_config: &SdkConfig) -> anyhow::Result<OpenSearch> {
+pub fn create_open_search(aws_config: &SdkConfig, url: Url) -> anyhow::Result<OpenSearch> {
     if cfg!(debug_assertions) {
-        create_open_search_dev()
+        create_open_search_dev(url)
     } else {
-        create_open_search_prod(aws_config)
+        create_open_search_prod(aws_config, url)
     }
 }
 
 /// Create instance of [OpenSearch] from the environment
-pub fn create_open_search_dev() -> anyhow::Result<OpenSearch> {
-    let url = std::env::var(OPENSEARCH_URL_ENV)
-        // Map the error to an anyhow type
-        .map_err(|err| anyhow::Error::from(err).context("missing OPENSEARCH_URL env"))
-        // Parse the URL
-        .and_then(|url| Url::parse(&url).context("failed to parse OPENSEARCH_URL"))?;
-
+pub fn create_open_search_dev(url: Url) -> anyhow::Result<OpenSearch> {
     let conn_pool = SingleNodeConnectionPool::new(url);
 
     let transport = TransportBuilder::new(conn_pool)
@@ -105,13 +96,7 @@ pub fn create_open_search_dev() -> anyhow::Result<OpenSearch> {
 }
 
 /// Create instance of [OpenSearch] from the environment
-pub fn create_open_search_prod(aws_config: &SdkConfig) -> anyhow::Result<OpenSearch> {
-    let url = std::env::var(OPENSEARCH_URL_ENV)
-        // Map the error to an anyhow type
-        .map_err(|err| anyhow::Error::from(err).context("missing OPENSEARCH_URL env"))
-        // Parse the URL
-        .and_then(|url| Url::parse(&url).context("failed to parse OPENSEARCH_URL"))?;
-
+pub fn create_open_search_prod(aws_config: &SdkConfig, url: Url) -> anyhow::Result<OpenSearch> {
     // Setup opensearch connection pool
     let conn_pool = SingleNodeConnectionPool::new(url);
 

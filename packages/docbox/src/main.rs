@@ -25,6 +25,7 @@ use std::{
 };
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
+use url::Url;
 
 mod docs;
 mod error;
@@ -136,7 +137,14 @@ async fn server() -> anyhow::Result<()> {
     let db_cache = Arc::new(db_cache);
 
     // Setup opensearch
-    let open_search = create_open_search(&aws_config).context("failed to create open search")?;
+    let open_search_url = std::env::var("OPENSEARCH_URL")
+        // Map the error to an anyhow type
+        .context("missing OPENSEARCH_URL env")
+        // Parse the URL
+        .and_then(|url| Url::parse(&url).context("failed to parse OPENSEARCH_URL"))?;
+
+    let open_search =
+        create_open_search(&aws_config, open_search_url).context("failed to create open search")?;
 
     // Create the SQS client
     // Warning: Will panic if the configuration provided is invalid
@@ -226,7 +234,7 @@ async fn server() -> anyhow::Result<()> {
     let app = app.layer(tower_http::cors::CorsLayer::very_permissive());
 
     // Bind the TCP listener for the HTTP server
-    let listener = tokio::net::TcpListener::bind(server_address).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(server_address).await?;
 
     // Log the startup message
     debug!("server started on {server_address}");
