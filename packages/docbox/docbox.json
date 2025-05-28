@@ -4,7 +4,8 @@
     "title": "Docbox API",
     "description": "Docbox HTTP API",
     "license": {
-      "name": ""
+      "name": "MIT",
+      "url": "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md"
     },
     "version": "0.1.0"
   },
@@ -649,7 +650,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -730,7 +731,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -809,7 +810,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -937,7 +938,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -946,7 +947,7 @@
           {
             "name": "file_id",
             "in": "path",
-            "description": "ID of the file to query",
+            "description": "ID of the file to delete",
             "required": true,
             "schema": {
               "type": "string",
@@ -1011,7 +1012,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -1095,7 +1096,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -1179,7 +1180,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -1269,7 +1270,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -1352,7 +1353,7 @@
           {
             "name": "scope",
             "in": "path",
-            "description": "Scope to create the link within",
+            "description": "Scope the file resides within",
             "required": true,
             "schema": {
               "type": "string"
@@ -3202,15 +3203,13 @@
           {
             "type": "object",
             "required": [
+              "original_id",
               "target_id",
               "type"
             ],
             "properties": {
               "original_id": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": "string",
                 "format": "uuid",
                 "description": "Folder moved from"
               },
@@ -4005,8 +4004,7 @@
               "null"
             ],
             "description": "The search query",
-            "default": null,
-            "minLength": 1
+            "default": null
           },
           "size": {
             "type": [

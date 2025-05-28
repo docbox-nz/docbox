@@ -15,6 +15,10 @@ use crate::routes::{
     info(
         title = "Docbox API",
         description = "Docbox HTTP API",
+        license(
+            name = "MIT",
+            url = "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md",
+        )
     ),
     tags(
         (name = DOCUMENT_BOX_TAG, description = "Document box related APIs"),
