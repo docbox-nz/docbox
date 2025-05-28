@@ -2,6 +2,7 @@
 name = "docbox"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [features]
 # Mock header values, used for browser local testing

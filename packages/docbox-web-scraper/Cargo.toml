@@ -2,6 +2,7 @@
 name = "docbox-web-scraper"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 # HTML parser for OGP metadata
