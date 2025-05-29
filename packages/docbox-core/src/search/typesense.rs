@@ -250,28 +250,17 @@ impl SearchIndex for TypesenseIndex {
             }
         }
 
-        let mut query_by = Vec::new();
+        if let Some(range) = query.created_at {
+            if let Some(start) = range.start {
+                let start = start.to_rfc3339();
+                filter_parts.push(format!(r#"created_at:>"{start}""#));
+            }
 
-        if query.include_name {
-            query_by.push("name");
+            if let Some(end) = range.end {
+                let end = end.to_rfc3339();
+                filter_parts.push(format!(r#"created_at:<"{end}""#));
+            }
         }
-
-        if query.include_content {
-            query_by.push("value");
-            query_by.push("page_content");
-        }
-
-        // if let Some(range) = query.created_at {
-        //     if let Some(start) = range.start {
-        //         let start = start.to_rfc3339();
-        //         query_parts.push(format!(r#"created_at > "{start}""#));
-        //     }
-
-        //     if let Some(end) = range.end {
-        //         let end = end.to_rfc3339();
-        //         query_parts.push(format!(r#"created_at < "{end}""#));
-        //     }
-        // }
 
         // if let Some(range) = query.modified {
         //     // TODO: ...modified date query
@@ -296,6 +285,16 @@ impl SearchIndex for TypesenseIndex {
                 r#"item_id:="{}""#,
                 escape_typesense_value(&item_id.to_string())
             ));
+        }
+
+        let mut query_by = Vec::new();
+        if query.include_name {
+            query_by.push("name");
+        }
+
+        if query.include_content {
+            query_by.push("value");
+            query_by.push("page_content");
         }
 
         let size = query.size.unwrap_or(50);
