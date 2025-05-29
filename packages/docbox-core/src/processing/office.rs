@@ -1,7 +1,7 @@
 use crate::{
+    files::generated::QueuedUpload,
     office::{OfficeConverter, PdfConvertError},
     processing::{pdf::process_pdf, ProcessingError, ProcessingOutput},
-    services::generated::QueuedUpload,
 };
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;

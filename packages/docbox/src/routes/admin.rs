@@ -7,6 +7,7 @@ use crate::{
 use axum::{http::StatusCode, Extension, Json};
 use axum_valid::Garde;
 use docbox_core::{
+    files::upload_file_presigned::purge_expired_presigned_tasks,
     search::{
         models::{
             AdminSearchRequest, AdminSearchResultResponse, FlattenedItemResult, SearchResultData,
@@ -15,7 +16,6 @@ use docbox_core::{
         os::resolve_search_result,
     },
     secrets::AppSecretManager,
-    services::files::presigned::purge_expired_presigned_tasks,
     storage::StorageLayerFactory,
 };
 use docbox_database::{

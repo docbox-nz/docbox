@@ -1,7 +1,5 @@
-use crate::{
-    search::models::DocumentPage,
-    services::{files::upload::ProcessingConfig, generated::QueuedUpload},
-};
+use crate::search::models::DocumentPage;
+use crate::{files::generated::QueuedUpload, files::upload_file::ProcessingConfig};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;

@@ -1,7 +1,5 @@
 pub mod document_box;
-pub mod files;
 pub mod folders;
-pub mod generated;
 pub mod links;
 pub mod migration;
 pub mod tenant;

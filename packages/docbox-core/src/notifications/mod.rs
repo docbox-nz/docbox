@@ -8,8 +8,8 @@ use crate::secrets::AppSecretManager;
 use crate::storage::StorageLayerFactory;
 use crate::{
     events::EventPublisherFactory,
+    files::upload_file_presigned::{safe_complete_presigned, CompletePresigned},
     search::SearchIndexFactory,
-    services::files::presigned::{safe_complete_presigned, CompletePresigned},
 };
 use docbox_database::{
     models::{folder::Folder, presigned_upload_task::PresignedUploadTask, tenant::Tenant},

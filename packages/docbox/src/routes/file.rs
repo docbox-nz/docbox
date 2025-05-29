@@ -24,14 +24,15 @@ use axum::{
 use axum_typed_multipart::TypedMultipart;
 use axum_valid::Garde;
 use docbox_core::{
+    files::{
+        delete_file::delete_file,
+        update_file::move_file,
+        update_file::update_file_name,
+        upload_file::{safe_upload_file, ProcessingConfig, UploadFile, UploadedFileData},
+        upload_file_presigned::{create_presigned_upload, CreatePresigned},
+    },
     processing::ProcessingLayer,
     search::models::UpdateSearchIndexData,
-    services::files::{
-        delete_file, move_file,
-        presigned::{create_presigned_upload, CreatePresigned},
-        update_file_name,
-        upload::{safe_upload_file, ProcessingConfig, UploadFile, UploadedFileData},
-    },
 };
 use docbox_database::models::{
     document_box::DocumentBoxScope,

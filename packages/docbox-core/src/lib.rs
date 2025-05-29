@@ -1,6 +1,7 @@
 pub mod aws;
 pub mod background;
 pub mod events;
+pub mod files;
 pub mod image;
 pub mod notifications;
 pub mod office;

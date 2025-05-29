@@ -21,7 +21,7 @@ use docbox_database::{
     DbPool,
 };
 
-use super::upload::UploadFileError;
+use super::upload_file::UploadFileError;
 
 pub async fn store_file_index(
     search: &TenantSearchIndex,

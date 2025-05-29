@@ -1,4 +1,5 @@
 use crate::{
+    files::{generated::QueuedUpload, upload_file::ProcessingConfig},
     office::{is_pdf_compatible, PdfConvertError},
     processing::{
         email::{is_mail_mime, process_email, EXPERIMENTAL_EMAIL_PARSING},
@@ -6,9 +7,8 @@ use crate::{
         office::process_office,
         pdf::process_pdf,
     },
-    services::files::upload::ProcessingConfig,
+    search::models::DocumentPage,
 };
-use crate::{search::models::DocumentPage, services::generated::QueuedUpload};
 use ::image::{ImageError, ImageFormat};
 use bytes::Bytes;
 use docbox_database::models::file::FileId;

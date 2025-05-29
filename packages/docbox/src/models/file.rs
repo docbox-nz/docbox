@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum_typed_multipart::{FieldData, TryFromMultipart};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use docbox_core::services::files::upload::ProcessingConfig;
+use docbox_core::files::upload_file::ProcessingConfig;
 use docbox_database::models::{
     file::{FileId, FileWithExtra},
     folder::FolderId,

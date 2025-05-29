@@ -1,13 +1,11 @@
+use crate::files::{create_file_key, index_file::store_file_index};
 use crate::processing::{process_file, ProcessingError, ProcessingIndexMetadata, ProcessingLayer};
 use crate::search::TenantSearchIndex;
 use crate::storage::TenantStorageLayer;
 use crate::utils::error::CompositeError;
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
-    services::{
-        files::{create_file_key, indexing::store_file_index},
-        generated::{upload_generated_files, QueuedUpload},
-    },
+    files::generated::{upload_generated_files, QueuedUpload},
 };
 use bytes::Bytes;
 use docbox_database::models::document_box::DocumentBoxScope;

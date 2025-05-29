@@ -1,9 +1,15 @@
 use crate::{
     events::TenantEventPublisher,
+    files::{
+        create_file_key,
+        upload_file::{
+            rollback_upload_file, upload_file, ProcessingConfig, UploadFile, UploadFileError,
+            UploadFileState,
+        },
+    },
     processing::{ProcessingError, ProcessingLayer},
     search::TenantSearchIndex,
     secrets::AppSecretManager,
-    services::files::upload::{rollback_upload_file, UploadFile},
     storage::{StorageLayerFactory, TenantStorageLayer},
 };
 use chrono::Utc;
@@ -24,11 +30,6 @@ use mime::Mime;
 use serde::Serialize;
 use std::{collections::HashMap, ops::DerefMut, str::FromStr, sync::Arc};
 use thiserror::Error;
-
-use super::{
-    create_file_key,
-    upload::{upload_file, ProcessingConfig, UploadFileError, UploadFileState},
-};
 
 #[derive(Serialize)]
 pub struct PresignedUploadOutcome {

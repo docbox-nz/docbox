@@ -2,8 +2,8 @@ use std::io::Cursor;
 
 use super::{ProcessingError, ProcessingOutput};
 use crate::{
+    files::generated::QueuedUpload,
     image::{apply_exif_orientation, create_img_bytes, read_exif_orientation},
-    services::generated::QueuedUpload,
 };
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;

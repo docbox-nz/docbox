@@ -1,61 +1,20 @@
-//! Business logic for working with files
-
-use std::ops::DerefMut;
-
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
+    files::generated::{delete_generated_files, GeneratedFileDeleteResult},
     search::TenantSearchIndex,
     storage::TenantStorageLayer,
-    utils::file::{get_file_name_ext, get_mime_ext, make_s3_safe},
 };
 use docbox_database::{
     models::{
         document_box::{DocumentBoxScope, WithScope},
-        edit_history::{
-            CreateEditHistory, CreateEditHistoryType, EditHistory, EditHistoryMetadata,
-        },
         file::File,
-        folder::Folder,
         generated_file::GeneratedFile,
-        user::UserId,
     },
-    DbErr, DbPool, DbTransaction,
+    DbErr, DbPool,
 };
 use futures::{stream::FuturesUnordered, StreamExt};
-use mime::Mime;
 use thiserror::Error;
 use tracing::error;
-use uuid::Uuid;
-
-use super::generated::{delete_generated_files, GeneratedFileDeleteResult};
-
-pub mod indexing;
-pub mod presigned;
-pub mod upload;
-
-pub fn create_file_key(document_box: &DocumentBoxScope, name: &str, mime: &Mime) -> String {
-    // Try get file extension from name
-    let file_ext = get_file_name_ext(name)
-        // Fallback to extension from mime type
-        .or_else(|| get_mime_ext(mime).map(|value| value.to_string()))
-        // Fallback to default .bin extension
-        .unwrap_or_else(|| "bin".to_string());
-
-    // Get the file name with the file extension stripped
-    let file_name = name.strip_suffix(&file_ext).unwrap_or(name);
-
-    // Strip unwanted characters from the file name
-    let clean_file_name = make_s3_safe(file_name);
-
-    // Unique portion of the file key
-    let file_key_unique = Uuid::new_v4().to_string();
-
-    // Key is composed of the {Unique ID}_{File Name}.{File Ext}
-    let file_key = format!("{file_key_unique}_{clean_file_name}.{file_ext}");
-
-    // Prefix file key with the scope directory
-    format!("{}/{}", document_box, file_key)
-}
 
 #[derive(Debug, Error)]
 pub enum DeleteFileError {
@@ -161,74 +120,4 @@ pub async fn delete_file(
     events.publish_event(TenantEventMessage::FileDeleted(WithScope::new(file, scope)));
 
     Ok(())
-}
-
-pub async fn move_file(
-    db: &mut DbTransaction<'_>,
-    user_id: Option<UserId>,
-    file: File,
-    target_folder: Folder,
-) -> anyhow::Result<File> {
-    // Track the edit history
-    if let Err(cause) = EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::File(file.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::MoveToFolder {
-                original_id: file.folder_id,
-                target_id: target_folder.id,
-            },
-        },
-    )
-    .await
-    {
-        tracing::error!(?cause, "failed to store file move edit history");
-        anyhow::bail!("failed to store move edit history");
-    }
-
-    let file = match file.move_to_folder(db.deref_mut(), target_folder.id).await {
-        Ok(file) => file,
-        Err(cause) => {
-            tracing::error!(?cause, "failed to move file in database");
-            anyhow::bail!("failed to move file in database");
-        }
-    };
-
-    Ok(file)
-}
-
-pub async fn update_file_name(
-    db: &mut DbTransaction<'_>,
-    user_id: Option<UserId>,
-    file: File,
-    new_name: String,
-) -> anyhow::Result<File> {
-    // Track the edit history
-    if let Err(cause) = EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::File(file.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::Rename {
-                original_name: file.name.clone(),
-                new_name: new_name.clone(),
-            },
-        },
-    )
-    .await
-    {
-        tracing::error!(?cause, "failed to store file rename edit history");
-        anyhow::bail!("failed to store rename edit history");
-    }
-
-    let file = match file.rename(db.deref_mut(), new_name.clone()).await {
-        Ok(file) => file,
-        Err(cause) => {
-            tracing::error!(?cause, "failed to rename file in database");
-            anyhow::bail!("failed to rename file in database");
-        }
-    };
-
-    Ok(file)
 }

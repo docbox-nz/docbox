@@ -1,6 +1,6 @@
 //! Business logic for working with folders
 
-use super::{files::delete_file, links::delete_link};
+use crate::files::delete_file::delete_file;
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
     search::{
@@ -27,6 +27,8 @@ use std::{collections::VecDeque, ops::DerefMut};
 use thiserror::Error;
 use tracing::{debug, error};
 use uuid::Uuid;
+
+use super::links::delete_link;
 
 #[derive(Debug, Error)]
 pub enum CreateFolderError {
