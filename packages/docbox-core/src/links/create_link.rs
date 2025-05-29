@@ -1,9 +1,7 @@
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
-    search::{
-        models::{SearchIndexData, SearchIndexType},
-        TenantSearchIndex,
-    },
+    links::index_link::store_link_index,
+    search::TenantSearchIndex,
 };
 use docbox_database::{
     models::{
@@ -16,7 +14,7 @@ use docbox_database::{
 };
 use std::ops::DerefMut;
 use thiserror::Error;
-use tracing::{debug, error};
+use tracing::error;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
@@ -89,7 +87,7 @@ async fn create_link(
         .await
         .map_err(CreateLinkError::BeginTransaction)?;
 
-    debug!("creating link");
+    tracing::debug!("creating link");
 
     // Create link
     let link = Link::create(
@@ -105,22 +103,7 @@ async fn create_link(
     .map_err(CreateLinkError::CreateLink)?;
 
     // Add link to search index
-    search
-        .add_data(SearchIndexData {
-            ty: SearchIndexType::Link,
-            item_id: link.id,
-            folder_id: link.folder_id,
-            name: link.name.to_string(),
-            mime: None,
-            content: Some(link.value.clone()),
-            pages: None,
-            created_at: link.created_at.to_rfc3339(),
-            created_by: link.created_by.clone(),
-            document_box: create.folder.document_box.clone(),
-        })
-        .await
-        .map_err(CreateLinkError::CreateIndex)?;
-
+    store_link_index(search, &link, &create.folder.document_box).await?;
     create_state.search_index_files.push(link.id);
 
     db.commit()

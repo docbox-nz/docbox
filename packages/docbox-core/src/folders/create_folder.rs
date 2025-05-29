@@ -1,9 +1,7 @@
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
-    search::{
-        models::{SearchIndexData, SearchIndexType},
-        TenantSearchIndex,
-    },
+    folders::index_folder::store_folder_index,
+    search::TenantSearchIndex,
 };
 use docbox_database::{
     models::{
@@ -102,22 +100,7 @@ async fn create_folder(
     .map_err(CreateFolderError::CreateFolder)?;
 
     // Add folder to search index
-    search
-        .add_data(SearchIndexData {
-            ty: SearchIndexType::Folder,
-            item_id: folder.id,
-            folder_id,
-            name: folder.name.to_string(),
-            mime: None,
-            content: None,
-            pages: None,
-            created_at: folder.created_at.to_rfc3339(),
-            created_by: folder.created_by.clone(),
-            document_box: folder.document_box.clone(),
-        })
-        .await
-        .map_err(CreateFolderError::CreateIndex)?;
-
+    store_folder_index(search, &folder, folder_id).await?;
     create_state.search_index_files.push(folder.id);
 
     db.commit()

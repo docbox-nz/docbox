@@ -9,13 +9,14 @@ use docbox_database::{
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 
-pub async fn re_index_link(
+use super::create_link::CreateLinkError;
+
+pub async fn store_link_index(
     search: &TenantSearchIndex,
+    link: &Link,
     scope: &DocumentBoxScope,
-    link: Link,
-) -> anyhow::Result<()> {
-    // Re-create base link index
-    if let Err(cause) = search
+) -> Result<(), CreateLinkError> {
+    search
         .add_data(SearchIndexData {
             ty: SearchIndexType::Link,
             item_id: link.id,
@@ -29,9 +30,20 @@ pub async fn re_index_link(
             document_box: scope.clone(),
         })
         .await
-    {
-        tracing::error!(?cause, "failed to create file base index");
-        anyhow::bail!("failed to create file base index");
+        .map_err(CreateLinkError::CreateIndex)?;
+
+    Ok(())
+}
+
+pub async fn re_index_link(
+    search: &TenantSearchIndex,
+    scope: &DocumentBoxScope,
+    link: Link,
+) -> anyhow::Result<()> {
+    // Re-create base link index
+    if let Err(cause) = store_link_index(search, &link, scope).await {
+        tracing::error!(?cause, "failed to create link base index");
+        anyhow::bail!("failed to create link base index");
     }
 
     Ok(())

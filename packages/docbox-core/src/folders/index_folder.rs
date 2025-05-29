@@ -4,10 +4,40 @@ use crate::search::{
 };
 use anyhow::Context;
 use docbox_database::{
-    models::{folder::Folder, tenant::Tenant},
+    models::{
+        folder::{Folder, FolderId},
+        tenant::Tenant,
+    },
     DbPool,
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
+
+use super::create_folder::CreateFolderError;
+
+pub async fn store_folder_index(
+    search: &TenantSearchIndex,
+    folder: &Folder,
+    folder_id: FolderId,
+) -> Result<(), CreateFolderError> {
+    // Add folder to search index
+    search
+        .add_data(SearchIndexData {
+            ty: SearchIndexType::Folder,
+            item_id: folder.id,
+            folder_id,
+            name: folder.name.to_string(),
+            mime: None,
+            content: None,
+            pages: None,
+            created_at: folder.created_at.to_rfc3339(),
+            created_by: folder.created_by.clone(),
+            document_box: folder.document_box.clone(),
+        })
+        .await
+        .map_err(CreateFolderError::CreateIndex)?;
+
+    Ok(())
+}
 
 pub async fn re_index_folder(search: &TenantSearchIndex, folder: Folder) -> anyhow::Result<()> {
     let folder_id = match folder.folder_id {
@@ -17,22 +47,7 @@ pub async fn re_index_folder(search: &TenantSearchIndex, folder: Folder) -> anyh
     };
 
     // Re-create base folder index
-    search
-        .add_data(SearchIndexData {
-            ty: SearchIndexType::Folder,
-            item_id: folder.id,
-            folder_id,
-            name: folder.name,
-            mime: None,
-            content: None,
-            pages: None,
-            created_at: folder.created_at.to_rfc3339(),
-            created_by: folder.created_by.clone(),
-            document_box: folder.document_box.clone(),
-        })
-        .await
-        .context("failed to create file base index")?;
-
+    store_folder_index(search, &folder, folder_id).await?;
     Ok(())
 }
 
