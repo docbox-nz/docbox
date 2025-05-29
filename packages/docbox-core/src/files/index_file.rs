@@ -110,11 +110,7 @@ pub async fn re_index_file(
                 UpdateSearchIndexData {
                     folder_id: None,
                     name: None,
-                    mime: None,
                     content: None,
-                    created_at: None,
-                    created_by: None,
-                    document_box: None,
                     pages: Some(pages),
                 },
             )

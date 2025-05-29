@@ -96,11 +96,7 @@ pub async fn update_folder(
             UpdateSearchIndexData {
                 folder_id: folder.folder_id,
                 name: Some(folder.name.clone()),
-                mime: None,
                 content: None,
-                created_at: None,
-                created_by: None,
-                document_box: None,
                 pages: None,
             },
         )

@@ -80,11 +80,7 @@ pub async fn update_file(
                 folder_id: Some(file.folder_id),
                 name: Some(file.name.clone()),
                 // Don't update unchanged
-                mime: None,
                 content: None,
-                created_at: None,
-                created_by: None,
-                document_box: None,
                 pages: None,
             },
         )

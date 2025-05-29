@@ -88,11 +88,7 @@ pub async fn update_link(
             UpdateSearchIndexData {
                 folder_id: Some(link.folder_id),
                 name: Some(link.name.clone()),
-                mime: None,
                 content: Some(link.value.clone()),
-                created_at: None,
-                created_by: None,
-                document_box: None,
                 pages: None,
             },
         )

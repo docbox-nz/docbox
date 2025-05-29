@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use crate::utils::serialize::WrappedMime;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum SearchIndexType {
     File,
     Folder,
@@ -72,11 +72,7 @@ pub struct DocumentPage {
 pub struct UpdateSearchIndexData {
     pub folder_id: Option<FolderId>,
     pub name: Option<String>,
-    pub mime: Option<String>,
     pub content: Option<String>,
-    pub created_at: Option<String>,
-    pub created_by: Option<UserId>,
-    pub document_box: Option<DocumentBoxScope>,
     pub pages: Option<Vec<DocumentPage>>,
 }
 
