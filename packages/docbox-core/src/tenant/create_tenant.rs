@@ -3,7 +3,6 @@
 use crate::search::{SearchIndexFactory, TenantSearchIndex};
 use crate::secrets::AppSecretManager;
 use crate::storage::{StorageLayerFactory, TenantStorageLayer};
-use anyhow::anyhow;
 use docbox_database::models::tenant::TenantId;
 use docbox_database::DbConnectErr;
 use docbox_database::{
@@ -11,7 +10,6 @@ use docbox_database::{
 };
 use std::ops::DerefMut;
 use thiserror::Error;
-use tracing::{debug, error};
 
 /// Request to create a tenant
 pub struct CreateTenant {
@@ -43,25 +41,17 @@ pub struct CreateTenant {
 
 #[derive(Debug, Error)]
 pub enum InitTenantError {
-    /// Failed to connect to the root db
+    /// Failed to connect to a database
     #[error("failed to connect")]
-    ConnectRootDb(DbConnectErr),
+    ConnectDb(#[from] DbConnectErr),
 
-    /// Failed to connect to the tenant db
-    #[error("failed to connect")]
-    ConnectTenantDb(DbConnectErr),
+    /// Database error
+    #[error(transparent)]
+    Database(#[from] DbErr),
 
-    /// Failed to start the database transaction
-    #[error("failed to begin transaction")]
-    BeginTransaction(DbErr),
-
-    /// Error creating the tenant database row
-    #[error("failed to create database tenant: {0}")]
-    CreateTenant(anyhow::Error),
-
-    /// Failed to create the tenant schema and tables
-    #[error("failed to setup tenant database")]
-    CreateTenantTables(DbErr),
+    /// Tenant already exists
+    #[error("tenant already exists")]
+    TenantAlreadyExist,
 
     /// Failed to create the S3 bucket
     #[error("failed to create tenant s3 bucket: {0}")]
@@ -78,40 +68,54 @@ pub enum InitTenantError {
     /// Failed to create the search index
     #[error("failed to create tenant search index: {0}")]
     CreateSearchIndex(anyhow::Error),
-
-    /// Failed to commit the database transaction
-    #[error("failed to commit transaction")]
-    CommitTransaction(DbErr),
 }
 
 #[derive(Default)]
-pub struct InitTenantState {
+struct CreateTenantState {
     /// Storage layer if bucket created
-    pub storage: Option<TenantStorageLayer>,
+    storage: Option<TenantStorageLayer>,
 
     /// Search index if search index is create
-    pub search: Option<TenantSearchIndex>,
+    search: Option<TenantSearchIndex>,
 }
 
 /// Attempts to initialize a new tenant
-pub async fn initialize_tenant(
+pub async fn safe_create_tenant(
     db_cache: &DatabasePoolCache<AppSecretManager>,
     search: &SearchIndexFactory,
     storage: &StorageLayerFactory,
     create: CreateTenant,
     env: String,
-    init_state: &mut InitTenantState,
+) -> Result<Tenant, InitTenantError> {
+    let mut create_state = CreateTenantState::default();
+
+    create_tenant(db_cache, search, storage, create, env, &mut create_state)
+        .await
+        .inspect_err(|_| {
+            // Attempt to rollback any allocated resources in the background
+            tokio::spawn(rollback_tenant_error(create_state));
+        })
+}
+
+/// Attempts to initialize a new tenant
+async fn create_tenant(
+    db_cache: &DatabasePoolCache<AppSecretManager>,
+    search: &SearchIndexFactory,
+    storage: &StorageLayerFactory,
+    create: CreateTenant,
+    env: String,
+    create_state: &mut CreateTenantState,
 ) -> Result<Tenant, InitTenantError> {
     let root_db = db_cache
         .get_root_pool()
         .await
-        .map_err(InitTenantError::ConnectRootDb)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to connect to root database"))?;
 
     // Enter a database transaction
     let mut root_transaction = root_db
         .begin()
         .await
-        .map_err(InitTenantError::BeginTransaction)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to begin root transaction"))?;
 
     // Create the tenant
     let tenant: Tenant = Tenant::create(
@@ -131,31 +135,31 @@ pub async fn initialize_tenant(
         if let Some(db_err) = err.as_database_error() {
             // Handle attempts at a duplicate tenant creation
             if db_err.is_unique_violation() {
-                return anyhow!("tenant already exists");
+                return InitTenantError::TenantAlreadyExist;
             }
         }
 
-        anyhow::Error::new(err)
+        InitTenantError::Database(err)
     })
-    .map_err(InitTenantError::CreateTenant)?;
+    .inspect_err(|error| tracing::error!(?error, "failed to create tenant"))?;
 
     let tenant_db = db_cache
         .get_tenant_pool(&tenant)
         .await
-        .map_err(InitTenantError::ConnectTenantDb)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to connect to tenant database"))?;
 
     // Enter a database transaction
     let mut tenant_transaction = tenant_db
         .begin()
         .await
-        .map_err(InitTenantError::BeginTransaction)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to begin tenant transaction"))?;
 
     // Setup the tenant database
     create_tenant_tables(&mut tenant_transaction)
         .await
-        .map_err(InitTenantError::CreateTenantTables)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to create tenant tables"))?;
 
-    debug!("creating tenant s3 bucket");
+    tracing::debug!("creating tenant s3 bucket");
 
     // Setup the tenant S3 bucket
     let storage = storage.create_storage_layer(&tenant);
@@ -163,7 +167,7 @@ pub async fn initialize_tenant(
         .create_bucket()
         .await
         .map_err(InitTenantError::CreateS3Bucket)?;
-    init_state.storage = Some(storage.clone());
+    create_state.storage = Some(storage.clone());
 
     // Connect the S3 bucket for file upload notifications
     if let Some(s3_queue_arn) = create.s3_queue_arn {
@@ -181,7 +185,7 @@ pub async fn initialize_tenant(
         }
     }
 
-    debug!("creating tenant search index");
+    tracing::debug!("creating tenant search index");
 
     // Setup the tenant search index
     let search = search.create_search_index(&tenant);
@@ -190,37 +194,37 @@ pub async fn initialize_tenant(
         .await
         .map_err(InitTenantError::CreateSearchIndex)?;
 
-    init_state.search = Some(search);
+    create_state.search = Some(search);
 
     // Commit database changes
     root_transaction
         .commit()
         .await
-        .map_err(InitTenantError::CommitTransaction)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to commit root transaction"))?;
 
     // Commit database changes
     tenant_transaction
         .commit()
         .await
-        .map_err(InitTenantError::CommitTransaction)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to commit tenant transaction"))?;
 
     Ok(tenant)
 }
 
 /// Attempts to rollback the creation of a tenant based on
 /// the point of failure
-pub async fn rollback_tenant_error(init_state: InitTenantState) {
+async fn rollback_tenant_error(create_state: CreateTenantState) {
     // Must revert created S3 bucket
-    if let Some(storage) = init_state.storage {
-        if let Err(err) = storage.delete_bucket().await {
-            error!("failed to rollback created tenant s3 bucket: {}", err);
+    if let Some(storage) = create_state.storage {
+        if let Err(error) = storage.delete_bucket().await {
+            tracing::error!(?error, "failed to rollback created tenant s3 bucket");
         }
     }
 
     // Must revert created search index
-    if let Some(search) = init_state.search {
-        if let Err(err) = search.delete_index().await {
-            error!("failed to rollback created tenant search index: {}", err);
+    if let Some(search) = create_state.search {
+        if let Err(error) = search.delete_index().await {
+            tracing::error!(?error, "failed to rollback created tenant search index");
         }
     }
 }

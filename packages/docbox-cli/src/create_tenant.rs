@@ -8,7 +8,7 @@ use docbox_core::{
     },
     secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
     storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
-    tenant::create_tenant::{initialize_tenant, rollback_tenant_error, InitTenantState},
+    tenant::create_tenant::safe_create_tenant,
 };
 use docbox_database::{
     create::{create_database, create_tenant_user},
@@ -183,8 +183,7 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
     let storage_factory = StorageLayerFactory::new(S3StorageLayerFactory::new(s3_client));
 
     // Attempt to initialize the tenant
-    let mut init_state = InitTenantState::default();
-    let tenant = match initialize_tenant(
+    let tenant = safe_create_tenant(
         &db_cache,
         &search_factory,
         &storage_factory,
@@ -199,17 +198,8 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
             s3_queue_arn: config.s3_queue_arn,
         },
         config.env,
-        &mut init_state,
     )
-    .await
-    {
-        Ok(value) => value,
-        Err(err) => {
-            // Attempt to rollback any allocated resources in the background
-            tokio::spawn(rollback_tenant_error(init_state));
-            return Err(eyre::Error::from(err));
-        }
-    };
+    .await?;
 
     tracing::info!(?tenant, "tenant created successfully");
 
