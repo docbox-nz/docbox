@@ -19,21 +19,13 @@ use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum CreateLinkError {
-    /// Failed to start the database transaction
-    #[error("failed to begin transaction")]
-    BeginTransaction(DbErr),
-
-    /// Failed to create the link database row
-    #[error("failed to create link: {0}")]
-    CreateLink(DbErr),
+    /// Database error occurred
+    #[error(transparent)]
+    Database(#[from] DbErr),
 
     /// Failed to create the search index
     #[error("failed to create link search index: {0}")]
     CreateIndex(anyhow::Error),
-
-    /// Failed to commit the database transaction
-    #[error("failed to commit transaction")]
-    CommitTransaction(DbErr),
 }
 
 /// State structure to keep track of resources created
@@ -82,12 +74,12 @@ async fn create_link(
     create: CreateLinkData,
     create_state: &mut CreateLinkState,
 ) -> Result<Link, CreateLinkError> {
+    tracing::debug!("creating link");
+
     let mut db = db
         .begin()
         .await
-        .map_err(CreateLinkError::BeginTransaction)?;
-
-    tracing::debug!("creating link");
+        .inspect_err(|error| tracing::error!(?error, "failed to being transaction"))?;
 
     // Create link
     let link = Link::create(
@@ -100,7 +92,7 @@ async fn create_link(
         },
     )
     .await
-    .map_err(CreateLinkError::CreateLink)?;
+    .inspect_err(|error| tracing::error!(?error, "failed to create link"))?;
 
     // Add link to search index
     store_link_index(search, &link, &create.folder.document_box).await?;
@@ -108,7 +100,7 @@ async fn create_link(
 
     db.commit()
         .await
-        .map_err(CreateLinkError::CommitTransaction)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to commit transaction"))?;
 
     // Publish an event
     events.publish_event(TenantEventMessage::LinkCreated(WithScope::new(
@@ -122,10 +114,10 @@ async fn create_link(
 async fn rollback_create_link(search: TenantSearchIndex, create_state: CreateLinkState) {
     // Revert file index data
     for id in create_state.search_index_files {
-        if let Err(err) = search.delete_data(id).await {
-            error!(
-                "failed to rollback created link search index: {} {}",
-                id, err
+        if let Err(error) = search.delete_data(id).await {
+            tracing::error!(
+                ?error, index_id = %id,
+                "failed to rollback created link search index"
             );
         }
     }

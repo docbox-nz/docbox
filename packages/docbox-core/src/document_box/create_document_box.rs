@@ -60,8 +60,8 @@ pub async fn create_document_box(
         },
     )
     .await
-    .inspect_err(|cause| {
-        tracing::error!(?cause, "failed to create document box root folder");
+    .inspect_err(|error| {
+        tracing::error!(?error, "failed to create document box root folder");
     })?;
 
     transaction.commit().await?;

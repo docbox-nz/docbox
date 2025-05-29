@@ -13,26 +13,17 @@ use docbox_database::{
 };
 use std::ops::DerefMut;
 use thiserror::Error;
-use tracing::{debug, error};
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum CreateFolderError {
-    /// Failed to start the database transaction
-    #[error("failed to begin transaction")]
-    BeginTransaction(DbErr),
-
-    /// Failed to create the folder database row
-    #[error("failed to create folder: {0}")]
-    CreateFolder(DbErr),
+    /// Database error occurred
+    #[error(transparent)]
+    Database(#[from] DbErr),
 
     /// Failed to create the search index
     #[error("failed to create folder search index: {0}")]
     CreateIndex(anyhow::Error),
-
-    /// Failed to commit the database transaction
-    #[error("failed to commit transaction")]
-    CommitTransaction(DbErr),
 }
 
 pub struct CreateFolderData {
@@ -77,12 +68,12 @@ async fn create_folder(
     create: CreateFolderData,
     create_state: &mut CreateFolderState,
 ) -> Result<Folder, CreateFolderError> {
+    tracing::debug!("creating folder");
+
     let mut db = db
         .begin()
         .await
-        .map_err(CreateFolderError::BeginTransaction)?;
-
-    debug!("creating folder");
+        .inspect_err(|error| tracing::error!(?error, "failed to being transaction"))?;
 
     let folder_id = create.folder.id;
 
@@ -97,7 +88,7 @@ async fn create_folder(
         },
     )
     .await
-    .map_err(CreateFolderError::CreateFolder)?;
+    .inspect_err(|error| tracing::error!(?error, "failed to create folder"))?;
 
     // Add folder to search index
     store_folder_index(search, &folder, folder_id).await?;
@@ -105,7 +96,7 @@ async fn create_folder(
 
     db.commit()
         .await
-        .map_err(CreateFolderError::CommitTransaction)?;
+        .inspect_err(|error| tracing::error!(?error, "failed to commit transaction"))?;
 
     // Publish an event
     events.publish_event(TenantEventMessage::FolderCreated(WithScope::new(
@@ -119,8 +110,11 @@ async fn create_folder(
 async fn rollback_create_folder(search: TenantSearchIndex, create_state: CreateFolderState) {
     // Revert file index data
     for id in create_state.search_index_files {
-        if let Err(err) = search.delete_data(id).await {
-            error!(?id, ?err, "failed to rollback created folder search index",);
+        if let Err(error) = search.delete_data(id).await {
+            tracing::error!(
+                ?error, index_id = %id,
+                "failed to rollback created folder search index",
+            );
         }
     }
 }
