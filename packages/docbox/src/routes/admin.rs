@@ -7,23 +7,14 @@ use crate::{
 use axum::{http::StatusCode, Extension, Json};
 use axum_valid::Garde;
 use docbox_core::{
+    document_box::search_document_box::{search_document_boxes_admin, ResolvedSearchResult},
     files::upload_file_presigned::purge_expired_presigned_tasks,
-    search::{
-        models::{
-            AdminSearchRequest, AdminSearchResultResponse, FlattenedItemResult, SearchResultData,
-            SearchResultItem,
-        },
-        os::resolve_search_result,
-    },
+    search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem},
     secrets::AppSecretManager,
     storage::StorageLayerFactory,
 };
-use docbox_database::{
-    models::{document_box::WithScope, folder::FolderPathSegment},
-    DatabasePoolCache,
-};
+use docbox_database::{models::document_box::WithScope, DatabasePoolCache};
 use std::sync::Arc;
-use tracing::error;
 
 pub const ADMIN_TAG: &str = "Admin";
 
@@ -60,48 +51,32 @@ pub async fn search_tenant(
         }));
     }
 
-    let results = search
-        .search_index(&req.scopes, req.request, None)
+    let resolved = search_document_boxes_admin(&db, &search, req)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to search index");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to perform admin search");
             HttpCommonError::ServerError
         })?;
 
-    let mut resolved: Vec<(
-        FlattenedItemResult,
-        SearchResultData,
-        Vec<FolderPathSegment>,
-    )> = Vec::with_capacity(results.results.len());
-
-    for result in results.results {
-        match resolve_search_result(&db, result).await {
-            Ok(value) => resolved.push(value),
-            Err(cause) => {
-                error!(?cause, "failed to fetch search result from database");
-                continue;
-            }
-        }
-    }
-
     let out: Vec<WithScope<SearchResultItem>> = resolved
+        .results
         .into_iter()
-        .map(|(hit, data, path)| WithScope {
+        .map(|ResolvedSearchResult { result, data, path }| WithScope {
             data: SearchResultItem {
                 path,
-                score: hit.score,
+                score: result.score,
                 data,
-                page_matches: hit.page_matches,
-                total_hits: hit.total_hits,
-                name_match: hit.name_match,
-                content_match: hit.content_match,
+                page_matches: result.page_matches,
+                total_hits: result.total_hits,
+                name_match: result.name_match,
+                content_match: result.content_match,
             },
-            scope: hit.document_box,
+            scope: result.document_box,
         })
         .collect();
 
     Ok(Json(AdminSearchResultResponse {
-        total_hits: results.total_hits,
+        total_hits: resolved.total_hits,
         results: out,
     }))
 }

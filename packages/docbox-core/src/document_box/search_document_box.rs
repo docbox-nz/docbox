@@ -8,7 +8,7 @@ use docbox_database::{
 use thiserror::Error;
 
 use crate::search::{
-    models::{FlattenedItemResult, SearchRequest, SearchResultData},
+    models::{AdminSearchRequest, FlattenedItemResult, SearchRequest, SearchResultData},
     os::resolve_search_result,
     TenantSearchIndex,
 };
@@ -73,6 +73,39 @@ pub async fn search_document_box(
     // Query search engine
     let results = search
         .search_index(&[scope], request, search_folder_ids)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query search index");
+            SearchDocumentBoxError::QueryIndex(cause)
+        })?;
+
+    // Resolve search results on the database end
+    let mut resolved: Vec<ResolvedSearchResult> = Vec::with_capacity(results.results.len());
+
+    for result in results.results {
+        match resolve_search_result(db, result).await {
+            Ok((result, data, path)) => resolved.push(ResolvedSearchResult { result, data, path }),
+            Err(cause) => {
+                tracing::error!("failed to fetch search result from database {cause:?}");
+                continue;
+            }
+        }
+    }
+
+    Ok(DocumentBoxSearchResults {
+        results: resolved,
+        total_hits: results.total_hits,
+    })
+}
+
+pub async fn search_document_boxes_admin(
+    db: &DbPool,
+    search: &TenantSearchIndex,
+    request: AdminSearchRequest,
+) -> Result<DocumentBoxSearchResults, SearchDocumentBoxError> {
+    // Query search engine
+    let results = search
+        .search_index(&request.scopes, request.request, None)
         .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to query search index");
