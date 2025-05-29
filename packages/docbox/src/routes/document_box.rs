@@ -16,20 +16,14 @@ use docbox_core::{
     document_box::{
         create_document_box::{create_document_box, CreateDocumentBox, CreateDocumentBoxError},
         delete_document_box::{delete_document_box, DeleteDocumentBoxError},
+        search_document_box::{search_document_box, ResolvedSearchResult},
     },
-    search::{
-        models::{
-            FlattenedItemResult, SearchRequest, SearchResultData, SearchResultItem,
-            SearchResultResponse,
-        },
-        os::resolve_search_result,
-    },
+    search::models::{SearchRequest, SearchResultItem, SearchResultResponse},
 };
 use docbox_database::models::{
     document_box::{DocumentBox, DocumentBoxScope},
-    folder::{self, Folder, FolderPathSegment, FolderWithExtra, ResolvedFolderWithExtra},
+    folder::{self, Folder, FolderWithExtra, ResolvedFolderWithExtra},
 };
-use tracing::{debug, error};
 
 pub const DOCUMENT_BOX_TAG: &str = "Document Box";
 
@@ -282,75 +276,35 @@ pub async fn delete(
 #[tracing::instrument(skip_all, fields(scope = %scope, req = ?req))]
 pub async fn search(
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     Path(scope): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<SearchRequest>>,
 ) -> HttpResult<SearchResultResponse> {
-    // TODO: Move this logic to the core crate
-    let search_folder_ids = match req.folder_id {
-        Some(folder_id) => {
-            let folder = Folder::find_by_id(&db, &scope, folder_id)
-                .await
-                .map_err(|cause| {
-                    tracing::error!(?cause, "failed to query folder");
-                    HttpCommonError::ServerError
-                })?
-                .ok_or_else(|| {
-                    tracing::error!("failed to find folder");
-                    HttpCommonError::ServerError
-                })?;
-
-            let folder_children = folder.tree_all_children(&db).await.map_err(|cause| {
-                tracing::error!(?cause, "failed to query folder children");
-                HttpCommonError::ServerError
-            })?;
-
-            Some(folder_children)
-        }
-        None => None,
-    };
-
-    debug!(?search_folder_ids, "searching within folders");
-
-    let results = opensearch
-        .search_index(&[scope], req, search_folder_ids)
+    let resolved = search_document_box(&db, &search, scope, req)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query search index");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to search document box");
             HttpCommonError::ServerError
         })?;
 
-    let mut resolved: Vec<(
-        FlattenedItemResult,
-        SearchResultData,
-        Vec<FolderPathSegment>,
-    )> = Vec::with_capacity(results.results.len());
-
-    for result in results.results {
-        match resolve_search_result(&db, result).await {
-            Ok(value) => resolved.push(value),
-            Err(cause) => {
-                error!("failed to fetch search result from database {cause:?}");
-                continue;
-            }
-        }
-    }
-
     let out: Vec<SearchResultItem> = resolved
+        .results
         .into_iter()
-        .map(|(hit, data, path)| SearchResultItem {
-            path,
-            score: hit.score,
-            data,
-            page_matches: hit.page_matches,
-            total_hits: hit.total_hits,
-            name_match: hit.name_match,
-            content_match: hit.content_match,
-        })
+        .map(
+            |ResolvedSearchResult { result, data, path }| SearchResultItem {
+                path,
+                score: result.score,
+                data,
+                page_matches: result.page_matches,
+                total_hits: result.total_hits,
+                name_match: result.name_match,
+                content_match: result.content_match,
+            },
+        )
         .collect();
 
     Ok(Json(SearchResultResponse {
-        total_hits: results.total_hits,
+        total_hits: resolved.total_hits,
         results: out,
     }))
 }
