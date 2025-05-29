@@ -70,8 +70,8 @@ pub struct DocumentPage {
 #[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateSearchIndexData {
-    pub folder_id: Option<FolderId>,
-    pub name: Option<String>,
+    pub folder_id: FolderId,
+    pub name: String,
     pub content: Option<String>,
     pub pages: Option<Vec<DocumentPage>>,
 }

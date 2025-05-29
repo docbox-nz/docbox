@@ -55,7 +55,7 @@ pub async fn update_folder(
 ) -> Result<(), UpdateFolderError> {
     let mut folder = folder;
 
-    let folder_id = folder
+    let mut folder_id = folder
         .folder_id
         // Cannot modify the root folder, this is not allowed
         .ok_or(UpdateFolderError::CannotModifyRoot)?;
@@ -78,6 +78,8 @@ pub async fn update_folder(
             .inspect_err(|cause| tracing::error!(?cause, "failed to query target folder"))?
             .ok_or(UpdateFolderError::UnknownTargetFolder)?;
 
+        folder_id = target_folder.id;
+
         folder = move_folder(&mut db, user_id.clone(), folder, folder_id, target_folder)
             .await
             .inspect_err(|cause| tracing::error!(?cause, "failed to move folder"))?;
@@ -94,8 +96,8 @@ pub async fn update_folder(
         .update_data(
             folder.id,
             UpdateSearchIndexData {
-                folder_id: folder.folder_id,
-                name: Some(folder.name.clone()),
+                folder_id,
+                name: folder.name.clone(),
                 content: None,
                 pages: None,
             },

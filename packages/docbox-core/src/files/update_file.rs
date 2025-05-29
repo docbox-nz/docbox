@@ -77,8 +77,8 @@ pub async fn update_file(
         .update_data(
             file.id,
             UpdateSearchIndexData {
-                folder_id: Some(file.folder_id),
-                name: Some(file.name.clone()),
+                folder_id: file.folder_id,
+                name: file.name.clone(),
                 // Don't update unchanged
                 content: None,
                 pages: None,

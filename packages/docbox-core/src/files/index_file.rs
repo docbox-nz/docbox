@@ -108,8 +108,8 @@ pub async fn re_index_file(
             .update_data(
                 file.id,
                 UpdateSearchIndexData {
-                    folder_id: None,
-                    name: None,
+                    folder_id: file.folder_id,
+                    name: file.name,
                     content: None,
                     pages: Some(pages),
                 },
