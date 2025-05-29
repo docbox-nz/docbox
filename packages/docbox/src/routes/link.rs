@@ -22,10 +22,11 @@ use axum::{
     Extension, Json,
 };
 use axum_valid::Garde;
-use docbox_core::search::models::UpdateSearchIndexData;
-use docbox_core::services::links::{
-    delete_link, move_link, safe_create_link, update_link_name, update_link_value, CreateLinkData,
+use docbox_core::links::{
+    create_link::safe_create_link, create_link::CreateLinkData, delete_link::delete_link,
+    update_link::move_link, update_link::update_link_name, update_link::update_link_value,
 };
+use docbox_core::search::models::UpdateSearchIndexData;
 use docbox_database::models::{
     document_box::DocumentBoxScope,
     edit_history::EditHistory,

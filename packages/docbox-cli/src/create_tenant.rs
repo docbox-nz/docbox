@@ -7,8 +7,8 @@ use docbox_core::{
         SearchIndexFactory,
     },
     secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
-    services::tenant::{initialize_tenant, rollback_tenant_error, InitTenantState},
     storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
+    tenant::create_tenant::{initialize_tenant, rollback_tenant_error, InitTenantState},
 };
 use docbox_database::{
     create::{create_database, create_tenant_user},
@@ -188,7 +188,7 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
         &db_cache,
         &search_factory,
         &storage_factory,
-        docbox_core::services::tenant::CreateTenant {
+        docbox_core::tenant::create_tenant::CreateTenant {
             id: config.id,
             db_name: config.db_name,
             db_secret_name: config.db_secret_name,

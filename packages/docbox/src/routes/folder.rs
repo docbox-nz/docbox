@@ -13,10 +13,12 @@ use crate::{
     models::folder::{CreateFolderRequest, FolderResponse, HttpFolderError, UpdateFolderRequest},
 };
 use docbox_core::{
-    search::models::UpdateSearchIndexData,
-    services::folders::{
-        delete_folder, move_folder, safe_create_folder, update_folder_name, CreateFolderData,
+    folders::{
+        create_folder::safe_create_folder, create_folder::CreateFolderData,
+        delete_folder::delete_folder, update_folder::move_folder,
+        update_folder::update_folder_name,
     },
+    search::models::UpdateSearchIndexData,
 };
 use docbox_database::models::{
     document_box::DocumentBoxScope,

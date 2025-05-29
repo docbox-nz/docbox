@@ -13,16 +13,16 @@ use crate::{
 use axum::{extract::Path, http::StatusCode, Json};
 use axum_valid::Garde;
 use docbox_core::{
+    document_box::{
+        create_document_box::{create_document_box, CreateDocumentBox, CreateDocumentBoxError},
+        delete_document_box::{delete_document_box, DeleteDocumentBoxError},
+    },
     search::{
         models::{
             FlattenedItemResult, SearchRequest, SearchResultData, SearchResultItem,
             SearchResultResponse,
         },
         os::resolve_search_result,
-    },
-    services::document_box::{
-        create_document_box, delete_document_box, CreateDocumentBox, CreateDocumentBoxError,
-        DeleteDocumentBoxError,
     },
 };
 use docbox_database::models::{

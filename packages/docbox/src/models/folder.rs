@@ -1,6 +1,6 @@
 use crate::error::HttpError;
 use axum::http::StatusCode;
-use docbox_core::services::folders::CreateFolderError;
+use docbox_core::folders::create_folder::CreateFolderError;
 use docbox_database::models::folder::{FolderId, FolderWithExtra, ResolvedFolderWithExtra};
 use garde::Validate;
 use serde::{Deserialize, Serialize};

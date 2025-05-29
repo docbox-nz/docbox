@@ -1,13 +1,16 @@
 pub mod aws;
 pub mod background;
+pub mod document_box;
 pub mod events;
 pub mod files;
+pub mod folders;
 pub mod image;
+pub mod links;
 pub mod notifications;
 pub mod office;
 pub mod processing;
 pub mod search;
 pub mod secrets;
-pub mod services;
 pub mod storage;
+pub mod tenant;
 pub mod utils;
