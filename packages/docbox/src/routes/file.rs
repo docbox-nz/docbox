@@ -117,9 +117,8 @@ pub async fn upload(
     }
 
     let content_type = req
-        .file
-        .metadata
-        .content_type
+        .mime
+        .or(req.file.metadata.content_type)
         .ok_or(HttpFileError::MissingMimeType)?;
 
     let mime = Mime::from_str(&content_type).map_err(|_| HttpFileError::InvalidMimeType)?;

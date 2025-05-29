@@ -95,6 +95,11 @@ pub struct UploadFileRequest {
     #[schema(format = Binary,value_type= Vec<u8>)]
     pub file: FieldData<Bytes>,
 
+    /// Optional mime type override, when not present the mime type will
+    /// be extracted from [UploadFileRequest::file]
+    #[garde(skip)]
+    pub mime: Option<String>,
+
     /// Whether to process the file asynchronously returning a task
     /// response instead of waiting for the upload
     #[garde(skip)]
