@@ -84,3 +84,4 @@ base64 = "0.22.1"
 bytes-utils = "0.1.4"
 
 utoipa = { workspace = true }
+itertools = "0.14.0"

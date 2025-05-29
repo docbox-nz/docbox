@@ -1,5 +1,16 @@
 version: "3.9"
 services:
+  typesense:
+    image: typesense/typesense:28.0
+    container_name: typesense
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense-data:/data
+    environment:
+      TYPESENSE_API_KEY: typesensedev     
+      TYPESENSE_DATA_DIR: /data
+
   opensearch-node1:
     image: opensearchproject/opensearch:latest
     container_name: opensearch-data-node
@@ -155,7 +166,8 @@ volumes:
   postgres_data:
   pgadmin-data:
   minio-data:
-
+  typesense-data:
+  
 networks:
   opensearch-net:
   docbox:

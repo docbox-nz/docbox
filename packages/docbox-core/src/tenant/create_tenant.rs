@@ -192,7 +192,8 @@ async fn create_tenant(
     search
         .create_index()
         .await
-        .map_err(InitTenantError::CreateSearchIndex)?;
+        .map_err(InitTenantError::CreateSearchIndex)
+        .inspect_err(|error| tracing::error!(?error, "failed to create search index"))?;
 
     create_state.search = Some(search);
 

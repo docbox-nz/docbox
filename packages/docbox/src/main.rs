@@ -7,10 +7,7 @@ use docbox_core::{
     notifications::{process_notification_queue, AppNotificationQueue, NotificationQueueData},
     office::{convert_server::OfficeConverterServer, OfficeConverter},
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
-    search::{
-        os::{create_open_search, OpenSearchIndexFactory},
-        SearchIndexFactory,
-    },
+    search::SearchIndexFactory,
     secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
     storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
 };
@@ -25,7 +22,6 @@ use std::{
 };
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
-use url::Url;
 
 mod docs;
 mod error;
@@ -136,16 +132,6 @@ async fn server() -> anyhow::Result<()> {
     let db_cache = DatabasePoolCache::new(db_host, db_port, db_root_secret_name, secrets);
     let db_cache = Arc::new(db_cache);
 
-    // Setup opensearch
-    let open_search_url = std::env::var("OPENSEARCH_URL")
-        // Map the error to an anyhow type
-        .context("missing OPENSEARCH_URL env")
-        // Parse the URL
-        .and_then(|url| Url::parse(&url).context("failed to parse OPENSEARCH_URL"))?;
-
-    let open_search =
-        create_open_search(&aws_config, open_search_url).context("failed to create open search")?;
-
     // Create the SQS client
     // Warning: Will panic if the configuration provided is invalid
     let sqs_client = SqsClient::new(&aws_config);
@@ -154,9 +140,8 @@ async fn server() -> anyhow::Result<()> {
     let sqs_publisher_factory = SqsEventPublisherFactory::new(sqs_client.clone());
     let event_publisher_factory = EventPublisherFactory::new(sqs_publisher_factory);
 
-    // Setup search index factories
-    let os_index_factory = OpenSearchIndexFactory::new(open_search);
-    let search_index_factory = SearchIndexFactory::new(os_index_factory);
+    // Setup search index factory
+    let search_index_factory = SearchIndexFactory::from_env(&aws_config)?;
 
     // Setup storage factory
     let s3_client = s3_client_from_env(&aws_config)?;

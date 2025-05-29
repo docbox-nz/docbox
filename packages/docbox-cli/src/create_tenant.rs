@@ -2,10 +2,7 @@ use std::path::PathBuf;
 
 use docbox_core::{
     aws::{aws_config, s3_client_from_env, SecretsManagerClient},
-    search::{
-        os::{create_open_search_prod, OpenSearchIndexFactory},
-        SearchIndexFactory,
-    },
+    search::SearchIndexFactory,
     secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
     storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
     tenant::create_tenant::safe_create_tenant,
@@ -18,7 +15,6 @@ use docbox_database::{
 use eyre::Context;
 use serde::Deserialize;
 use serde_json::json;
-use url::Url;
 
 use crate::{connect_db, Credentials};
 
@@ -167,15 +163,8 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
         secrets,
     );
 
-    // Setup the search index
-    let open_search_url = std::env::var("OPENSEARCH_URL")
-        // Map the error to an anyhow type
-        .context("missing OPENSEARCH_URL env")
-        // Parse the URL
-        .and_then(|url| Url::parse(&url).context("failed to parse OPENSEARCH_URL"))?;
-    let open_search = create_open_search_prod(&aws_config, open_search_url)
+    let search_factory = SearchIndexFactory::from_env(&aws_config)
         .map_err(|err| eyre::Error::msg(err.to_string()))?;
-    let search_factory = SearchIndexFactory::new(OpenSearchIndexFactory::new(open_search));
 
     // Setup S3 access
     let s3_client =
