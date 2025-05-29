@@ -1,18 +1,14 @@
 use anyhow::Context;
-use futures::TryFutureExt;
-use pdf_process::{
-    pdf_info, text::PAGE_END_CHARACTER, text_all_pages_split, PdfInfoArgs, PdfTextArgs,
-};
+use pdf_process::text::PAGE_END_CHARACTER;
 use std::str::FromStr;
 
 use crate::{
     office::is_pdf_compatible,
-    processing::{pdf::is_pdf_file, ProcessingError, ProcessingIndexMetadata},
+    processing::ProcessingIndexMetadata,
     search::{
         models::{DocumentPage, SearchIndexData, SearchIndexType, UpdateSearchIndexData},
         TenantSearchIndex,
     },
-    services::generated::QueuedUpload,
     storage::TenantStorageLayer,
 };
 
@@ -25,7 +21,7 @@ use docbox_database::{
     DbPool,
 };
 
-use super::upload::{store_generated_files, UploadFileError};
+use super::upload::UploadFileError;
 
 pub async fn store_file_index(
     search: &TenantSearchIndex,
@@ -67,7 +63,6 @@ pub async fn re_index_file(
     // No text processing for encrypted files
     if file.encrypted {
         if fresh {
-            // Re-create base file index
             store_file_index(search, &file, scope, None).await?;
         }
 
@@ -76,76 +71,7 @@ pub async fn re_index_file(
 
     let mime = mime::Mime::from_str(&file.mime).context("invalid file mime type")?;
 
-    let pdf_file_bytes = if is_pdf_file(&mime) {
-        // Read the PDF file from S3
-        match storage
-            .get_file(&file.file_key)
-            .await?
-            .collect_bytes()
-            .await
-        {
-            Ok(value) => value,
-            Err(cause) => {
-                tracing::error!(?cause, ?file, "failed to load pdf bytes from s3 stream");
-                anyhow::bail!("failed to load pdf bytes from s3 stream");
-            }
-        }
-    } else if is_pdf_compatible(&mime) {
-        // Load the generated pdf file and text file
-        let pdf_file = GeneratedFile::find(db, scope, file.id, GeneratedFileType::Pdf).await?;
-
-        tracing::debug!(?pdf_file, "loaded file generated pdf");
-
-        // No PDF file to process for text content
-        let pdf_file = match pdf_file {
-            Some(value) => value,
-            None => return Ok(()),
-        };
-
-        // Read the PDF file from S3
-        match storage
-            .get_file(&pdf_file.file_key)
-            .await?
-            .collect_bytes()
-            .await
-        {
-            Ok(value) => value,
-            Err(cause) => {
-                tracing::error!(?cause, ?pdf_file, "failed to load pdf bytes from s3 stream");
-                anyhow::bail!("failed to load pdf bytes from s3 stream");
-            }
-        }
-    } else {
-        if fresh {
-            // Re-create base file index
-            store_file_index(search, &file, scope, None).await?;
-        }
-
-        return Ok(());
-    };
-
-    // Load the generated text
-    let text_file = GeneratedFile::find(db, scope, file.id, GeneratedFileType::TextContent).await?;
-
-    let pdf_info_args = PdfInfoArgs::default();
-
-    // Load the pdf information
-    let pdf_info = match pdf_info(&pdf_file_bytes, &pdf_info_args).await {
-        Ok(value) => value,
-        Err(cause) => {
-            tracing::error!(?cause, "failed to get pdf file info");
-            anyhow::bail!("failed to get pdf file info");
-        }
-    };
-
-    // Get available pages
-    let page_count = pdf_info
-        .pages()
-        .ok_or(ProcessingError::MalformedFile)?
-        .map_err(|_| ProcessingError::MalformedFile)?;
-
-    // No content to index
-    if page_count < 1 {
+    if !is_pdf_compatible(&mime) {
         if fresh {
             // Re-create base file index
             store_file_index(search, &file, scope, None).await?;
@@ -154,33 +80,18 @@ pub async fn re_index_file(
         return Ok(());
     }
 
-    let text_args = PdfTextArgs::default();
-
-    // Extract pdf text
-    let pages = match text_all_pages_split(&pdf_file_bytes, &text_args)
-        // Match outer result type with inner type
-        .map_err(ProcessingError::ExtractFileText)
-        .await
-    {
+    let pages = match try_pdf_compatible_document_pages(db, storage, scope, &file).await {
         Ok(value) => value,
         Err(cause) => {
-            tracing::error!(?cause, "failed to get pdf pages text");
-            anyhow::bail!("failed to get pdf pages text");
+            if fresh {
+                // Re-create base file index
+                store_file_index(search, &file, scope, None).await?;
+            }
+
+            tracing::error!(?cause, "failed to re-create pdf index data pages");
+            return Ok(());
         }
     };
-
-    // Create a combined text content using the PDF page end character
-    let page_end = PAGE_END_CHARACTER.to_string();
-    let combined_text_content = pages.join(&page_end).as_bytes().to_vec();
-
-    let pages = pages
-        .into_iter()
-        .enumerate()
-        .map(|(page, content)| DocumentPage {
-            page: page as u64,
-            content,
-        })
-        .collect();
 
     if fresh {
         // Re-create base file index
@@ -211,35 +122,49 @@ pub async fn re_index_file(
             .map_err(UploadFileError::CreateIndex)?;
     }
 
-    let queued_uploads = vec![QueuedUpload::new(
-        mime::TEXT_PLAIN,
-        GeneratedFileType::TextContent,
-        combined_text_content.into(),
-    )];
-
-    {
-        let mut db = db.begin().await?;
-        let mut upload_keys = Vec::new();
-        store_generated_files(&mut db, storage, &file, &mut upload_keys, queued_uploads).await?;
-        db.commit().await?;
-    }
-
-    // Delete the associated text file (The old version)
-    if let Some(text_file) = text_file {
-        if let Err(cause) = storage.delete_file(&text_file.file_key).await {
-            tracing::error!(
-                ?cause,
-                ?text_file,
-                "failed to delete previous generated text file from s3"
-            );
-            anyhow::bail!("failed to delete previous generated text file from s3")
-        }
-
-        if let Err(cause) = text_file.delete(db).await {
-            tracing::error!(?cause, "failed to delete previous text file from db");
-            anyhow::bail!("failed to delete previous text file from db")
-        }
-    }
-
     Ok(())
+}
+
+/// Attempts to obtain the [DocumentPage] collection for a PDF compatible file
+pub async fn try_pdf_compatible_document_pages(
+    db: &DbPool,
+    storage: &TenantStorageLayer,
+    scope: &DocumentBoxScope,
+    file: &File,
+) -> anyhow::Result<Vec<DocumentPage>> {
+    // Load the extracted text content for the file
+    let text_file = GeneratedFile::find(db, scope, file.id, GeneratedFileType::TextContent)
+        .await?
+        .context("missing text content")?;
+
+    tracing::debug!(?text_file, "loaded file generated text content");
+
+    // Read the PDF file from S3
+    let text_content = storage
+        .get_file(&text_file.file_key)
+        .await?
+        .collect_bytes()
+        .await
+        .inspect_err(|cause| {
+            tracing::error!(?cause, "failed to load pdf bytes from s3 stream");
+        })?;
+
+    // Load the text content
+    let text_content = text_content.to_vec();
+    let text_content = String::from_utf8(text_content).context("invalid utf8 text content")?;
+
+    // Split the content back into pages
+    let pages = text_content.split(PAGE_END_CHARACTER);
+
+    // Create the pages data
+    let pages = pages
+        .into_iter()
+        .enumerate()
+        .map(|(page, content)| DocumentPage {
+            page: page as u64,
+            content: content.to_string(),
+        })
+        .collect();
+
+    Ok(pages)
 }
