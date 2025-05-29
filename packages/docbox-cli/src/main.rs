@@ -10,6 +10,7 @@ mod create_tenant;
 mod delete_tenant;
 mod get_tenant;
 mod migrate;
+mod rebuild_tenant_index;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -25,6 +26,13 @@ pub enum Commands {
 
     /// Create a new tenant
     CreateTenant {
+        /// File containing the tenant configuration details
+        #[arg(short, long)]
+        file: PathBuf,
+    },
+
+    /// Rebuild the tenant search index from its files
+    RebuildTenantIndex {
         /// File containing the tenant configuration details
         #[arg(short, long)]
         file: PathBuf,
@@ -132,6 +140,10 @@ async fn main() -> eyre::Result<()> {
             skip_failed,
         } => {
             migrate::migrate(env, file, tenant_id, skip_failed).await?;
+            Ok(())
+        }
+        Commands::RebuildTenantIndex { file } => {
+            rebuild_tenant_index::rebuild_tenant_index(file).await?;
             Ok(())
         }
     }

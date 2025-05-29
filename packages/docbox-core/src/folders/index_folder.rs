@@ -52,7 +52,6 @@ pub async fn re_index_folder(search: &TenantSearchIndex, folder: Folder) -> anyh
 }
 
 /// goes through all folders the tenant and re-indexes them
-#[allow(unused)]
 pub async fn re_index_folders(
     db: &DbPool,
     search: &TenantSearchIndex,
@@ -64,7 +63,7 @@ pub async fn re_index_folders(
     const PAGE_SIZE: u64 = 500;
 
     loop {
-        let folders = Folder::all(db, page_index * PAGE_SIZE, PAGE_SIZE)
+        let folders = Folder::all_non_root(db, page_index * PAGE_SIZE, PAGE_SIZE)
             .await
             .with_context(|| format!("failed to load folders page: {page_index}"))?;
 

@@ -40,17 +40,11 @@ pub async fn re_index_link(
     scope: &DocumentBoxScope,
     link: Link,
 ) -> anyhow::Result<()> {
-    // Re-create base link index
-    if let Err(cause) = store_link_index(search, &link, scope).await {
-        tracing::error!(?cause, "failed to create link base index");
-        anyhow::bail!("failed to create link base index");
-    }
-
+    store_link_index(search, &link, scope).await?;
     Ok(())
 }
 
 /// goes through all links the tenant and re-indexes them
-#[allow(unused)]
 pub async fn re_index_links(
     db: &DbPool,
     search: &TenantSearchIndex,

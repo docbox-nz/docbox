@@ -1,4 +1,5 @@
 use anyhow::Context;
+use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use pdf_process::text::PAGE_END_CHARACTER;
 use std::str::FromStr;
 
@@ -17,6 +18,7 @@ use docbox_database::{
         document_box::DocumentBoxScope,
         file::File,
         generated_file::{GeneratedFile, GeneratedFileType},
+        tenant::Tenant,
     },
     DbPool,
 };
@@ -51,19 +53,71 @@ pub async fn store_file_index(
     Ok(())
 }
 
-#[allow(unused)]
+pub async fn re_index_files(
+    db: &DbPool,
+    search: &TenantSearchIndex,
+    storage: &TenantStorageLayer,
+    tenant: &Tenant,
+) -> anyhow::Result<()> {
+    let tenant_id = tenant.id;
+
+    let mut page_index = 0;
+    const PAGE_SIZE: u64 = 5000;
+
+    loop {
+        let mut files = File::all(db, page_index * PAGE_SIZE, PAGE_SIZE)
+            .await
+            .with_context(|| format!("failed to load files page: {page_index}"))?;
+
+        let is_end = (files.len() as u64) < PAGE_SIZE;
+
+        // Apply migration to all tenants
+        let results: Vec<anyhow::Result<()>> = files
+            .into_iter()
+            .map(|file| -> BoxFuture<'_, anyhow::Result<()>> {
+                Box::pin(async move {
+                    let file_id = file.file.id;
+                    re_index_file(db, search, storage, &file.scope, &file.file, true)
+                        .await
+                        .with_context(|| {
+                            format!(
+                            "failed to migrate folder: Tenant ID: {tenant_id} File ID: {file_id}"
+                        )
+                        })
+                })
+            })
+            .collect::<FuturesUnordered<BoxFuture<'_, anyhow::Result<()>>>>()
+            .collect()
+            .await;
+
+        for result in results {
+            if let Err(err) = result {
+                tracing::error!(?err, "failed to migrate tenant")
+            }
+        }
+
+        if is_end {
+            break;
+        }
+
+        page_index += 1;
+    }
+
+    Ok(())
+}
+
 pub async fn re_index_file(
     db: &DbPool,
     search: &TenantSearchIndex,
     storage: &TenantStorageLayer,
     scope: &DocumentBoxScope,
-    file: File,
+    file: &File,
     fresh: bool,
 ) -> anyhow::Result<()> {
     // No text processing for encrypted files
     if file.encrypted {
         if fresh {
-            store_file_index(search, &file, scope, None).await?;
+            store_file_index(search, file, scope, None).await?;
         }
 
         return Ok(());
@@ -74,18 +128,18 @@ pub async fn re_index_file(
     if !is_pdf_compatible(&mime) {
         if fresh {
             // Re-create base file index
-            store_file_index(search, &file, scope, None).await?;
+            store_file_index(search, file, scope, None).await?;
         }
 
         return Ok(());
     }
 
-    let pages = match try_pdf_compatible_document_pages(db, storage, scope, &file).await {
+    let pages = match try_pdf_compatible_document_pages(db, storage, scope, file).await {
         Ok(value) => value,
         Err(cause) => {
             if fresh {
                 // Re-create base file index
-                store_file_index(search, &file, scope, None).await?;
+                store_file_index(search, file, scope, None).await?;
             }
 
             tracing::error!(?cause, "failed to re-create pdf index data pages");
@@ -97,7 +151,7 @@ pub async fn re_index_file(
         // Re-create base file index
         store_file_index(
             search,
-            &file,
+            file,
             scope,
             Some(ProcessingIndexMetadata { pages: Some(pages) }),
         )
@@ -109,7 +163,7 @@ pub async fn re_index_file(
                 file.id,
                 UpdateSearchIndexData {
                     folder_id: file.folder_id,
-                    name: file.name,
+                    name: file.name.clone(),
                     content: None,
                     pages: Some(pages),
                 },

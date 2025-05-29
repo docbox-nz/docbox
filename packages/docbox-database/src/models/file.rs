@@ -144,6 +144,29 @@ pub struct CreateFile {
 }
 
 impl File {
+    pub async fn all(
+        db: impl DbExecutor<'_>,
+        offset: u64,
+        page_size: u64,
+    ) -> DbResult<Vec<FileWithScope>> {
+        sqlx::query_as(
+            r#"
+            SELECT 
+            "file".*,
+            "folder"."document_box" AS "scope" 
+            FROM "docbox_files" "file"
+            INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id" 
+            ORDER BY "created_at" ASC
+            OFFSET $1
+            LIMIT $2
+        "#,
+        )
+        .bind(offset as i64)
+        .bind(page_size as i64)
+        .fetch_all(db)
+        .await
+    }
+
     pub async fn move_to_folder(
         mut self,
         db: impl DbExecutor<'_>,

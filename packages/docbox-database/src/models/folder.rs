@@ -356,14 +356,16 @@ impl Folder {
     }
 
     /// Get all folders and sub folder across any scope in a paginated fashion
-    pub async fn all(
+    /// (Ignores roots of document boxes)
+    pub async fn all_non_root(
         db: impl DbExecutor<'_>,
         offset: u64,
         page_size: u64,
     ) -> DbResult<Vec<Folder>> {
         sqlx::query_as(
             r#"
-            SELECT * FROM "docbox_folders" 
+            SELECT * FROM "docbox_folders"
+            WHERE "folder_id" IS NOT NULL 
             ORDER BY "created_at" ASC
             OFFSET $1
             LIMIT $2
