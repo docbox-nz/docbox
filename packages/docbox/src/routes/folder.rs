@@ -282,9 +282,9 @@ pub async fn update(
 #[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
-    TenantStorage(s3): TenantStorage,
+    TenantStorage(storage): TenantStorage,
     TenantEvents(events): TenantEvents,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
 ) -> HttpStatusResult {
     let folder = Folder::find_by_id(&db, &scope, folder_id)
@@ -297,7 +297,7 @@ pub async fn delete(
         // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
-    delete_folder(&db, &s3, &opensearch, &events, folder)
+    delete_folder(&db, &storage, &search, &events, folder)
         .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to delete folder");

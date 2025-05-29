@@ -86,8 +86,8 @@ pub const FILE_TAG: &str = "File";
 pub async fn upload(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
-    TenantStorage(s3): TenantStorage,
+    TenantSearch(search): TenantSearch,
+    TenantStorage(storage): TenantStorage,
     TenantEvents(events): TenantEvents,
     //
     Extension(processing): Extension<ProcessingLayer>,
@@ -155,7 +155,7 @@ pub async fn upload(
 
     // Handle synchronous request waiting for the task to complete before responding
     if !req.asynchronous.unwrap_or_default() {
-        let data = safe_upload_file(db, opensearch, s3, events, processing, upload)
+        let data = safe_upload_file(db, search, storage, events, processing, upload)
             .await
             .map_err(|cause| {
                 tracing::error!(?cause, "failed to upload file");
@@ -167,7 +167,7 @@ pub async fn upload(
 
     // Spawn background task
     let (task_id, created_at) = background_task(db.clone(), scope.clone(), async move {
-        let result = safe_upload_file(db, opensearch, s3, events, processing, upload)
+        let result = safe_upload_file(db, search, storage, events, processing, upload)
             .await
             .map_err(|cause| {
                 tracing::error!(?cause, "failed to upload file");
@@ -263,7 +263,7 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
 pub async fn create_presigned(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
-    TenantStorage(s3): TenantStorage,
+    TenantStorage(storage): TenantStorage,
     Path(scope): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<CreatePresignedRequest>>,
 ) -> Result<(StatusCode, Json<PresignedUploadResponse>), DynHttpError> {
@@ -280,7 +280,7 @@ pub async fn create_presigned(
 
     let response = create_presigned_upload(
         &db,
-        &s3,
+        &storage,
         CreatePresigned {
             name: req.name,
             document_box: scope,
@@ -578,7 +578,7 @@ pub async fn update(
 #[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, query = ?query))]
 pub async fn get_raw(
     TenantDb(db): TenantDb,
-    TenantStorage(s3): TenantStorage,
+    TenantStorage(storage): TenantStorage,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
     Query(query): Query<RawFileQuery>,
 ) -> Result<Response<Body>, DynHttpError> {
@@ -590,7 +590,7 @@ pub async fn get_raw(
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
-    let byte_stream = s3.get_file(&file.file_key).await.map_err(|cause| {
+    let byte_stream = storage.get_file(&file.file_key).await.map_err(|cause| {
         tracing::error!(?cause, "failed to get file from S3");
         HttpCommonError::ServerError
     })?;
@@ -637,7 +637,7 @@ pub async fn get_raw(
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     TenantEvents(events): TenantEvents,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
 ) -> HttpStatusResult {
@@ -649,7 +649,7 @@ pub async fn delete(
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
-    delete_file(&db, &storage, &opensearch, &events, file, scope)
+    delete_file(&db, &storage, &search, &events, file, scope)
         .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to delete file");
@@ -721,7 +721,7 @@ pub async fn get_generated(
 #[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type))]
 pub async fn get_generated_raw(
     TenantDb(db): TenantDb,
-    TenantStorage(s3): TenantStorage,
+    TenantStorage(storage): TenantStorage,
     Path((scope, file_id, generated_type)): Path<(DocumentBoxScope, FileId, GeneratedFileType)>,
 ) -> Result<Response<Body>, DynHttpError> {
     let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
@@ -732,7 +732,7 @@ pub async fn get_generated_raw(
         })?
         .ok_or(HttpFileError::NoMatchingGenerated)?;
 
-    let byte_stream = s3.get_file(&file.file_key).await.map_err(|cause| {
+    let byte_stream = storage.get_file(&file.file_key).await.map_err(|cause| {
         tracing::error!(?cause, "failed to file from S3");
         HttpCommonError::ServerError
     })?;

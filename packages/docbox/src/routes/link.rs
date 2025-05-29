@@ -436,7 +436,7 @@ pub async fn update(
 #[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     TenantEvents(events): TenantEvents,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpStatusResult {
@@ -450,7 +450,7 @@ pub async fn delete(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    delete_link(&db, &opensearch, &events, link, scope)
+    delete_link(&db, &search, &events, link, scope)
         .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to delete folder");

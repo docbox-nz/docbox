@@ -44,17 +44,17 @@ pub enum UploadFileError {
     #[error("failed to process file: {0}")]
     Processing(#[from] ProcessingError),
 
-    /// Failed to upload generated file to s3
-    #[error("failed to upload generated file to s3: {0}")]
-    GeneratedS3Upload(anyhow::Error),
+    /// Failed to upload generated file to storage layer
+    #[error("failed to upload generated file to storage layer: {0}")]
+    UploadGeneratedFile(anyhow::Error),
 
     /// Failed to create the generated file database row
     #[error("failed to create generated file")]
     CreateGeneratedFile(DbErr),
 
-    /// Failed to upload file to s3
-    #[error("failed to upload file to s3: {0}")]
-    FileS3Upload(anyhow::Error),
+    /// Failed to upload file to storage layer
+    #[error("failed to upload file to storage layer: {0}")]
+    UploadFile(anyhow::Error),
 
     /// Multiple error messages
     #[error(transparent)]
@@ -302,7 +302,7 @@ pub async fn upload_file(
         storage
             .upload_file(&file_key, mime.to_string(), file_bytes)
             .await
-            .map_err(UploadFileError::FileS3Upload)?;
+            .map_err(UploadFileError::UploadFile)?;
         upload_state.s3_upload_keys.push(file_key.clone());
     }
 
@@ -370,7 +370,7 @@ pub async fn store_generated_files(
             // Failed upload
             Err(cause) => {
                 tracing::error!(?cause, "failed to upload generated file");
-                upload_errors.push(UploadFileError::GeneratedS3Upload(cause));
+                upload_errors.push(UploadFileError::UploadGeneratedFile(cause));
             }
         }
     }

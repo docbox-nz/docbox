@@ -30,13 +30,13 @@ pub enum DeleteFileError {
     #[error("failed to create file: {0}")]
     DeleteFile(DbErr),
 
-    /// Failed to remove file from s3
-    #[error("failed to remove file from s3: {0}")]
-    DeleteFileS3(anyhow::Error),
+    /// Failed to remove file from storage
+    #[error("failed to remove file from storage: {0}")]
+    DeleteFileStorage(anyhow::Error),
 
-    /// Failed to remove generated file from s3
-    #[error("failed to remove generated file from s3: {0}")]
-    DeleteGeneratedS3(anyhow::Error),
+    /// Failed to remove generated file from storage
+    #[error("failed to remove generated file from storage: {0}")]
+    DeleteGeneratedFileStorage(anyhow::Error),
 
     /// Failed to delete the generated file database row
     #[error("failed to create generated file: {0}")]
@@ -84,7 +84,7 @@ pub async fn delete_file(
                 }
             }
 
-            return Err(DeleteFileError::DeleteGeneratedS3(err));
+            return Err(DeleteFileError::DeleteGeneratedFileStorage(err));
         }
     }
 
@@ -105,7 +105,7 @@ pub async fn delete_file(
     storage
         .delete_file(&file.file_key)
         .await
-        .map_err(DeleteFileError::DeleteFileS3)?;
+        .map_err(DeleteFileError::DeleteFileStorage)?;
 
     // Delete the indexed file contents
     search

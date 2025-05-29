@@ -87,7 +87,7 @@ pub enum InitTenantError {
 #[derive(Default)]
 pub struct InitTenantState {
     /// Storage layer if bucket created
-    pub s3: Option<TenantStorageLayer>,
+    pub storage: Option<TenantStorageLayer>,
 
     /// Search index if search index is create
     pub search: Option<TenantSearchIndex>,
@@ -163,7 +163,7 @@ pub async fn initialize_tenant(
         .create_bucket()
         .await
         .map_err(InitTenantError::CreateS3Bucket)?;
-    init_state.s3 = Some(storage.clone());
+    init_state.storage = Some(storage.clone());
 
     // Connect the S3 bucket for file upload notifications
     if let Some(s3_queue_arn) = create.s3_queue_arn {
@@ -211,8 +211,8 @@ pub async fn initialize_tenant(
 /// the point of failure
 pub async fn rollback_tenant_error(init_state: InitTenantState) {
     // Must revert created S3 bucket
-    if let Some(s3) = init_state.s3 {
-        if let Err(err) = s3.delete_bucket().await {
+    if let Some(storage) = init_state.storage {
+        if let Err(err) = storage.delete_bucket().await {
             error!("failed to rollback created tenant s3 bucket: {}", err);
         }
     }
