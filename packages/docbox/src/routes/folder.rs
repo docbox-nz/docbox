@@ -1,9 +1,5 @@
 //! Folder related endpoints
 
-use axum::{extract::Path, http::StatusCode, Json};
-use axum_valid::Garde;
-use std::ops::DerefMut;
-
 use crate::{
     error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
@@ -12,13 +8,12 @@ use crate::{
     },
     models::folder::{CreateFolderRequest, FolderResponse, HttpFolderError, UpdateFolderRequest},
 };
-use docbox_core::{
-    folders::{
-        create_folder::safe_create_folder, create_folder::CreateFolderData,
-        delete_folder::delete_folder, update_folder::move_folder,
-        update_folder::update_folder_name,
-    },
-    search::models::UpdateSearchIndexData,
+use axum::{extract::Path, http::StatusCode, Json};
+use axum_valid::Garde;
+use docbox_core::folders::{
+    create_folder::{safe_create_folder, CreateFolderData},
+    delete_folder::delete_folder,
+    update_folder::{UpdateFolder, UpdateFolderError},
 };
 use docbox_database::models::{
     document_box::DocumentBoxScope,
@@ -220,11 +215,11 @@ pub async fn get_edit_history(
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
     Garde(Json(req)): Garde<Json<UpdateFolderRequest>>,
 ) -> HttpStatusResult {
-    let mut folder = Folder::find_by_id(&db, &scope, folder_id)
+    let folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
         // Failed to query folder
         .map_err(|cause| {
@@ -234,77 +229,30 @@ pub async fn update(
         // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
-    // Cannot modify the root folder, this is not allowed
-    if folder.folder_id.is_none() {
-        return Err(HttpFolderError::CannotModifyRoot.into());
-    }
-
-    let mut db = db.begin().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to begin transaction");
-        HttpCommonError::ServerError
-    })?;
-
     // Update stored editing user data
-    let user = action_user.store_user(db.deref_mut()).await?;
+    let user = action_user.store_user(&db).await?;
     let user_id = user.as_ref().map(|value| value.id.to_string());
 
-    if let Some(target_id) = req.folder_id {
-        // Cannot move folder into itself
-        if target_id == folder.id {
-            return Err(HttpFolderError::CannotMoveIntoSelf.into());
-        }
-
-        // Ensure the target folder exists, also ensures the target folder is in the same scope
-        // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
-        let target_folder = Folder::find_by_id(db.deref_mut(), &scope, target_id)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to query folder");
-                HttpCommonError::ServerError
-            })?
-            .ok_or(HttpFolderError::UnknownTargetFolder)?;
-
-        folder = move_folder(&mut db, user_id.clone(), folder, target_folder)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to move folder");
-                HttpCommonError::ServerError
-            })?;
+    let update = UpdateFolder {
+        folder_id: req.folder_id,
+        name: req.name,
     };
 
-    if let Some(new_name) = req.name {
-        folder = update_folder_name(&mut db, user_id, folder, new_name)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to update folder name");
-                HttpCommonError::ServerError
-            })?;
-    }
-
-    // Update search index data
-    opensearch
-        .update_data(
-            folder.id,
-            UpdateSearchIndexData {
-                folder_id: folder.folder_id,
-                name: Some(folder.name.clone()),
-                mime: None,
-                content: None,
-                created_at: None,
-                created_by: None,
-                document_box: None,
-                pages: None,
-            },
-        )
-        .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to update search index data");
-            HttpCommonError::ServerError
-        })?;
-
-    db.commit().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to commit transaction");
-        HttpCommonError::ServerError
+    docbox_core::folders::update_folder::update_folder(
+        &db, &search, &scope, folder, user_id, update,
+    )
+    .await
+    .map_err(|err| match err {
+        UpdateFolderError::UnknownTargetFolder => {
+            DynHttpError::from(HttpFolderError::UnknownTargetFolder)
+        }
+        UpdateFolderError::CannotModifyRoot => {
+            DynHttpError::from(HttpFolderError::CannotModifyRoot)
+        }
+        UpdateFolderError::CannotMoveIntoSelf => {
+            DynHttpError::from(HttpFolderError::CannotMoveIntoSelf)
+        }
+        _ => DynHttpError::from(HttpCommonError::ServerError),
     })?;
 
     Ok(StatusCode::OK)

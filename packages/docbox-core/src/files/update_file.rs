@@ -31,10 +31,10 @@ pub enum UpdateFileError {
 }
 
 pub struct UpdateFile {
-    /// Move the link to another folder
+    /// Move the file to another folder
     pub folder_id: Option<FolderId>,
 
-    /// Update the link name
+    /// Update the file name
     pub name: Option<String>,
 }
 

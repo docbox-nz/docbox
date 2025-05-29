@@ -111,6 +111,7 @@ pub async fn update_link(
 
 /// Moves a link to the provided folder, creates a new edit history
 /// item for the change
+#[tracing::instrument(skip_all, fields(?user_id, link_id = %link.id, target_folder_id = %target_folder.id))]
 async fn move_link(
     db: &mut DbTransaction<'_>,
     user_id: Option<UserId>,
@@ -143,6 +144,7 @@ async fn move_link(
 
 /// Updates a link value, creates a new edit history
 /// item for the change
+#[tracing::instrument(skip_all, fields(?user_id, link_id = %link.id, %new_value))]
 async fn update_link_value(
     db: &mut DbTransaction<'_>,
     user_id: Option<UserId>,
@@ -175,6 +177,7 @@ async fn update_link_value(
 
 /// Updates a link name, creates a new edit history
 /// item for the change
+#[tracing::instrument(skip_all, fields(?user_id, link_id = %link.id, %new_name))]
 async fn update_link_name(
     db: &mut DbTransaction<'_>,
     user_id: Option<UserId>,
