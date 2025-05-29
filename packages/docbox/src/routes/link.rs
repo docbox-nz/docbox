@@ -22,11 +22,10 @@ use axum::{
     Extension, Json,
 };
 use axum_valid::Garde;
+use docbox_core::links::update_link::{UpdateLink, UpdateLinkError};
 use docbox_core::links::{
     create_link::safe_create_link, create_link::CreateLinkData, delete_link::delete_link,
-    update_link::move_link, update_link::update_link_name, update_link::update_link_value,
 };
-use docbox_core::search::models::UpdateSearchIndexData;
 use docbox_database::models::{
     document_box::DocumentBoxScope,
     edit_history::EditHistory,
@@ -34,7 +33,7 @@ use docbox_database::models::{
     link::{CreatedByUser, LastModifiedByUser, Link, LinkId, LinkWithExtra},
 };
 use docbox_web_scraper::WebsiteMetaService;
-use std::{ops::DerefMut, sync::Arc};
+use std::sync::Arc;
 
 pub const LINK_TAG: &str = "Link";
 
@@ -379,11 +378,11 @@ pub async fn get_edit_history(
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
     Garde(Json(req)): Garde<Json<UpdateLinkRequest>>,
 ) -> HttpStatusResult {
-    let mut link = Link::find(&db, &scope, link_id)
+    let link = Link::find(&db, &scope, link_id)
         .await
         // Failed to query link
         .map_err(|cause| {
@@ -393,77 +392,24 @@ pub async fn update(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let mut db = db.begin().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to begin transaction");
-        HttpCommonError::ServerError
-    })?;
-
     // Update stored editing user data
-    let user = action_user.store_user(db.deref_mut()).await?;
+    let user = action_user.store_user(&db).await?;
     let user_id = user.as_ref().map(|value| value.id.to_string());
 
-    if let Some(target_id) = req.folder_id {
-        // Ensure the target folder exists, also ensures the target folder is in the same scope
-        // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
-        let target_folder = Folder::find_by_id(db.deref_mut(), &scope, target_id)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to query target folder");
-                HttpCommonError::ServerError
-            })?
-            .ok_or(HttpFolderError::UnknownTargetFolder)?;
-
-        link = move_link(&mut db, user_id.clone(), link, target_folder)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to move link");
-                HttpCommonError::ServerError
-            })?;
+    let update = UpdateLink {
+        folder_id: req.folder_id,
+        name: req.name,
+        value: req.value,
     };
 
-    if let Some(new_name) = req.name {
-        link = update_link_name(&mut db, user_id.clone(), link, new_name)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to update link name");
-                HttpCommonError::ServerError
-            })?;
-    }
-
-    if let Some(new_value) = req.value {
-        link = update_link_value(&mut db, user_id, link, new_value)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to update link value");
-                HttpCommonError::ServerError
-            })?;
-    }
-
-    // Update search index data for the new name and value
-    opensearch
-        .update_data(
-            link.id,
-            UpdateSearchIndexData {
-                folder_id: Some(link.folder_id),
-                name: Some(link.name.clone()),
-                mime: None,
-                content: Some(link.value.clone()),
-                created_at: None,
-                created_by: None,
-                document_box: None,
-                pages: None,
-            },
-        )
+    docbox_core::links::update_link::update_link(&db, &search, &scope, link, user_id, update)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to update search index");
-            HttpCommonError::ServerError
+        .map_err(|err| match err {
+            UpdateLinkError::UnknownTargetFolder => {
+                DynHttpError::from(HttpFolderError::UnknownTargetFolder)
+            }
+            _ => DynHttpError::from(HttpCommonError::ServerError),
         })?;
-
-    db.commit().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to commit transaction");
-        HttpCommonError::ServerError
-    })?;
 
     Ok(StatusCode::OK)
 }
