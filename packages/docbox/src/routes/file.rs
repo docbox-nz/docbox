@@ -26,13 +26,11 @@ use axum_valid::Garde;
 use docbox_core::{
     files::{
         delete_file::delete_file,
-        update_file::move_file,
-        update_file::update_file_name,
+        update_file::{UpdateFile, UpdateFileError},
         upload_file::{safe_upload_file, ProcessingConfig, UploadFile, UploadedFileData},
         upload_file_presigned::{create_presigned_upload, CreatePresigned},
     },
     processing::ProcessingLayer,
-    search::models::UpdateSearchIndexData,
 };
 use docbox_database::models::{
     document_box::DocumentBoxScope,
@@ -45,7 +43,7 @@ use docbox_database::models::{
     user::User,
 };
 use mime::Mime;
-use std::{ops::DerefMut, str::FromStr};
+use std::str::FromStr;
 
 pub const FILE_TAG: &str = "File";
 
@@ -524,11 +522,11 @@ pub async fn get_edit_history(
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
-    TenantSearch(opensearch): TenantSearch,
+    TenantSearch(search): TenantSearch,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
     Garde(Json(req)): Garde<Json<UpdateFileRequest>>,
 ) -> HttpStatusResult {
-    let mut file = File::find(&db, &scope, file_id)
+    let file = File::find(&db, &scope, file_id)
         .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to query file");
@@ -536,69 +534,23 @@ pub async fn update(
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
-    let mut db = db.begin().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to begin transaction");
-        HttpCommonError::ServerError
-    })?;
-
     // Update stored editing user data
-    let user = action_user.store_user(db.deref_mut()).await?;
+    let user = action_user.store_user(&db).await?;
     let user_id = user.as_ref().map(|value| value.id.to_string());
 
-    if let Some(target_id) = req.folder_id {
-        // Ensure the target folder exists, also ensures the target folder is in the same scope
-        // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
-        let target_folder = Folder::find_by_id(db.deref_mut(), &scope, target_id)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to query target folder");
-                HttpCommonError::ServerError
-            })?
-            .ok_or(HttpFolderError::UnknownTargetFolder)?;
-
-        file = move_file(&mut db, user_id.clone(), file, target_folder)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to move file");
-                HttpCommonError::ServerError
-            })?;
+    let update = UpdateFile {
+        folder_id: req.folder_id,
+        name: req.name,
     };
 
-    if let Some(new_name) = req.name {
-        file = update_file_name(&mut db, user_id, file, new_name)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to update file name");
-                HttpCommonError::ServerError
-            })?;
-    }
-
-    // Update search index data
-    opensearch
-        .update_data(
-            file.id,
-            UpdateSearchIndexData {
-                folder_id: Some(file.folder_id),
-                name: Some(file.name.clone()),
-                // Don't update unchanged
-                mime: None,
-                content: None,
-                created_at: None,
-                created_by: None,
-                document_box: None,
-                pages: None,
-            },
-        )
+    docbox_core::files::update_file::update_file(&db, &search, &scope, file, user_id, update)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to update search index data");
-            HttpCommonError::ServerError
+        .map_err(|err| match err {
+            UpdateFileError::UnknownTargetFolder => {
+                DynHttpError::from(HttpFolderError::UnknownTargetFolder)
+            }
+            _ => DynHttpError::from(HttpCommonError::ServerError),
         })?;
-
-    db.commit().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to commit transaction");
-        HttpCommonError::ServerError
-    })?;
 
     Ok(StatusCode::OK)
 }
