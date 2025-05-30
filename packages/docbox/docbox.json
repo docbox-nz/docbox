@@ -1478,7 +1478,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SearchResultResponse"
+                  "$ref": "#/components/schemas/FileSearchResultResponse"
                 }
               }
             }
@@ -3480,6 +3480,26 @@
           }
         }
       },
+      "FileSearchResultResponse": {
+        "type": "object",
+        "required": [
+          "total_hits",
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageResult"
+            }
+          },
+          "total_hits": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "FileUploadResponse": {
         "oneOf": [
           {
@@ -4084,8 +4104,9 @@
               "null"
             ],
             "format": "int32",
-            "description": "Maximum number of pages too return",
+            "description": "Maximum number of pages too return\n\nDeprecated: use the /search endpoint on the file itself with an offset instead",
             "default": null,
+            "deprecated": true,
             "maximum": 100,
             "minimum": 0
           },

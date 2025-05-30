@@ -31,7 +31,7 @@ use docbox_core::{
         upload_file_presigned::{create_presigned_upload, CreatePresigned},
     },
     processing::ProcessingLayer,
-    search::models::{FileSearchRequest, FileSearchResultResponse, SearchResultResponse},
+    search::models::{FileSearchRequest, FileSearchResultResponse},
 };
 use docbox_database::models::{
     document_box::DocumentBoxScope,
@@ -623,7 +623,7 @@ pub async fn get_raw(
     tag = FILE_TAG,
     path = "/box/{scope}/file/{file_id}/search",
     responses(
-        (status = 200, description = "Searched successfully", body = SearchResultResponse),
+        (status = 200, description = "Searched successfully", body = FileSearchResultResponse),
         (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
         (status = 404, description = "File not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
