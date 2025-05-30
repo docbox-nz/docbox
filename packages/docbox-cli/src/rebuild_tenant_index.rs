@@ -51,6 +51,8 @@ pub async fn rebuild_tenant_index(
 
     tracing::info!(?tenant, "started re-indexing tenant");
 
+    _ = search.create_index().await;
+
     re_index_links(&db, &search, &tenant)
         .await
         .inspect_err(|error| tracing::error!(?error, "failed to re-index links"))
