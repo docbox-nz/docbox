@@ -322,6 +322,44 @@ impl SearchIndex for OpenSearchIndex {
         })
     }
 
+    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> anyhow::Result<()> {
+        let mapped_data: Vec<JsonBody<OsSearchIndexData>> = data
+            .into_iter()
+            .map(|data| {
+                JsonBody::new(OsSearchIndexData {
+                    ty: data.ty,
+                    folder_id: data.folder_id,
+                    document_box: data.document_box,
+                    item_id: data.item_id,
+                    name: data.name,
+                    mime: data.mime,
+                    content: data.content,
+                    created_at: data.created_at.to_rfc3339(),
+                    created_by: data.created_by,
+                    pages: data.pages,
+                })
+            })
+            .collect();
+
+        // Index a file
+        let result = self
+            .client
+            // Use file.id
+            .bulk(opensearch::BulkParts::Index(&self.search_index.0))
+            .body(mapped_data)
+            .send()
+            .await?;
+
+        let status_code = result.status_code();
+
+        let response = result.text().await?;
+
+        if status_code.is_client_error() || status_code.is_server_error() {
+            return Err(anyhow::anyhow!("error response: {response}"));
+        }
+        Ok(())
+    }
+
     async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()> {
         let data = OsSearchIndexData {
             ty: data.ty,

@@ -420,6 +420,66 @@ impl SearchIndex for TypesenseIndex {
         })
     }
 
+    async fn bulk_add_data(&self, data: Vec<super::models::SearchIndexData>) -> anyhow::Result<()> {
+        let mut documents = Vec::new();
+
+        for data in data {
+            let root = TypesenseDataEntryRootV1 {
+                document_box: data.document_box,
+                folder_id: data.folder_id,
+                ty: data.ty,
+                item_id: data.item_id,
+                created_at: data.created_at.timestamp(),
+                created_by: data.created_by,
+                value: data.content,
+                mime: data.mime,
+                name: data.name,
+            };
+
+            // When its a file with page data
+            if let Some(pages) = data.pages {
+                // Add a new entry for each page
+                for page in pages {
+                    documents.push(TypesenseEntry {
+                        id: Uuid::new_v4(),
+                        entry: TypesenseDataEntry::V1(TypesenseDataEntryV1::Page(
+                            TypesenseDataEntryPageV1 {
+                                root: root.clone(),
+                                page: page.page,
+                                page_content: Some(page.content),
+                            },
+                        )),
+                    });
+                }
+            }
+
+            // Create the root document
+            documents.push(TypesenseEntry {
+                id: Uuid::new_v4(),
+                entry: TypesenseDataEntry::V1(TypesenseDataEntryV1::Root(root)),
+            });
+        }
+
+        let mut bulk_data = String::new();
+        for document in documents {
+            let value = serde_json::to_string(&document)?;
+            bulk_data.push_str(&value);
+            bulk_data.push('\n');
+        }
+
+        self.client
+            .post(format!(
+                "{}/collections/{}/documents/import",
+                self.base_url, self.index
+            ))
+            .body(bulk_data)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+
     async fn add_data(&self, data: super::models::SearchIndexData) -> anyhow::Result<()> {
         let mut documents = Vec::new();
 

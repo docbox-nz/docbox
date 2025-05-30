@@ -130,6 +130,13 @@ impl TenantSearchIndex {
         }
     }
 
+    pub async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> anyhow::Result<()> {
+        match self {
+            TenantSearchIndex::OpenSearch(index) => index.bulk_add_data(data).await,
+            TenantSearchIndex::Typesense(index) => index.bulk_add_data(data).await,
+        }
+    }
+
     pub async fn update_data(
         &self,
         item_id: Uuid,
@@ -173,6 +180,9 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
 
     /// Adds the provided data to the search index
     async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()>;
+
+    /// Adds the provided data to the search index
+    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> anyhow::Result<()>;
 
     /// Updates the provided data in the search index
     async fn update_data(&self, item_id: Uuid, data: UpdateSearchIndexData) -> anyhow::Result<()>;

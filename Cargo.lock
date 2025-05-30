@@ -1711,6 +1711,7 @@ dependencies = [
 name = "docbox-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bytes",
  "chrono",
  "clap",
@@ -1719,11 +1720,14 @@ dependencies = [
  "docbox-database",
  "dotenvy",
  "eyre",
+ "futures",
+ "itertools 0.14.0",
  "mime",
  "serde",
  "serde_json",
  "serde_with",
  "sqlx",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "tracing-subscriber",

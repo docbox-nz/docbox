@@ -10,9 +10,11 @@ use futures::TryFutureExt;
 use image::{DynamicImage, ImageFormat};
 use mime::Mime;
 use pdf_process::{
-    pdf_info, render_single_page, text::PAGE_END_CHARACTER, text_all_pages_split, OutputFormat,
-    PdfInfo, PdfInfoArgs, PdfInfoError, PdfTextArgs, RenderArgs,
+    pdf_info, render_single_page, text_all_pages_split, OutputFormat, PdfInfo, PdfInfoArgs,
+    PdfInfoError, PdfTextArgs, RenderArgs,
 };
+
+pub use pdf_process::text::PAGE_END_CHARACTER;
 
 /// Processes a PDF compatible file producing index data and generated files such as
 /// thumbnails and a converted pdf version

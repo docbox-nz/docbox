@@ -26,7 +26,7 @@ pub enum SearchIndexType {
     Link,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchIndexData {
     /// Type of item the search index data is representing
     #[serde(rename = "item_type")]
@@ -61,7 +61,7 @@ pub struct SearchIndexData {
     pub pages: Option<Vec<DocumentPage>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentPage {
     pub page: u64,
     pub content: String,
