@@ -11,6 +11,7 @@ use docbox_database::{
         folder::{Folder, FolderId, FolderPathSegment},
         link::Link,
         tenant::Tenant,
+        user::UserId,
     },
     DbPool,
 };
@@ -30,8 +31,8 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        SearchIndexData, SearchIndexType, SearchRequest, SearchResultData, SearchResults,
-        UpdateSearchIndexData,
+        DocumentPage, SearchIndexData, SearchIndexType, SearchRequest, SearchResultData,
+        SearchResults, UpdateSearchIndexData,
     },
     SearchIndex,
 };
@@ -111,6 +112,50 @@ pub fn create_open_search_prod(aws_config: &SdkConfig, url: Url) -> anyhow::Resu
     let open_search = OpenSearch::new(transport);
 
     Ok(open_search)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OsSearchIndexData {
+    /// Type of item the search index data is representing
+    #[serde(rename = "item_type")]
+    pub ty: SearchIndexType,
+
+    /// ID of the folder the indexed item is within.
+    ///
+    /// (For searching only withing a specific folder path)
+    pub folder_id: FolderId,
+    /// Document box scope that this item is within
+    ///
+    /// (For restricting search scope)
+    pub document_box: DocumentBoxScope,
+
+    /// Unique ID for the actual document
+    ///
+    /// this is to allow multiple page documents to be stored as
+    /// separate search index items without overriding each other
+    pub item_id: Uuid,
+    /// Name of this item
+    pub name: String,
+    /// Mime type when working with file items (Otherwise none)
+    pub mime: Option<String>,
+    /// For files this is the file content (With an associated page number)
+    /// For links this is the link value
+    pub content: Option<String>,
+    /// Creation date for the item
+    pub created_at: String,
+    /// User who created the item
+    pub created_by: Option<UserId>,
+    /// Optional pages of document content
+    pub pages: Option<Vec<DocumentPage>>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OsUpdateSearchIndexData {
+    pub folder_id: FolderId,
+    pub name: String,
+    pub content: Option<String>,
+    pub pages: Option<Vec<DocumentPage>>,
 }
 
 impl SearchIndex for OpenSearchIndex {
@@ -278,6 +323,19 @@ impl SearchIndex for OpenSearchIndex {
     }
 
     async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()> {
+        let data = OsSearchIndexData {
+            ty: data.ty,
+            folder_id: data.folder_id,
+            document_box: data.document_box,
+            item_id: data.item_id,
+            name: data.name,
+            mime: data.mime,
+            content: data.content,
+            created_at: data.created_at.to_rfc3339(),
+            created_by: data.created_by,
+            pages: data.pages,
+        };
+
         // Index a file
         let result = self
             .client
@@ -301,6 +359,13 @@ impl SearchIndex for OpenSearchIndex {
     }
 
     async fn update_data(&self, item_id: Uuid, data: UpdateSearchIndexData) -> anyhow::Result<()> {
+        let data = OsUpdateSearchIndexData {
+            folder_id: data.folder_id,
+            name: data.name,
+            content: data.content,
+            pages: data.pages,
+        };
+
         let items = self
             .get_by_item_id(item_id)
             .await
@@ -324,7 +389,7 @@ impl SearchIndex for OpenSearchIndex {
             #[serde(rename = "doc")]
             Document {
                 #[serde(flatten)]
-                data: &'a UpdateSearchIndexData,
+                data: &'a OsUpdateSearchIndexData,
             },
         }
 

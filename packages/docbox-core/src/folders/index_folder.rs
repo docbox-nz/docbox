@@ -29,7 +29,7 @@ pub async fn store_folder_index(
             mime: None,
             content: None,
             pages: None,
-            created_at: folder.created_at.to_rfc3339(),
+            created_at: folder.created_at,
             created_by: folder.created_by.clone(),
             document_box: folder.document_box.clone(),
         })

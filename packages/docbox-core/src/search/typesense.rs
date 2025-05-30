@@ -94,8 +94,8 @@ pub struct TypesenseDataEntryRootV1 {
     /// Mime value if the item is a file
     pub mime: Option<String>,
 
-    /// Creation date for the item
-    pub created_at: String,
+    /// Creation date for the item (Unix timestamp)
+    pub created_at: i64,
     /// User who created the item
     pub created_by: Option<UserId>,
 }
@@ -189,7 +189,7 @@ impl SearchIndex for TypesenseIndex {
             { "name": "value", "type": "string", "optional": true },
             { "name": "mime", "type": "string", "optional": true },
 
-            { "name": "created_at", "type": "string", "facet": true },
+            { "name": "created_at", "type": "int64", "facet": true },
             { "name": "created_by", "type": "string", "optional": true, "facet": true },
 
             { "name": "page", "type": "int32", "optional": true },
@@ -251,12 +251,12 @@ impl SearchIndex for TypesenseIndex {
 
         if let Some(range) = query.created_at {
             if let Some(start) = range.start {
-                let start = start.to_rfc3339();
+                let start = start.timestamp();
                 filter_parts.push(format!(r#"created_at:>"{start}""#));
             }
 
             if let Some(end) = range.end {
-                let end = end.to_rfc3339();
+                let end = end.timestamp();
                 filter_parts.push(format!(r#"created_at:<"{end}""#));
             }
         }
@@ -428,7 +428,7 @@ impl SearchIndex for TypesenseIndex {
             folder_id: data.folder_id,
             ty: data.ty,
             item_id: data.item_id,
-            created_at: data.created_at,
+            created_at: data.created_at.timestamp(),
             created_by: data.created_by,
             value: data.content,
             mime: data.mime,
@@ -564,7 +564,7 @@ impl SearchIndex for TypesenseIndex {
                 name: data.name.clone(),
                 value: data.content.clone(),
                 mime: root.mime.clone(),
-                created_at: root.created_at.clone(),
+                created_at: root.created_at,
                 created_by: root.created_by.clone(),
             };
 

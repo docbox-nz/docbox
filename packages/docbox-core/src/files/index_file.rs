@@ -39,7 +39,7 @@ pub async fn store_file_index(
         name: file.name.to_string(),
         mime: Some(file.mime.clone()),
         content: None,
-        created_at: file.created_at.to_rfc3339(),
+        created_at: file.created_at,
         created_by: file.created_by.clone(),
         document_box: document_box.clone(),
         pages: index_metadata.and_then(|value| value.pages),
@@ -77,6 +77,7 @@ pub async fn re_index_files(
             .map(|file| -> BoxFuture<'_, anyhow::Result<()>> {
                 Box::pin(async move {
                     let file_id = file.file.id;
+
                     re_index_file(db, search, storage, &file.scope, &file.file, true)
                         .await
                         .with_context(|| {

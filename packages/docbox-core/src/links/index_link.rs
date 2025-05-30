@@ -25,7 +25,7 @@ pub async fn store_link_index(
             mime: None,
             content: Some(link.value.clone()),
             pages: None,
-            created_at: link.created_at.to_rfc3339(),
+            created_at: link.created_at,
             created_by: link.created_by.clone(),
             document_box: scope.clone(),
         })

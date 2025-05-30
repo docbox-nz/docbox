@@ -54,7 +54,7 @@ pub struct SearchIndexData {
     /// For links this is the link value
     pub content: Option<String>,
     /// Creation date for the item
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
     /// User who created the item
     pub created_by: Option<UserId>,
     /// Optional pages of document content
