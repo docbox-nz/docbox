@@ -27,22 +27,17 @@ pub enum SearchIndexFactoryConfig {
 impl SearchIndexFactoryConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         let variant = std::env::var("DOCBOX_SEARCH_INDEX_FACTORY")
-            .unwrap_or_else(|_| "opensearch".to_string());
+            .unwrap_or_else(|_| "typesense".to_string());
         match variant.as_str() {
-            "typesense" => {
+            "open_search" => {
+                let url = std::env::var("OPENSEARCH_URL").context("missing OPENSEARCH_URL env")?;
+                Ok(Self::OpenSearch { url })
+            }
+            _ => {
                 let url = std::env::var("TYPESENSE_URL").context("missing TYPESENSE_URL env")?;
                 let api_key =
                     std::env::var("TYPESENSE_API_KEY").context("missing TYPESENSE_API_KEY env")?;
-
                 Ok(Self::Typesense { url, api_key })
-            }
-            _ => {
-                // Setup opensearch
-                let url = std::env::var("OPENSEARCH_URL")
-                    // Map the error to an anyhow type
-                    .context("missing OPENSEARCH_URL env")?;
-
-                Ok(Self::OpenSearch { url })
             }
         }
     }

@@ -1,5 +1,5 @@
-version: "3.9"
 services:
+  # Search index
   typesense:
     image: typesense/typesense:28.0
     container_name: typesense
@@ -10,70 +10,6 @@ services:
     environment:
       TYPESENSE_API_KEY: typesensedev     
       TYPESENSE_DATA_DIR: /data
-
-  opensearch-node1:
-    image: opensearchproject/opensearch:latest
-    container_name: opensearch-data-node
-    environment:
-      - cluster.name=opensearch-cluster
-      - node.name=opensearch-node1
-      - discovery.seed_hosts=opensearch-node1,opensearch-node2
-      - cluster.initial_cluster_manager_nodes=opensearch-node1
-      - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-      - "DISABLE_INSTALL_DEMO_CONFIG=true"
-      - "DISABLE_SECURITY_PLUGIN=true"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    volumes:
-      - opensearch-data1:/usr/share/opensearch/data
-    ports:
-      - 9200:9200
-      - 9600:9600
-    networks:
-      - opensearch-net
-
-  opensearch-node2:
-    image: opensearchproject/opensearch:latest
-    container_name: opensearch-ml-node
-    environment:
-      - cluster.name=opensearch-cluster
-      - node.name=opensearch-node2
-      - node.roles=ml
-      - discovery.seed_hosts=opensearch-node1,opensearch-node2
-      - cluster.initial_cluster_manager_nodes=opensearch-node1
-      - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-      - "DISABLE_INSTALL_DEMO_CONFIG=true"
-      - "DISABLE_SECURITY_PLUGIN=true"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    volumes:
-      - opensearch-data2:/usr/share/opensearch/data
-    networks:
-      - opensearch-net
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:latest
-    container_name: opensearch-dashboards
-    ports:
-      - 5601:5601
-    expose:
-      - "5601"
-    environment:
-      - 'OPENSEARCH_HOSTS=["http://opensearch-node1:9200","http://opensearch-node2:9200"]'
-      - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
-    networks:
-      - opensearch-net
 
   # Database
   database:
@@ -122,6 +58,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # HTTP proxy server
   squid:
     image: sameersbn/squid:3.5.27-2
     ports:
@@ -161,8 +98,6 @@ services:
     restart: always
 
 volumes:
-  opensearch-data1:
-  opensearch-data2:
   postgres_data:
   pgadmin-data:
   minio-data:

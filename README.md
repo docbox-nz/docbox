@@ -21,7 +21,7 @@ Files, folders, and links are organized into logical groups called **Document Bo
   - Folders 
   - "Link" files
 - 🔍 Full-Text Search
-  - Powerful OpenSearch based queries
+  - Powerful Typesense based queries
   - Full text down to page-by-page level results
 - ⚙️ Document Processing
   - Generate PDF files for viewing office files in browsers
@@ -50,7 +50,7 @@ Files, folders, and links are organized into logical groups called **Document Bo
 
 - **Backend**: Rust
 - **Database**: PostgreSQL
-- **Search Engine**: OpenSearch
+- **Search Engine**: Typesense
 - **Storage**: S3-compatible object storage (e.g. AWS S3, MinIO)
 
-![Docbox Diagram](docbox.drawio.png)
+![Docbox Diagram](assets/docbox.drawio.png)
