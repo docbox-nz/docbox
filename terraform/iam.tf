@@ -35,11 +35,18 @@ resource "aws_iam_policy" "docbox_secrets_manager_policy" {
         "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:postgres/docbox/dev/*",
         "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:postgres/docbox/prod/*",
         # Root docbox database user credentials
-        "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:postgres/docbox/config-??????",
+        "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:postgres/docbox/config*",
       ]
     }]
   })
 }
+
+# Create attachment between policy
+resource "aws_iam_role_policy_attachment" "docbox_secrets_manager_policy_attachment" {
+  role       = aws_iam_role.docbox_role.name
+  policy_arn = aws_iam_policy.docbox_secrets_manager_policy.arn
+}
+
 
 # IAM Policy to allow S3 access to the API EC2 
 resource "aws_iam_policy" "s3_access_policy" {
