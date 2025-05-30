@@ -9,7 +9,7 @@ use docbox_core::{
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
     search::{SearchIndexFactory, SearchIndexFactoryConfig},
     secrets::{AppSecretManager, SecretsManagerConfig},
-    storage::StorageLayerFactory,
+    storage::{StorageLayerFactory, StorageLayerFactoryConfig},
 };
 use docbox_database::DatabasePoolCache;
 use docbox_web_scraper::WebsiteMetaService;
@@ -121,7 +121,8 @@ async fn server() -> anyhow::Result<()> {
     let search_index_factory = SearchIndexFactory::from_config(&aws_config, search_config)?;
 
     // Setup storage factory
-    let storage_factory = StorageLayerFactory::from_env(&aws_config)?;
+    let storage_factory_config = StorageLayerFactoryConfig::from_env()?;
+    let storage_factory = StorageLayerFactory::from_config(&aws_config, storage_factory_config);
 
     // Setup notification queue
     let notification_queue = match (

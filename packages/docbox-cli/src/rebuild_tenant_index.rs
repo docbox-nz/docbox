@@ -38,8 +38,7 @@ pub async fn rebuild_tenant_index(
         .map_err(|err| eyre::Error::msg(err.to_string()))?;
 
     // Setup S3 access
-    let storage_factory = StorageLayerFactory::from_env(&aws_config)
-        .map_err(|err| eyre::Error::msg(err.to_string()))?;
+    let storage_factory = StorageLayerFactory::from_config(&aws_config, config.storage.clone());
 
     let root_db = db_cache.get_root_pool().await?;
     let tenant = Tenant::find_by_id(&root_db, tenant_id, &env)

@@ -1,16 +1,60 @@
+use anyhow::Context;
 use aws_config::SdkConfig;
-use aws_sdk_s3::presigning::PresignedRequest;
+use aws_sdk_s3::{config::Credentials, presigning::PresignedRequest};
 use bytes::{Buf, Bytes};
 use bytes_utils::SegmentedBuf;
 use chrono::{DateTime, Utc};
 use docbox_database::models::tenant::Tenant;
 use futures::{Stream, StreamExt};
 use s3::{S3StorageLayer, S3StorageLayerFactory};
+use serde::Deserialize;
 use std::pin::Pin;
 
-use crate::aws::s3_client_from_env;
+use crate::aws::S3Client;
 
 pub mod s3;
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "provider", rename_all = "snake_case")]
+pub enum StorageLayerFactoryConfig {
+    S3 { endpoint: S3Endpoint },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum S3Endpoint {
+    Aws,
+    Custom {
+        endpoint: String,
+        access_key_id: String,
+        access_key_secret: String,
+    },
+}
+
+impl StorageLayerFactoryConfig {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let endpoint = match std::env::var("DOCBOX_S3_ENDPOINT") {
+            // Using a custom S3 endpoint
+            Ok(endpoint_url) => {
+                let access_key_id = std::env::var("DOCBOX_S3_ACCESS_KEY_ID").context(
+                    "cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_ID",
+                )?;
+                let access_key_secret = std::env::var("DOCBOX_S3_ACCESS_KEY_SECRET").context(
+                    "cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_SECRET",
+                )?;
+
+                S3Endpoint::Custom {
+                    endpoint: endpoint_url,
+                    access_key_id,
+                    access_key_secret,
+                }
+            }
+            Err(_) => S3Endpoint::Aws,
+        };
+
+        Ok(Self::S3 { endpoint })
+    }
+}
 
 #[derive(Clone)]
 pub enum StorageLayerFactory {
@@ -18,11 +62,42 @@ pub enum StorageLayerFactory {
 }
 
 impl StorageLayerFactory {
-    pub fn from_env(aws_config: &SdkConfig) -> anyhow::Result<Self> {
-        // Currently only a S3 backend is supported
-        let s3_client = s3_client_from_env(aws_config)?;
-        let s3_storage_factory = S3StorageLayerFactory::new(s3_client);
-        Ok(Self::S3(s3_storage_factory))
+    pub fn from_config(aws_config: &SdkConfig, config: StorageLayerFactoryConfig) -> Self {
+        match config {
+            StorageLayerFactoryConfig::S3 { endpoint } => {
+                let s3_client = match endpoint {
+                    S3Endpoint::Aws => {
+                        tracing::debug!("using aws s3 storage layer");
+                        S3Client::new(aws_config)
+                    }
+                    S3Endpoint::Custom {
+                        endpoint,
+                        access_key_id,
+                        access_key_secret,
+                    } => {
+                        tracing::debug!("using custom s3 storage layer");
+                        let credentials = Credentials::new(
+                            access_key_id,
+                            access_key_secret,
+                            None,
+                            None,
+                            "docbox_key_provider",
+                        );
+
+                        // Enforces the "path" style for S3 bucket access
+                        let config = aws_sdk_s3::config::Builder::from(aws_config)
+                            .force_path_style(true)
+                            .endpoint_url(endpoint)
+                            .credentials_provider(credentials)
+                            .build();
+                        S3Client::from_conf(config)
+                    }
+                };
+
+                let s3_storage_factory = S3StorageLayerFactory::new(s3_client);
+                Self::S3(s3_storage_factory)
+            }
+        }
     }
 
     pub fn create_storage_layer(&self, tenant: &Tenant) -> TenantStorageLayer {

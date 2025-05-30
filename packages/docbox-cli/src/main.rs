@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
-use docbox_core::{search::SearchIndexFactoryConfig, secrets::SecretsManagerConfig};
+use docbox_core::{
+    search::SearchIndexFactoryConfig, secrets::SecretsManagerConfig,
+    storage::StorageLayerFactoryConfig,
+};
 use eyre::Context;
 use serde::Deserialize;
 use sqlx::{postgres::PgConnectOptions, PgPool};
@@ -29,6 +32,7 @@ pub struct CliConfiguration {
     pub database: CliDatabaseConfiguration,
     pub secrets: SecretsManagerConfig,
     pub search: SearchIndexFactoryConfig,
+    pub storage: StorageLayerFactoryConfig,
 }
 
 #[derive(Clone, Deserialize)]

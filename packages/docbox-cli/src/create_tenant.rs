@@ -138,8 +138,7 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
     let search_factory = SearchIndexFactory::from_config(&aws_config, config.search.clone())
         .map_err(|err| eyre::Error::msg(err.to_string()))?;
 
-    let storage_factory = StorageLayerFactory::from_env(&aws_config)
-        .map_err(|err| eyre::Error::msg(err.to_string()))?;
+    let storage_factory = StorageLayerFactory::from_config(&aws_config, config.storage.clone());
 
     // Attempt to initialize the tenant
     let tenant = safe_create_tenant(
