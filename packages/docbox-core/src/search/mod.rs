@@ -13,7 +13,7 @@ pub mod os;
 pub mod os_models;
 pub mod typesense;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SearchIndexFactoryConfig {
     Typesense { url: String, api_key: String },

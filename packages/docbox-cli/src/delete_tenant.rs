@@ -1,19 +1,19 @@
 use docbox_database::models::tenant::{Tenant, TenantId};
 use eyre::{Context, ContextCompat};
 
-use crate::{connect_db, Credentials};
+use crate::{connect_db, CliConfiguration};
 
-pub async fn delete_tenant(env: String, tenant_id: TenantId) -> eyre::Result<()> {
-    // Load CLI credentials
-    let credentials_raw = tokio::fs::read("private/cli-credentials.json").await?;
-    let credentials: Credentials = serde_json::from_slice(&credentials_raw)?;
-
+pub async fn delete_tenant(
+    config: &CliConfiguration,
+    env: String,
+    tenant_id: TenantId,
+) -> eyre::Result<()> {
     // Connect to the docbox database
     let db_docbox = connect_db(
-        &credentials.host,
-        credentials.port,
-        &credentials.username,
-        &credentials.password,
+        &config.database.host,
+        config.database.port,
+        &config.database.username,
+        &config.database.password,
         "docbox",
     )
     .await

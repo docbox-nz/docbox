@@ -12,9 +12,9 @@ use crate::aws::SecretsManagerClient;
 pub mod aws;
 pub mod memory;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
-pub enum SecretManagerConfig {
+pub enum SecretsManagerConfig {
     /// In-memory secret manager
     Memory {
         /// Collection of secrets to include
@@ -28,7 +28,7 @@ pub enum SecretManagerConfig {
     Aws,
 }
 
-impl SecretManagerConfig {
+impl SecretsManagerConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         let variant = std::env::var("DOCBOX_SECRET_MANAGER").unwrap_or_else(|_| "aws".to_string());
         match variant.as_str() {
@@ -51,9 +51,9 @@ pub enum AppSecretManager {
 
 impl AppSecretManager {
     /// Create the secret manager from the provided config
-    pub fn from_config(aws_config: &SdkConfig, config: SecretManagerConfig) -> Self {
+    pub fn from_config(aws_config: &SdkConfig, config: SecretsManagerConfig) -> Self {
         match config {
-            SecretManagerConfig::Memory { secrets, default } => {
+            SecretsManagerConfig::Memory { secrets, default } => {
                 tracing::debug!("using in memory secret manager");
                 AppSecretManager::Memory(MemorySecretManager::new(
                     secrets
@@ -63,7 +63,7 @@ impl AppSecretManager {
                     default.map(Secret::String),
                 ))
             }
-            SecretManagerConfig::Aws => {
+            SecretsManagerConfig::Aws => {
                 tracing::debug!("using aws secret manager");
                 let client = SecretsManagerClient::new(aws_config);
                 AppSecretManager::Aws(AwsSecretManager::new(client))

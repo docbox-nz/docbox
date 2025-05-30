@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use docbox_core::{search::SearchIndexFactoryConfig, secrets::SecretsManagerConfig};
 use eyre::Context;
 use serde::Deserialize;
 use sqlx::{postgres::PgConnectOptions, PgPool};
@@ -17,6 +18,26 @@ mod rebuild_tenant_index;
 struct Args {
     #[command(subcommand)]
     pub command: Option<Commands>,
+
+    /// Path to the cli configuration file
+    #[arg(short, long)]
+    pub config: PathBuf,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct CliConfiguration {
+    pub database: CliDatabaseConfiguration,
+    pub secrets: SecretsManagerConfig,
+    pub search: SearchIndexFactoryConfig,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct CliDatabaseConfiguration {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub root_secret_name: String,
 }
 
 #[derive(Subcommand)]
@@ -33,9 +54,13 @@ pub enum Commands {
 
     /// Rebuild the tenant search index from its files
     RebuildTenantIndex {
-        /// File containing the tenant configuration details
+        /// Environment of the tenant
         #[arg(short, long)]
-        file: PathBuf,
+        env: String,
+
+        /// ID of the tenant to rebuild
+        #[arg(short, long)]
+        tenant_id: Uuid,
     },
 
     /// Delete a tenant
@@ -75,14 +100,6 @@ pub enum Commands {
     },
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Credentials {
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
-}
-
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     // Load environment variables
@@ -116,21 +133,26 @@ async fn main() -> eyre::Result<()> {
         }
     };
 
+    // Load the create tenant config
+    let config_raw = tokio::fs::read(args.config).await?;
+    let config: CliConfiguration =
+        serde_json::from_slice(&config_raw).context("failed to parse config")?;
+
     match command {
         Commands::CreateRoot {} => {
-            create_root::create_root().await?;
+            create_root::create_root(&config).await?;
             Ok(())
         }
         Commands::CreateTenant { file } => {
-            create_tenant::create_tenant(file).await?;
+            create_tenant::create_tenant(&config, file).await?;
             Ok(())
         }
         Commands::DeleteTenant { env, tenant_id } => {
-            delete_tenant::delete_tenant(env, tenant_id).await?;
+            delete_tenant::delete_tenant(&config, env, tenant_id).await?;
             Ok(())
         }
         Commands::GetTenant { env, tenant_id } => {
-            get_tenant::get_tenant(env, tenant_id).await?;
+            get_tenant::get_tenant(&config, env, tenant_id).await?;
             Ok(())
         }
         Commands::Migrate {
@@ -139,11 +161,11 @@ async fn main() -> eyre::Result<()> {
             tenant_id,
             skip_failed,
         } => {
-            migrate::migrate(env, file, tenant_id, skip_failed).await?;
+            migrate::migrate(&config, env, file, tenant_id, skip_failed).await?;
             Ok(())
         }
-        Commands::RebuildTenantIndex { file } => {
-            rebuild_tenant_index::rebuild_tenant_index(file).await?;
+        Commands::RebuildTenantIndex { env, tenant_id } => {
+            rebuild_tenant_index::rebuild_tenant_index(&config, env, tenant_id).await?;
             Ok(())
         }
     }

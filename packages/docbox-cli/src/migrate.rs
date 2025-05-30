@@ -4,23 +4,20 @@ use docbox_database::{models::tenant::Tenant, ROOT_DATABASE_NAME};
 use eyre::Context;
 use uuid::Uuid;
 
-use crate::{connect_db, Credentials};
+use crate::{connect_db, CliConfiguration};
 
 pub async fn migrate(
+    config: &CliConfiguration,
     env: String,
     file: PathBuf,
     tenant_id: Option<Uuid>,
     skip_failed: bool,
 ) -> eyre::Result<()> {
-    // Load CLI credentials
-    let credentials_raw = tokio::fs::read("private/cli-credentials.json").await?;
-    let credentials: Credentials = serde_json::from_slice(&credentials_raw)?;
-
     let root = match connect_db(
-        &credentials.host,
-        credentials.port,
-        &credentials.username,
-        &credentials.password,
+        &config.database.host,
+        config.database.port,
+        &config.database.username,
+        &config.database.password,
         ROOT_DATABASE_NAME,
     )
     .await
@@ -64,10 +61,10 @@ pub async fn migrate(
         );
 
         let db = match connect_db(
-            &credentials.host,
-            credentials.port,
-            &credentials.username,
-            &credentials.password,
+            &config.database.host,
+            config.database.port,
+            &config.database.username,
+            &config.database.password,
             &tenant.db_name,
         )
         .await

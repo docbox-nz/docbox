@@ -8,7 +8,7 @@ use docbox_core::{
     office::{convert_server::OfficeConverterServer, OfficeConverter},
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
     search::{SearchIndexFactory, SearchIndexFactoryConfig},
-    secrets::{AppSecretManager, SecretManagerConfig},
+    secrets::{AppSecretManager, SecretsManagerConfig},
     storage::StorageLayerFactory,
 };
 use docbox_database::DatabasePoolCache;
@@ -88,7 +88,7 @@ async fn server() -> anyhow::Result<()> {
     let aws_config = aws_config().await;
 
     // Create secrets manager
-    let secrets_config = SecretManagerConfig::from_env()?;
+    let secrets_config = SecretsManagerConfig::from_env()?;
     let secrets = AppSecretManager::from_config(&aws_config, secrets_config);
 
     // Load database credentials
