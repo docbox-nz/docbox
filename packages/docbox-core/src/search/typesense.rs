@@ -303,6 +303,9 @@ impl SearchIndex for TypesenseIndex {
         let max_pages = query.max_pages.unwrap_or(3);
         let _pages_offset = query.pages_offset.unwrap_or(0);
 
+        // TODO: When searching for a specific item_id, disable group_by and use
+        // pages_offset instead. to emulate previous opensearch functionality
+
         let query = query.query.unwrap_or_default();
 
         let filter_by = filter_parts.join("&&");
