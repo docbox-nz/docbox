@@ -257,7 +257,8 @@ impl SearchIndex for TypesenseIndex {
                     "exclude_fields": "page_content",
                     "highlight_fields": "page_content",
                     "highlight_start_tag": "<em>",
-                    "highlight_end_tag": "</em>"
+                    "highlight_end_tag": "</em>",
+                    "highlight_affix_num_tokens": 15,
                 }
             ]
         });
