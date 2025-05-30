@@ -243,6 +243,15 @@ impl SearchIndex for OpenSearchIndex {
         Ok(())
     }
 
+    async fn search_index_file(
+        &self,
+        _scope: &DocumentBoxScope,
+        _file_id: docbox_database::models::file::FileId,
+        _query: super::models::FileSearchRequest,
+    ) -> anyhow::Result<SearchResults> {
+        anyhow::bail!("search index file is not currently supported on the opensearch backend");
+    }
+
     async fn search_index(
         &self,
         scope: &[DocumentBoxScope],

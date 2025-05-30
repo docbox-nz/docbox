@@ -1415,6 +1415,107 @@
         }
       }
     },
+    "/box/{scope}/file/{file_id}/search": {
+      "post": {
+        "tags": [
+          "File"
+        ],
+        "summary": "Search",
+        "description": "Search within the contents of the file",
+        "operationId": "file_search",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the file resides within",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "description": "ID of the file to query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Searched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResultResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed or invalid request not meeting validation requirements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/box/{scope}/folder": {
       "post": {
         "tags": [
@@ -3345,6 +3446,40 @@
           }
         }
       },
+      "FileSearchRequest": {
+        "type": "object",
+        "description": "Request to search within a file",
+        "properties": {
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Maximum number of results to return",
+            "default": null,
+            "minimum": 0
+          },
+          "offset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Offset to start returning results from",
+            "default": null,
+            "minimum": 0
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The search query",
+            "default": null
+          }
+        }
+      },
       "FileUploadResponse": {
         "oneOf": [
           {
@@ -3917,8 +4052,9 @@
               "null"
             ],
             "format": "uuid",
-            "description": "Enforce search to a specific file,link,folder",
-            "default": null
+            "description": "Enforce search to a specific file,link,folder\n\nDeprecated: use the /search endpoint on the file itself instead",
+            "default": null,
+            "deprecated": true
           },
           "max_fragment_size": {
             "type": [
@@ -4316,6 +4452,13 @@
             "type": "string",
             "format": "uuid",
             "description": "Folder to store the file in"
+          },
+          "mime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional mime type override, when not present the mime type will\nbe extracted from [UploadFileRequest::file]"
           },
           "name": {
             "type": "string",

@@ -5,6 +5,7 @@ use docbox_database::{
     },
     DbErr, DbPool,
 };
+use futures::StreamExt;
 use thiserror::Error;
 
 use crate::search::{
@@ -79,23 +80,35 @@ pub async fn search_document_box(
             SearchDocumentBoxError::QueryIndex(cause)
         })?;
 
-    // Resolve search results on the database end
-    let mut resolved: Vec<ResolvedSearchResult> = Vec::with_capacity(results.results.len());
-
-    for result in results.results {
-        match resolve_search_result(db, result).await {
-            Ok((result, data, path)) => resolved.push(ResolvedSearchResult { result, data, path }),
-            Err(cause) => {
-                tracing::error!("failed to fetch search result from database {cause:?}");
-                continue;
-            }
-        }
-    }
+    let total_hits = results.total_hits;
+    let results = resolve_search_results(db, results.results).await;
 
     Ok(DocumentBoxSearchResults {
-        results: resolved,
-        total_hits: results.total_hits,
+        results,
+        total_hits,
     })
+}
+
+pub async fn resolve_search_results(
+    db: &DbPool,
+    results: Vec<FlattenedItemResult>,
+) -> Vec<ResolvedSearchResult> {
+    let chunk_results: Vec<Option<ResolvedSearchResult>> = futures::stream::iter(results)
+        .map(|result| async move {
+            match resolve_search_result(db, result).await {
+                Ok((result, data, path)) => Some(ResolvedSearchResult { result, data, path }),
+                Err(cause) => {
+                    tracing::error!("failed to fetch search result from database {cause:?}");
+                    None
+                }
+            }
+        })
+        // Process at most 20 resolves at a time
+        .buffered(20)
+        .collect()
+        .await;
+
+    chunk_results.into_iter().flatten().collect()
 }
 
 pub async fn search_document_boxes_admin(
@@ -112,21 +125,11 @@ pub async fn search_document_boxes_admin(
             SearchDocumentBoxError::QueryIndex(cause)
         })?;
 
-    // Resolve search results on the database end
-    let mut resolved: Vec<ResolvedSearchResult> = Vec::with_capacity(results.results.len());
-
-    for result in results.results {
-        match resolve_search_result(db, result).await {
-            Ok((result, data, path)) => resolved.push(ResolvedSearchResult { result, data, path }),
-            Err(cause) => {
-                tracing::error!("failed to fetch search result from database {cause:?}");
-                continue;
-            }
-        }
-    }
+    let total_hits = results.total_hits;
+    let results = resolve_search_results(db, results.results).await;
 
     Ok(DocumentBoxSearchResults {
-        results: resolved,
-        total_hits: results.total_hits,
+        results,
+        total_hits,
     })
 }

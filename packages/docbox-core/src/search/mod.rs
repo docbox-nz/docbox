@@ -1,7 +1,11 @@
 use anyhow::Context;
 use aws_config::SdkConfig;
-use docbox_database::models::{document_box::DocumentBoxScope, folder::FolderId, tenant::Tenant};
-use models::{SearchIndexData, SearchRequest, SearchResults, UpdateSearchIndexData};
+use docbox_database::models::{
+    document_box::DocumentBoxScope, file::FileId, folder::FolderId, tenant::Tenant,
+};
+use models::{
+    FileSearchRequest, SearchIndexData, SearchRequest, SearchResults, UpdateSearchIndexData,
+};
 use os::{create_open_search, OpenSearchIndex, OpenSearchIndexFactory, TenantSearchIndexName};
 use reqwest::Url;
 use serde::Deserialize;
@@ -123,6 +127,23 @@ impl TenantSearchIndex {
         }
     }
 
+    /// Searches the index for matches scoped to a specific file
+    pub async fn search_index_file(
+        &self,
+        scope: &DocumentBoxScope,
+        file_id: FileId,
+        query: FileSearchRequest,
+    ) -> anyhow::Result<SearchResults> {
+        match self {
+            TenantSearchIndex::OpenSearch(index) => {
+                index.search_index_file(scope, file_id, query).await
+            }
+            TenantSearchIndex::Typesense(index) => {
+                index.search_index_file(scope, file_id, query).await
+            }
+        }
+    }
+
     pub async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()> {
         match self {
             TenantSearchIndex::OpenSearch(index) => index.add_data(data).await,
@@ -176,6 +197,14 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
         scope: &[DocumentBoxScope],
         query: SearchRequest,
         folder_children: Option<Vec<FolderId>>,
+    ) -> anyhow::Result<SearchResults>;
+
+    /// Searches the index for matches scoped to a specific file
+    async fn search_index_file(
+        &self,
+        scope: &DocumentBoxScope,
+        file_id: FileId,
+        query: FileSearchRequest,
     ) -> anyhow::Result<SearchResults>;
 
     /// Adds the provided data to the search index

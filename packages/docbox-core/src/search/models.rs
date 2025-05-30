@@ -123,6 +123,23 @@ pub struct AdminSearchRequest {
     pub request: SearchRequest,
 }
 
+/// Request to search within a file
+#[derive(Default, Debug, Validate, Deserialize, Serialize, ToSchema)]
+#[serde(default)]
+pub struct FileSearchRequest {
+    /// The search query
+    #[garde(skip)]
+    pub query: Option<String>,
+
+    /// Offset to start returning results from
+    #[garde(skip)]
+    pub offset: Option<u64>,
+
+    /// Maximum number of results to return
+    #[garde(skip)]
+    pub limit: Option<u16>,
+}
+
 /// Request to search within a document box
 #[derive(Default, Debug, Validate, Deserialize, Serialize, ToSchema)]
 #[serde(default)]
@@ -178,7 +195,10 @@ pub struct SearchRequest {
     pub folder_id: Option<FolderId>,
 
     /// Enforce search to a specific file,link,folder
+    ///
+    /// Deprecated: use the /search endpoint on the file itself instead
     #[garde(skip)]
+    #[schema(deprecated)]
     pub item_id: Option<Uuid>,
 
     /// Number of items to include in the response
@@ -190,8 +210,11 @@ pub struct SearchRequest {
     pub offset: Option<u64>,
 
     /// Maximum number of pages too return
+    ///
+    /// Deprecated: use the /search endpoint on the file itself with an offset instead
     #[garde(range(max = 100))]
     #[schema(maximum = 100)]
+    #[schema(deprecated)]
     pub max_pages: Option<u16>,
 
     /// Offset to start at when aggregating page results

@@ -52,6 +52,7 @@ use crate::routes::{
         file::delete,
         file::get_generated,
         file::get_generated_raw,
+        file::search,
         // Folder routes
         folder::create,
         folder::get,

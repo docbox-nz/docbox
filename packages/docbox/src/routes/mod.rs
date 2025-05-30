@@ -86,6 +86,7 @@ pub fn file_router() -> Router {
                 .route("/raw/*name", get(file::get_raw))
                 .route("/children", get(file::get_children))
                 .route("/edit-history", get(file::get_edit_history))
+                .route("/search", post(file::search))
                 // Generated file instance
                 .nest(
                     "/generated",
