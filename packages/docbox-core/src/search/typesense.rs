@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::search::models::{FlattenedItemResult, PageResult};
 
 use super::{
-    models::{SearchIndexType, SearchResults},
+    models::{FileSearchResults, SearchIndexType, SearchResults},
     SearchIndex,
 };
 
@@ -235,7 +235,7 @@ impl SearchIndex for TypesenseIndex {
         scope: &DocumentBoxScope,
         file_id: docbox_database::models::file::FileId,
         query: super::models::FileSearchRequest,
-    ) -> anyhow::Result<SearchResults> {
+    ) -> anyhow::Result<FileSearchResults> {
         let offset = query.offset.unwrap_or(0);
         let limit = query.limit.unwrap_or(50);
         let query = query.query.unwrap_or_default();
@@ -280,80 +280,29 @@ impl SearchIndex for TypesenseIndex {
         let search = search.results.first().context("missing search result")?;
 
         let total_hits = search.found;
+        let results: Vec<PageResult> = search
+            .hits
+            .iter()
+            .filter_map(|hit| {
+                let entry = match &hit.document {
+                    TypesenseDataEntry::V1(TypesenseDataEntryV1::Page(page)) => page,
+                    _ => return None,
+                };
 
-        let mut results: Vec<FlattenedItemResult> = Vec::new();
-        let root = match search.hits.first() {
-            Some(value) => &value.document,
-            None => {
-                // No search results
-                return Ok(SearchResults {
-                    total_hits: 0,
-                    results: Vec::new(),
-                });
-            }
-        };
-
-        match root {
-            TypesenseDataEntry::V1(TypesenseDataEntryV1::Root(root))
-            | TypesenseDataEntry::V1(TypesenseDataEntryV1::Page(TypesenseDataEntryPageV1 {
-                root,
-                ..
-            })) => {
-                let group_score = search
-                    .hits
+                let highlighted = hit
+                    .highlights
                     .iter()
-                    .map(|hit| hit.text_match)
-                    .max()
-                    .unwrap_or_default();
+                    .find(|value| value.field == "page_content")
+                    .map(|value| value.snippet.to_string())?;
 
-                let name_match = search.hits.iter().any(|hit| {
-                    hit.highlights
-                        .iter()
-                        .any(|highlight| highlight.field == "name")
-                });
+                Some(PageResult {
+                    page: entry.page,
+                    matches: vec![highlighted],
+                })
+            })
+            .collect();
 
-                let content_match = search.hits.iter().any(|hit| {
-                    hit.highlights.iter().any(|highlight| {
-                        highlight.field == "value" || highlight.field == "page_content"
-                    })
-                });
-
-                let page_matches: Vec<PageResult> = search
-                    .hits
-                    .iter()
-                    .filter_map(|hit| {
-                        let entry = match &hit.document {
-                            TypesenseDataEntry::V1(TypesenseDataEntryV1::Page(page)) => page,
-                            _ => return None,
-                        };
-
-                        let highlighted = hit
-                            .highlights
-                            .iter()
-                            .find(|value| value.field == "page_content")
-                            .map(|value| value.snippet.to_string())?;
-
-                        Some(PageResult {
-                            page: entry.page,
-                            matches: vec![highlighted],
-                        })
-                    })
-                    .collect();
-
-                results.push(FlattenedItemResult {
-                    item_ty: root.ty,
-                    item_id: root.item_id,
-                    document_box: root.document_box.clone(),
-                    page_matches,
-                    total_hits: search.found,
-                    score: group_score as f32,
-                    name_match,
-                    content_match,
-                });
-            }
-        };
-
-        Ok(SearchResults {
+        Ok(FileSearchResults {
             total_hits,
             results,
         })

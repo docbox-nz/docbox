@@ -22,13 +22,9 @@ pub enum DeleteFileError {
     #[error("failed to delete tenant search index: {0}")]
     DeleteIndex(anyhow::Error),
 
-    /// Failed to find generated files
-    #[error("failed to query generated files: {0}")]
-    GetGeneratedFiles(DbErr),
-
-    /// Failed to delete the file database row
-    #[error("failed to create file: {0}")]
-    DeleteFile(DbErr),
+    /// Database error
+    #[error(transparent)]
+    Database(#[from] DbErr),
 
     /// Failed to remove file from storage
     #[error("failed to remove file from storage: {0}")]
@@ -37,10 +33,6 @@ pub enum DeleteFileError {
     /// Failed to remove generated file from storage
     #[error("failed to remove generated file from storage: {0}")]
     DeleteGeneratedFileStorage(anyhow::Error),
-
-    /// Failed to delete the generated file database row
-    #[error("failed to create generated file: {0}")]
-    DeleteGeneratedFile(DbErr),
 }
 
 /// Deletes a file and all associated generated files.
@@ -65,7 +57,7 @@ pub async fn delete_file(
 ) -> Result<(), DeleteFileError> {
     let generated = GeneratedFile::find_all(db, file.id)
         .await
-        .map_err(DeleteFileError::GetGeneratedFiles)?;
+        .inspect(|error| tracing::error!(?error, "failed to query generated files"))?;
 
     match delete_generated_files(storage, &generated).await {
         GeneratedFileDeleteResult::Ok => {}
@@ -80,7 +72,7 @@ pub async fn delete_file(
             // Ignore errors from this point, they are not recoverable
             while let Some(result) = delete_files_future.next().await {
                 if let Err(cause) = result {
-                    error!(?cause, "failed to delete generated file from db");
+                    tracing::error!(?cause, "failed to delete generated file from db");
                 }
             }
 
@@ -96,8 +88,8 @@ pub async fn delete_file(
     // Delete the generated files from the database
     while let Some(result) = delete_files_future.next().await {
         if let Err(cause) = result {
-            error!(?cause, "failed to delete generated file");
-            return Err(DeleteFileError::DeleteGeneratedFile(cause));
+            tracing::error!(?cause, "failed to delete generated file");
+            return Err(DeleteFileError::Database(cause));
         }
     }
 
@@ -114,7 +106,9 @@ pub async fn delete_file(
         .map_err(DeleteFileError::DeleteIndex)?;
 
     // Delete the file itself
-    file.delete(db).await.map_err(DeleteFileError::DeleteFile)?;
+    file.delete(db)
+        .await
+        .inspect(|error| tracing::error!(?error, "failed to delete file from database"))?;
 
     // Publish an event
     events.publish_event(TenantEventMessage::FileDeleted(WithScope::new(file, scope)));

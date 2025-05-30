@@ -31,8 +31,8 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        DocumentPage, SearchIndexData, SearchIndexType, SearchRequest, SearchResultData,
-        SearchResults, UpdateSearchIndexData,
+        DocumentPage, FileSearchResults, SearchIndexData, SearchIndexType, SearchRequest,
+        SearchResultData, SearchResults, UpdateSearchIndexData,
     },
     SearchIndex,
 };
@@ -248,7 +248,7 @@ impl SearchIndex for OpenSearchIndex {
         _scope: &DocumentBoxScope,
         _file_id: docbox_database::models::file::FileId,
         _query: super::models::FileSearchRequest,
-    ) -> anyhow::Result<SearchResults> {
+    ) -> anyhow::Result<FileSearchResults> {
         anyhow::bail!("search index file is not currently supported on the opensearch backend");
     }
 

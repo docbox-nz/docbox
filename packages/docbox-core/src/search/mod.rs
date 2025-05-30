@@ -4,7 +4,8 @@ use docbox_database::models::{
     document_box::DocumentBoxScope, file::FileId, folder::FolderId, tenant::Tenant,
 };
 use models::{
-    FileSearchRequest, SearchIndexData, SearchRequest, SearchResults, UpdateSearchIndexData,
+    FileSearchRequest, FileSearchResults, SearchIndexData, SearchRequest, SearchResults,
+    UpdateSearchIndexData,
 };
 use os::{create_open_search, OpenSearchIndex, OpenSearchIndexFactory, TenantSearchIndexName};
 use reqwest::Url;
@@ -128,7 +129,7 @@ impl TenantSearchIndex {
         scope: &DocumentBoxScope,
         file_id: FileId,
         query: FileSearchRequest,
-    ) -> anyhow::Result<SearchResults> {
+    ) -> anyhow::Result<FileSearchResults> {
         match self {
             TenantSearchIndex::OpenSearch(index) => {
                 index.search_index_file(scope, file_id, query).await
@@ -200,7 +201,7 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
         scope: &DocumentBoxScope,
         file_id: FileId,
         query: FileSearchRequest,
-    ) -> anyhow::Result<SearchResults>;
+    ) -> anyhow::Result<FileSearchResults>;
 
     /// Adds the provided data to the search index
     async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()>;

@@ -24,16 +24,14 @@ use axum::{
 use axum_typed_multipart::TypedMultipart;
 use axum_valid::Garde;
 use docbox_core::{
-    document_box::search_document_box::ResolvedSearchResult,
     files::{
         delete_file::delete_file,
-        search_file::search_file,
         update_file::{UpdateFile, UpdateFileError},
         upload_file::{safe_upload_file, ProcessingConfig, UploadFile, UploadedFileData},
         upload_file_presigned::{create_presigned_upload, CreatePresigned},
     },
     processing::ProcessingLayer,
-    search::models::{FileSearchRequest, SearchResultItem, SearchResultResponse},
+    search::models::{FileSearchRequest, FileSearchResultResponse, SearchResultResponse},
 };
 use docbox_database::models::{
     document_box::DocumentBoxScope,
@@ -642,7 +640,7 @@ pub async fn search(
     TenantSearch(search): TenantSearch,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
     Json(req): Json<FileSearchRequest>,
-) -> HttpResult<SearchResultResponse> {
+) -> HttpResult<FileSearchResultResponse> {
     // Assert the file exists
     _ = File::find(&db, &scope, file_id)
         .await
@@ -652,32 +650,17 @@ pub async fn search(
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
-    let resolved = search_file(&db, &search, scope, file_id, req)
+    let result = search
+        .search_index_file(&scope, file_id, req)
         .await
         .map_err(|error| {
             tracing::error!(?error, "failed to search document box");
             HttpCommonError::ServerError
         })?;
 
-    let out: Vec<SearchResultItem> = resolved
-        .results
-        .into_iter()
-        .map(
-            |ResolvedSearchResult { result, data, path }| SearchResultItem {
-                path,
-                score: result.score,
-                data,
-                page_matches: result.page_matches,
-                total_hits: result.total_hits,
-                name_match: result.name_match,
-                content_match: result.content_match,
-            },
-        )
-        .collect();
-
-    Ok(Json(SearchResultResponse {
-        total_hits: resolved.total_hits,
-        results: out,
+    Ok(Json(FileSearchResultResponse {
+        total_hits: result.total_hits,
+        results: result.results,
     }))
 }
 

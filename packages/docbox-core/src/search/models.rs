@@ -76,6 +76,14 @@ pub struct UpdateSearchIndexData {
     pub pages: Option<Vec<DocumentPage>>,
 }
 
+/// Search results scoped to a specific file
+pub struct FileSearchResults {
+    // Total number of hits against the item
+    pub total_hits: u64,
+    /// Matches within the contents
+    pub results: Vec<PageResult>,
+}
+
 pub struct SearchResults {
     pub results: Vec<FlattenedItemResult>,
     pub total_hits: u64,
@@ -267,6 +275,12 @@ pub enum SearchResultData {
 pub struct SearchResultResponse {
     pub total_hits: u64,
     pub results: Vec<SearchResultItem>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FileSearchResultResponse {
+    pub total_hits: u64,
+    pub results: Vec<PageResult>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
