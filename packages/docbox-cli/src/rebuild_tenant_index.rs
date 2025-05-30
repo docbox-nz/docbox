@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
 use docbox_core::{
-    aws::{aws_config, SecretsManagerClient},
+    aws::aws_config,
     files::index_file::re_index_files,
     folders::index_folder::re_index_folders,
     links::index_link::re_index_links,
-    search::SearchIndexFactory,
-    secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
+    search::{SearchIndexFactory, SearchIndexFactoryConfig},
+    secrets::{AppSecretManager, SecretManagerConfig},
     storage::StorageLayerFactory,
 };
 use docbox_database::{models::tenant::Tenant, DatabasePoolCache};
@@ -31,22 +31,23 @@ pub async fn rebuild_tenant_index(tenant_file: PathBuf) -> eyre::Result<()> {
     let aws_config = aws_config().await;
 
     // Connect to secrets manager
-    let secrets_client = SecretsManagerClient::new(&aws_config);
-    let secrets = match config.skip_secret_creation {
-        false => AppSecretManager::Aws(AwsSecretManager::new(secrets_client)),
-        true => AppSecretManager::Memory(MemorySecretManager::new(
-            [(
+    let secrets_config = match config.skip_secret_creation {
+        false => SecretManagerConfig::Aws,
+        true => SecretManagerConfig::Memory {
+            secrets: [(
                 config.db_secret_name.to_string(),
-                Secret::String(serde_json::to_string(&json!({
+                serde_json::to_string(&json!({
                     "username": config.db_role_name,
                     "password": config.db_password
-                }))?),
+                }))?,
             )]
             .into_iter()
             .collect(),
-            None,
-        )),
+            default: None,
+        },
     };
+
+    let secrets = AppSecretManager::from_config(&aws_config, secrets_config);
 
     tracing::info!("created database secret");
 
@@ -60,7 +61,9 @@ pub async fn rebuild_tenant_index(tenant_file: PathBuf) -> eyre::Result<()> {
         secrets,
     );
 
-    let search_factory = SearchIndexFactory::from_env(&aws_config)
+    let search_config =
+        SearchIndexFactoryConfig::from_env().map_err(|err| eyre::Error::msg(err.to_string()))?;
+    let search_factory = SearchIndexFactory::from_config(&aws_config, search_config)
         .map_err(|err| eyre::Error::msg(err.to_string()))?;
 
     // Setup S3 access

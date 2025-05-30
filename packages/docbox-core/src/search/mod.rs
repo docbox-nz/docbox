@@ -4,6 +4,7 @@ use docbox_database::models::{document_box::DocumentBoxScope, folder::FolderId, 
 use models::{SearchIndexData, SearchRequest, SearchResults, UpdateSearchIndexData};
 use os::{create_open_search, OpenSearchIndex, OpenSearchIndexFactory, TenantSearchIndexName};
 use reqwest::Url;
+use serde::Deserialize;
 use typesense::{TypesenseIndex, TypesenseIndexFactory};
 use uuid::Uuid;
 
@@ -12,6 +13,37 @@ pub mod os;
 pub mod os_models;
 pub mod typesense;
 
+#[derive(Debug, Deserialize)]
+#[serde(tag = "provider", rename_all = "snake_case")]
+pub enum SearchIndexFactoryConfig {
+    Typesense { url: String, api_key: String },
+    OpenSearch { url: String },
+}
+
+impl SearchIndexFactoryConfig {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let variant = std::env::var("DOCBOX_SEARCH_INDEX_FACTORY")
+            .unwrap_or_else(|_| "opensearch".to_string());
+        match variant.as_str() {
+            "typesense" => {
+                let url = std::env::var("TYPESENSE_URL").context("missing TYPESENSE_URL env")?;
+                let api_key =
+                    std::env::var("TYPESENSE_API_KEY").context("missing TYPESENSE_API_KEY env")?;
+
+                Ok(Self::Typesense { url, api_key })
+            }
+            _ => {
+                // Setup opensearch
+                let url = std::env::var("OPENSEARCH_URL")
+                    // Map the error to an anyhow type
+                    .context("missing OPENSEARCH_URL env")?;
+
+                Ok(Self::OpenSearch { url })
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum SearchIndexFactory {
     OpenSearch(OpenSearchIndexFactory),
@@ -19,33 +51,21 @@ pub enum SearchIndexFactory {
 }
 
 impl SearchIndexFactory {
-    pub fn from_env(aws_config: &SdkConfig) -> anyhow::Result<Self> {
-        match std::env::var("DOCBOX_SEARCH_INDEX_FACTORY")
-            .unwrap_or_else(|_| "opensearch".to_string())
-            .as_str()
-        {
-            "typesense" => {
+    pub fn from_config(
+        aws_config: &SdkConfig,
+        config: SearchIndexFactoryConfig,
+    ) -> anyhow::Result<Self> {
+        match config {
+            SearchIndexFactoryConfig::Typesense { url, api_key } => {
                 tracing::debug!("using typesense search index");
-                let typesense_url =
-                    std::env::var("TYPESENSE_URL").context("missing TYPESENSE_URL env")?;
-                let api_key =
-                    std::env::var("TYPESENSE_API_KEY").context("missing TYPESENSE_API_KEY env")?;
-
-                let typesense_factory = TypesenseIndexFactory::new(typesense_url, api_key)?;
+                let typesense_factory = TypesenseIndexFactory::new(url, api_key)?;
                 Ok(SearchIndexFactory::Typesense(typesense_factory))
             }
-            _ => {
+            SearchIndexFactoryConfig::OpenSearch { url } => {
                 tracing::debug!("using opensearch search index");
-                // Setup opensearch
-                let open_search_url = std::env::var("OPENSEARCH_URL")
-                    // Map the error to an anyhow type
-                    .context("missing OPENSEARCH_URL env")
-                    // Parse the URL
-                    .and_then(|url| Url::parse(&url).context("failed to parse OPENSEARCH_URL"))?;
-
-                let open_search = create_open_search(aws_config, open_search_url)
-                    .context("failed to create open search")?;
-
+                let url = Url::parse(&url).context("failed to parse opensearch url")?;
+                let open_search =
+                    create_open_search(aws_config, url).context("failed to create open search")?;
                 let os_index_factory = OpenSearchIndexFactory::new(open_search);
                 Ok(SearchIndexFactory::OpenSearch(os_index_factory))
             }

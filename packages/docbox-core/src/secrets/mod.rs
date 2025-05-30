@@ -1,14 +1,48 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use aws::AwsSecretManager;
 use aws_config::SdkConfig;
 use docbox_database::{DbConnectErr, DbSecretManager, DbSecrets};
 use memory::MemorySecretManager;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize};
 
 use crate::aws::SecretsManagerClient;
 
 pub mod aws;
 pub mod memory;
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "provider", rename_all = "snake_case")]
+pub enum SecretManagerConfig {
+    /// In-memory secret manager
+    Memory {
+        /// Collection of secrets to include
+        #[serde(default)]
+        secrets: HashMap<String, String>,
+        /// Optional default secret
+        #[serde(default)]
+        default: Option<String>,
+    },
+    /// AWS secret manager
+    Aws,
+}
+
+impl SecretManagerConfig {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let variant = std::env::var("DOCBOX_SECRET_MANAGER").unwrap_or_else(|_| "aws".to_string());
+        match variant.as_str() {
+            "memory" => {
+                let default = std::env::var("DOCBOX_SECRET_MANAGER_DEFAULT").ok();
+                Ok(Self::Memory {
+                    secrets: Default::default(),
+                    default,
+                })
+            }
+            _ => Ok(Self::Aws),
+        }
+    }
+}
 
 pub enum AppSecretManager {
     Aws(AwsSecretManager),
@@ -16,24 +50,23 @@ pub enum AppSecretManager {
 }
 
 impl AppSecretManager {
-    pub fn from_env(aws_config: &SdkConfig) -> anyhow::Result<Self> {
-        match std::env::var("DOCBOX_SECRET_MANAGER")
-            .unwrap_or_else(|_| "opensearch".to_string())
-            .as_str()
-        {
-            "memory" => {
-                let default = std::env::var("DOCBOX_SECRET_MANAGER_DEFAULT")
-                    .ok()
-                    .map(Secret::String);
-
-                Ok(AppSecretManager::Memory(MemorySecretManager::new(
-                    Default::default(),
-                    default,
-                )))
+    /// Create the secret manager from the provided config
+    pub fn from_config(aws_config: &SdkConfig, config: SecretManagerConfig) -> Self {
+        match config {
+            SecretManagerConfig::Memory { secrets, default } => {
+                tracing::debug!("using in memory secret manager");
+                AppSecretManager::Memory(MemorySecretManager::new(
+                    secrets
+                        .into_iter()
+                        .map(|(key, value)| (key, Secret::String(value)))
+                        .collect(),
+                    default.map(Secret::String),
+                ))
             }
-            _ => {
+            SecretManagerConfig::Aws => {
+                tracing::debug!("using aws secret manager");
                 let client = SecretsManagerClient::new(aws_config);
-                Ok(AppSecretManager::Aws(AwsSecretManager::new(client)))
+                AppSecretManager::Aws(AwsSecretManager::new(client))
             }
         }
     }

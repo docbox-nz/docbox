@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use docbox_core::{
-    aws::{aws_config, SecretsManagerClient},
-    search::SearchIndexFactory,
-    secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
+    aws::aws_config,
+    search::{SearchIndexFactory, SearchIndexFactoryConfig},
+    secrets::{AppSecretManager, SecretManagerConfig},
     storage::StorageLayerFactory,
     tenant::create_tenant::safe_create_tenant,
 };
@@ -128,28 +128,23 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
     });
     let secret_value = serde_json::to_string(&secret_value)?;
 
-    // Connect to secrets manager
-    let secrets_client = SecretsManagerClient::new(&aws_config);
-    let secrets = match config.skip_secret_creation {
-        false => AppSecretManager::Aws(AwsSecretManager::new(secrets_client)),
-        true => AppSecretManager::Memory(MemorySecretManager::new(
-            [(
-                config.db_secret_name.to_string(),
-                Secret::String(serde_json::to_string(&json!({
-                    "username": config.db_role_name,
-                    "password": config.db_password
-                }))?),
-            )]
-            .into_iter()
-            .collect(),
-            None,
-        )),
+    let secrets_config = match config.skip_secret_creation {
+        false => SecretManagerConfig::Aws,
+        true => SecretManagerConfig::Memory {
+            secrets: [(config.db_secret_name.to_string(), secret_value.clone())]
+                .into_iter()
+                .collect(),
+            default: None,
+        },
     };
+    let secrets = AppSecretManager::from_config(&aws_config, secrets_config);
 
-    secrets
-        .create_secret(&config.db_secret_name, &secret_value)
-        .await
-        .map_err(|err| eyre::Error::msg(err.to_string()))?;
+    if !config.skip_secret_creation {
+        secrets
+            .create_secret(&config.db_secret_name, &secret_value)
+            .await
+            .map_err(|err| eyre::Error::msg(err.to_string()))?;
+    }
 
     tracing::info!("created database secret");
 
@@ -163,8 +158,11 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
         secrets,
     );
 
-    let search_factory = SearchIndexFactory::from_env(&aws_config)
+    let search_config =
+        SearchIndexFactoryConfig::from_env().map_err(|err| eyre::Error::msg(err.to_string()))?;
+    let search_factory = SearchIndexFactory::from_config(&aws_config, search_config)
         .map_err(|err| eyre::Error::msg(err.to_string()))?;
+
     let storage_factory = StorageLayerFactory::from_env(&aws_config)
         .map_err(|err| eyre::Error::msg(err.to_string()))?;
 

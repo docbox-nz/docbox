@@ -7,8 +7,8 @@ use docbox_core::{
     notifications::{process_notification_queue, AppNotificationQueue, NotificationQueueData},
     office::{convert_server::OfficeConverterServer, OfficeConverter},
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
-    search::SearchIndexFactory,
-    secrets::AppSecretManager,
+    search::{SearchIndexFactory, SearchIndexFactoryConfig},
+    secrets::{AppSecretManager, SecretManagerConfig},
     storage::StorageLayerFactory,
 };
 use docbox_database::DatabasePoolCache;
@@ -88,7 +88,8 @@ async fn server() -> anyhow::Result<()> {
     let aws_config = aws_config().await;
 
     // Create secrets manager
-    let secrets = AppSecretManager::from_env(&aws_config)?;
+    let secrets_config = SecretManagerConfig::from_env()?;
+    let secrets = AppSecretManager::from_config(&aws_config, secrets_config);
 
     // Load database credentials
     let db_host: String =
@@ -116,7 +117,8 @@ async fn server() -> anyhow::Result<()> {
     let event_publisher_factory = EventPublisherFactory::new(sqs_publisher_factory);
 
     // Setup search index factory
-    let search_index_factory = SearchIndexFactory::from_env(&aws_config)?;
+    let search_config = SearchIndexFactoryConfig::from_env()?;
+    let search_index_factory = SearchIndexFactory::from_config(&aws_config, search_config)?;
 
     // Setup storage factory
     let storage_factory = StorageLayerFactory::from_env(&aws_config)?;

@@ -32,8 +32,7 @@ impl TypesenseIndexFactory {
             .default_headers(headers)
             // Don't try and proxy through the proxy
             .no_proxy()
-            .build()
-            .unwrap();
+            .build()?;
 
         Ok(Self { client, base_url })
     }
