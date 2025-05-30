@@ -3,11 +3,6 @@ output "ec2_instance_ip" {
   value = aws_instance.api.private_ip
 }
 
-# Get the endpoint for the opensearch instance
-output "opensearch_endpoint" {
-  value = aws_opensearch_domain.opensearch.endpoint
-}
-
 # Get the private IP for the HTTP proxy
 output "http_proxy_ip" {
   value = aws_instance.http_proxy.private_ip

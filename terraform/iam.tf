@@ -18,36 +18,6 @@ resource "aws_iam_role" "docbox_role" {
   })
 }
 
-# resource "aws_iam_service_linked_role" "opensearch_linked_role" {
-#   aws_service_name = "opensearchservice.amazonaws.com"
-# }
-
-
-# IAM polcity to allow Opensearch access to the API EC2
-resource "aws_iam_policy" "docbox_opensearch_policy" {
-  name        = "docbox_opensearch_policy"
-  description = "Policy for EC2 to access OpenSearch"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "es:*",
-        ]
-        Resource = "${aws_opensearch_domain.opensearch.arn}/*"
-      }
-    ]
-  })
-}
-
-# Create attachment between the opensearch access role and policy
-resource "aws_iam_role_policy_attachment" "docbox_opensearch_attachment" {
-  role       = aws_iam_role.docbox_role.name
-  policy_arn = aws_iam_policy.docbox_opensearch_policy.arn
-}
-
 # IAM policy to allow docbox to access the secrets manger
 resource "aws_iam_policy" "docbox_secrets_manager_policy" {
   name        = "docbox_secrets_access_policy"
@@ -69,32 +39,6 @@ resource "aws_iam_policy" "docbox_secrets_manager_policy" {
       ]
     }]
   })
-}
-
-# Attach the secrets manager policy to the docbox role
-resource "aws_iam_role_policy_attachment" "attach_secrets_manager_policy" {
-  role       = aws_iam_role.docbox_role.name
-  policy_arn = aws_iam_policy.docbox_secrets_manager_policy.arn
-}
-
-# Access policy for opensearch
-data "aws_iam_policy_document" "opensearch_policy_doc" {
-  statement {
-    effect = "Allow"
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    actions   = ["es:*"]
-    resources = ["arn:aws:es:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:domain/${var.opensearch_domain}/*"]
-  }
-}
-
-resource "aws_opensearch_domain_policy" "main" {
-  domain_name     = aws_opensearch_domain.opensearch.domain_name
-  access_policies = data.aws_iam_policy_document.opensearch_policy_doc.json
 }
 
 # IAM Policy to allow S3 access to the API EC2 
