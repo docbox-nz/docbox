@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
 use docbox_core::{
-    aws::{aws_config, s3_client_from_env, SecretsManagerClient},
+    aws::{aws_config, SecretsManagerClient},
     files::index_file::re_index_files,
     folders::index_folder::re_index_folders,
     links::index_link::re_index_links,
     search::SearchIndexFactory,
     secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
-    storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
+    storage::StorageLayerFactory,
 };
 use docbox_database::{models::tenant::Tenant, DatabasePoolCache};
 use eyre::{Context, ContextCompat};
@@ -64,9 +64,8 @@ pub async fn rebuild_tenant_index(tenant_file: PathBuf) -> eyre::Result<()> {
         .map_err(|err| eyre::Error::msg(err.to_string()))?;
 
     // Setup S3 access
-    let s3_client =
-        s3_client_from_env(&aws_config).map_err(|err| eyre::Error::msg(err.to_string()))?;
-    let storage_factory = StorageLayerFactory::new(S3StorageLayerFactory::new(s3_client));
+    let storage_factory = StorageLayerFactory::from_env(&aws_config)
+        .map_err(|err| eyre::Error::msg(err.to_string()))?;
 
     let root_db = db_cache.get_root_pool().await?;
     let tenant = Tenant::find_by_id(&root_db, config.id, &config.env)

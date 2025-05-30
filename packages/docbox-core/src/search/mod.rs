@@ -20,7 +20,7 @@ pub enum SearchIndexFactory {
 
 impl SearchIndexFactory {
     pub fn from_env(aws_config: &SdkConfig) -> anyhow::Result<Self> {
-        match std::env::var("SEARCH_INDEX_FACTORY")
+        match std::env::var("DOCBOX_SEARCH_INDEX_FACTORY")
             .unwrap_or_else(|_| "opensearch".to_string())
             .as_str()
         {

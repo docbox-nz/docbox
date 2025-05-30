@@ -65,7 +65,7 @@ pub async fn re_index_files(
     const PAGE_SIZE: u64 = 5000;
 
     loop {
-        let mut files = File::all(db, page_index * PAGE_SIZE, PAGE_SIZE)
+        let files = File::all(db, page_index * PAGE_SIZE, PAGE_SIZE)
             .await
             .with_context(|| format!("failed to load files page: {page_index}"))?;
 

@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
 use docbox_core::{
-    aws::{aws_config, s3_client_from_env, SecretsManagerClient},
+    aws::{aws_config, SecretsManagerClient},
     search::SearchIndexFactory,
     secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
-    storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
+    storage::StorageLayerFactory,
     tenant::create_tenant::safe_create_tenant,
 };
 use docbox_database::{
@@ -165,11 +165,8 @@ pub async fn create_tenant(tenant_file: PathBuf) -> eyre::Result<()> {
 
     let search_factory = SearchIndexFactory::from_env(&aws_config)
         .map_err(|err| eyre::Error::msg(err.to_string()))?;
-
-    // Setup S3 access
-    let s3_client =
-        s3_client_from_env(&aws_config).map_err(|err| eyre::Error::msg(err.to_string()))?;
-    let storage_factory = StorageLayerFactory::new(S3StorageLayerFactory::new(s3_client));
+    let storage_factory = StorageLayerFactory::from_env(&aws_config)
+        .map_err(|err| eyre::Error::msg(err.to_string()))?;
 
     // Attempt to initialize the tenant
     let tenant = safe_create_tenant(

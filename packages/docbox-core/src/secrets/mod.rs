@@ -1,8 +1,11 @@
 use async_trait::async_trait;
 use aws::AwsSecretManager;
+use aws_config::SdkConfig;
 use docbox_database::{DbConnectErr, DbSecretManager, DbSecrets};
 use memory::MemorySecretManager;
 use serde::de::DeserializeOwned;
+
+use crate::aws::SecretsManagerClient;
 
 pub mod aws;
 pub mod memory;
@@ -13,6 +16,28 @@ pub enum AppSecretManager {
 }
 
 impl AppSecretManager {
+    pub fn from_env(aws_config: &SdkConfig) -> anyhow::Result<Self> {
+        match std::env::var("DOCBOX_SECRET_MANAGER")
+            .unwrap_or_else(|_| "opensearch".to_string())
+            .as_str()
+        {
+            "memory" => {
+                let default = std::env::var("DOCBOX_SECRET_MANAGER_DEFAULT")
+                    .ok()
+                    .map(Secret::String);
+
+                Ok(AppSecretManager::Memory(MemorySecretManager::new(
+                    Default::default(),
+                    default,
+                )))
+            }
+            _ => {
+                let client = SecretsManagerClient::new(aws_config);
+                Ok(AppSecretManager::Aws(AwsSecretManager::new(client)))
+            }
+        }
+    }
+
     pub async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>> {
         match self {
             AppSecretManager::Aws(inner) => inner.get_secret(name).await,

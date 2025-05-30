@@ -1,21 +1,20 @@
 use anyhow::Context;
 use axum::{extract::DefaultBodyLimit, routing::post, Extension};
 use docbox_core::{
-    aws::{aws_config, s3_client_from_env, SecretsManagerClient, SqsClient},
+    aws::{aws_config, SqsClient},
     background::{perform_background_tasks, BackgroundTaskData},
     events::{sqs::SqsEventPublisherFactory, EventPublisherFactory},
     notifications::{process_notification_queue, AppNotificationQueue, NotificationQueueData},
     office::{convert_server::OfficeConverterServer, OfficeConverter},
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
     search::SearchIndexFactory,
-    secrets::{aws::AwsSecretManager, memory::MemorySecretManager, AppSecretManager, Secret},
-    storage::{s3::S3StorageLayerFactory, StorageLayerFactory},
+    secrets::AppSecretManager,
+    storage::StorageLayerFactory,
 };
 use docbox_database::DatabasePoolCache;
 use docbox_web_scraper::WebsiteMetaService;
 use logging::{init_logging, init_logging_with_sentry};
 use routes::router;
-use serde_json::json;
 use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
@@ -89,31 +88,7 @@ async fn server() -> anyhow::Result<()> {
     let aws_config = aws_config().await;
 
     // Create secrets manager
-    let secrets = match cfg!(debug_assertions) {
-        true => {
-            // Running locally in debug mode targeting a local database
-            // uses the same credentials for all secrets
-            let username = std::env::var("POSTGRES_USER")
-                .context("missing environment variable POSTGRES_USER")?;
-            let password = std::env::var("POSTGRES_PASSWORD")
-                .context("missing environment variable POSTGRES_PASSWORD")?;
-
-            let value = serde_json::to_string(&json!({
-                "username": username,
-                "password": password,
-            }))
-            .context("failed to encode database secret")?;
-
-            AppSecretManager::Memory(MemorySecretManager::new(
-                Default::default(),
-                Some(Secret::String(value)),
-            ))
-        }
-        false => {
-            let client = SecretsManagerClient::new(&aws_config);
-            AppSecretManager::Aws(AwsSecretManager::new(client))
-        }
-    };
+    let secrets = AppSecretManager::from_env(&aws_config)?;
 
     // Load database credentials
     let db_host: String =
@@ -144,9 +119,7 @@ async fn server() -> anyhow::Result<()> {
     let search_index_factory = SearchIndexFactory::from_env(&aws_config)?;
 
     // Setup storage factory
-    let s3_client = s3_client_from_env(&aws_config)?;
-    let s3_storage_factory = S3StorageLayerFactory::new(s3_client);
-    let storage_factory = StorageLayerFactory::new(s3_storage_factory);
+    let storage_factory = StorageLayerFactory::from_env(&aws_config)?;
 
     // Setup notification queue
     let notification_queue = match (

@@ -1,3 +1,4 @@
+use aws_config::SdkConfig;
 use aws_sdk_s3::presigning::PresignedRequest;
 use bytes::{Buf, Bytes};
 use bytes_utils::SegmentedBuf;
@@ -7,22 +8,31 @@ use futures::{Stream, StreamExt};
 use s3::{S3StorageLayer, S3StorageLayerFactory};
 use std::pin::Pin;
 
+use crate::aws::s3_client_from_env;
+
 pub mod s3;
 
 #[derive(Clone)]
-pub struct StorageLayerFactory {
-    s3: S3StorageLayerFactory,
+pub enum StorageLayerFactory {
+    S3(S3StorageLayerFactory),
 }
 
 impl StorageLayerFactory {
-    pub fn new(s3: S3StorageLayerFactory) -> Self {
-        Self { s3 }
+    pub fn from_env(aws_config: &SdkConfig) -> anyhow::Result<Self> {
+        // Currently only a S3 backend is supported
+        let s3_client = s3_client_from_env(aws_config)?;
+        let s3_storage_factory = S3StorageLayerFactory::new(s3_client);
+        Ok(Self::S3(s3_storage_factory))
     }
 
     pub fn create_storage_layer(&self, tenant: &Tenant) -> TenantStorageLayer {
-        let bucket_name = tenant.s3_name.clone();
-        let layer = self.s3.create_storage_layer(bucket_name);
-        TenantStorageLayer::S3(layer)
+        match self {
+            StorageLayerFactory::S3(s3) => {
+                let bucket_name = tenant.s3_name.clone();
+                let layer = s3.create_storage_layer(bucket_name);
+                TenantStorageLayer::S3(layer)
+            }
+        }
     }
 }
 
