@@ -323,6 +323,8 @@ impl SearchIndex for TypesenseIndex {
                     "filter_by": filter_by.as_str(),
                     "exclude_fields": "page_content",
                     "highlight_fields": "name,value,page_content",
+                    "highlight_start_tag": "<em>",
+                    "highlight_end_tag": "</em>"
                 }
             ]
         });
