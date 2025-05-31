@@ -82,7 +82,7 @@ fn generate_image_preview(
 
     let thumbnail_jpeg = {
         let thumbnail = image.thumbnail(64, 64);
-        create_img_bytes(&thumbnail, ImageFormat::Jpeg)?
+        create_img_bytes(&thumbnail, format)?
     };
 
     let large_thumbnail_jpeg = {
