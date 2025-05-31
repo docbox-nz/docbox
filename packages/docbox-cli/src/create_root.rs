@@ -1,4 +1,7 @@
-use docbox_database::create::{create_database, create_tenants_table};
+use docbox_database::{
+    create::{create_database, create_tenants_table},
+    ROOT_DATABASE_NAME,
+};
 use eyre::Context;
 
 use crate::{connect_db, CliConfiguration};
@@ -17,7 +20,7 @@ pub async fn create_root(config: &CliConfiguration) -> eyre::Result<()> {
     .context("failed to connect to postgres database")?;
 
     // Create the tenant database
-    if let Err(err) = create_database(&db_root, "docbox").await {
+    if let Err(err) = create_database(&db_root, ROOT_DATABASE_NAME).await {
         if !err
             .as_database_error()
             .is_some_and(|err| err.code().is_some_and(|code| code.to_string().eq("42P04")))
@@ -32,7 +35,7 @@ pub async fn create_root(config: &CliConfiguration) -> eyre::Result<()> {
         config.database.port,
         &config.database.username,
         &config.database.password,
-        "docbox",
+        ROOT_DATABASE_NAME,
     )
     .await
     .context("failed to connect to docbox database")?;
