@@ -57,7 +57,7 @@ pub async fn delete_file(
 ) -> Result<(), DeleteFileError> {
     let generated = GeneratedFile::find_all(db, file.id)
         .await
-        .inspect(|error| tracing::error!(?error, "failed to query generated files"))?;
+        .inspect_err(|error| tracing::error!(?error, "failed to query generated files"))?;
 
     match delete_generated_files(storage, &generated).await {
         GeneratedFileDeleteResult::Ok => {}
@@ -108,7 +108,7 @@ pub async fn delete_file(
     // Delete the file itself
     file.delete(db)
         .await
-        .inspect(|error| tracing::error!(?error, "failed to delete file from database"))?;
+        .inspect_err(|error| tracing::error!(?error, "failed to delete file from database"))?;
 
     // Publish an event
     events.publish_event(TenantEventMessage::FileDeleted(WithScope::new(file, scope)));
