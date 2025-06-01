@@ -2,10 +2,12 @@ use async_trait::async_trait;
 use models::tenant::Tenant;
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
-use sqlx::{
+pub use sqlx::postgres::PgSslMode;
+pub use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool, Postgres, Transaction,
 };
+
 use std::{error::Error, time::Duration};
 use thiserror::Error;
 use tracing::debug;

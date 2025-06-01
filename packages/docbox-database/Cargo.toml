@@ -56,3 +56,6 @@ strum = { version = "0.26", features = ["derive"] }
 async-trait = { workspace = true }
 
 utoipa = { workspace = true }
+
+[dev-dependencies]
+testcontainers-modules = { version = "0.12.1", features = ["postgres"] }

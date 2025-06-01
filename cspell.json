@@ -51,6 +51,7 @@
     "sqlx",
     "subquery",
     "sysinfo",
+    "testcontainers",
     "Typesense",
     "unoconvert",
     "unoserver",
