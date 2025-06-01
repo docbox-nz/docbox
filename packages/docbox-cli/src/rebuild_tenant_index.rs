@@ -27,7 +27,7 @@ use futures::{future::LocalBoxFuture, stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use uuid::Uuid;
 
-use crate::CliConfiguration;
+use crate::{AnyhowError, CliConfiguration};
 
 pub async fn rebuild_tenant_index(
     config: &CliConfiguration,
@@ -280,10 +280,6 @@ pub async fn create_files_index_data(
 
     Ok(data)
 }
-
-#[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-struct AnyhowError(anyhow::Error);
 
 /// Attempts to obtain the [DocumentPage] collection for a PDF compatible file
 pub async fn try_pdf_compatible_document_pages(

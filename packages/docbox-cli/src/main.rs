@@ -14,6 +14,7 @@ mod create_tenant;
 mod delete_tenant;
 mod get_tenant;
 mod migrate;
+mod migrate_search;
 mod rebuild_tenant_index;
 
 #[derive(Parser)]
@@ -26,6 +27,10 @@ struct Args {
     #[arg(short, long)]
     pub config: PathBuf,
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct AnyhowError(anyhow::Error);
 
 #[derive(Clone, Deserialize)]
 pub struct CliConfiguration {
@@ -102,6 +107,22 @@ pub enum Commands {
         #[arg(short, long)]
         skip_failed: bool,
     },
+
+    /// Run a search migration
+    MigrateSearch {
+        // Environment to target
+        #[arg(short, long)]
+        env: String,
+        /// Name of the migration
+        #[arg(short, long)]
+        name: String,
+        /// Specific tenant to run against
+        #[arg(short, long)]
+        tenant_id: Option<Uuid>,
+        /// Skip failed migrations
+        #[arg(short, long)]
+        skip_failed: bool,
+    },
 }
 
 #[tokio::main]
@@ -166,6 +187,15 @@ async fn main() -> eyre::Result<()> {
             skip_failed,
         } => {
             migrate::migrate(&config, env, file, tenant_id, skip_failed).await?;
+            Ok(())
+        }
+        Commands::MigrateSearch {
+            env,
+            name,
+            tenant_id,
+            skip_failed,
+        } => {
+            migrate_search::migrate_search(&config, env, name, tenant_id, skip_failed).await?;
             Ok(())
         }
         Commands::RebuildTenantIndex { env, tenant_id } => {

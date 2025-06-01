@@ -607,6 +607,15 @@ impl SearchIndex for TypesenseIndex {
             .error_for_status()?;
         Ok(())
     }
+
+    async fn apply_migration(&self, name: &str) -> anyhow::Result<()> {
+        match name {
+            "m1_future_migration" => {}
+            _ => {}
+        }
+
+        Ok(())
+    }
 }
 
 impl TypesenseIndex {
@@ -772,10 +781,6 @@ impl TypesenseIndex {
                 filter_parts.push(format!(r#"created_at:<"{end}""#));
             }
         }
-
-        // if let Some(range) = query.modified {
-        //     // TODO: ...modified date query
-        // }
 
         if let Some(created_by) = query.created_by.as_ref() {
             filter_parts.push(format!(

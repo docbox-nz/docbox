@@ -1,16 +1,15 @@
+use super::{
+    models::{
+        DocumentPage, FileSearchResults, SearchIndexData, SearchIndexType, SearchRequest,
+        SearchResults, UpdateSearchIndexData,
+    },
+    SearchIndex,
+};
 use crate::search::models::{FlattenedItemResult, PageResult, SearchScore};
 use anyhow::Context;
 use aws_config::SdkConfig;
-use docbox_database::{
-    models::{
-        document_box::DocumentBoxScope,
-        file::File,
-        folder::{Folder, FolderId, FolderPathSegment},
-        link::Link,
-        tenant::Tenant,
-        user::UserId,
-    },
-    DbPool,
+use docbox_database::models::{
+    document_box::DocumentBoxScope, folder::FolderId, tenant::Tenant, user::UserId,
 };
 use opensearch::{
     http::{
@@ -25,14 +24,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::skip_serializing_none;
 use uuid::Uuid;
-
-use super::{
-    models::{
-        DocumentPage, FileSearchResults, SearchIndexData, SearchIndexType, SearchRequest,
-        SearchResultData, SearchResults, UpdateSearchIndexData,
-    },
-    SearchIndex,
-};
 
 #[derive(Clone)]
 pub struct OpenSearchIndexFactory {
@@ -496,6 +487,10 @@ impl SearchIndex for OpenSearchIndex {
 
         Ok(())
     }
+
+    async fn apply_migration(&self, _name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 impl OpenSearchIndex {
@@ -534,47 +529,6 @@ impl OpenSearchIndex {
 
         Ok(response.hits.hits.into_iter().map(|hit| hit._id).collect())
     }
-}
-
-pub async fn resolve_search_result(
-    db: &DbPool,
-    hit: FlattenedItemResult,
-) -> anyhow::Result<(
-    FlattenedItemResult,
-    SearchResultData,
-    Vec<FolderPathSegment>,
-)> {
-    let (data, path) = match hit.item_ty {
-        SearchIndexType::File => {
-            let file = File::find_with_extra(db, &hit.document_box, hit.item_id)
-                .await
-                .context("failed to query file")?
-                .context("file present in search results doesn't exist")?;
-            let path = File::resolve_path(db, hit.item_id).await?;
-
-            (SearchResultData::File(file), path)
-        }
-        SearchIndexType::Folder => {
-            let folder = Folder::find_by_id_with_extra(db, &hit.document_box, hit.item_id)
-                .await
-                .context("failed to query folder")?
-                .context("folder present in search results doesn't exist")?;
-            let path = Folder::resolve_path(db, hit.item_id).await?;
-
-            (SearchResultData::Folder(folder), path)
-        }
-        SearchIndexType::Link => {
-            let link = Link::find_with_extra(db, &hit.document_box, hit.item_id)
-                .await
-                .context("failed to query link")?
-                .context("link present in search results doesn't exist")?;
-            let path = Link::resolve_path(db, hit.item_id).await?;
-
-            (SearchResultData::Link(link), path)
-        }
-    };
-
-    Ok((hit, data, path))
 }
 
 /// Updates data within the search index

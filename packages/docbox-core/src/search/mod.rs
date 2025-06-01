@@ -177,6 +177,13 @@ impl TenantSearchIndex {
             TenantSearchIndex::Typesense(index) => index.delete_by_scope(scope).await,
         }
     }
+
+    pub async fn apply_migration(&self, name: &str) -> anyhow::Result<()> {
+        match self {
+            TenantSearchIndex::OpenSearch(index) => index.apply_migration(name).await,
+            TenantSearchIndex::Typesense(index) => index.apply_migration(name).await,
+        }
+    }
 }
 
 pub(crate) trait SearchIndex: Send + Sync + 'static {
@@ -214,5 +221,9 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
     /// Deletes the provided data from the search index
     async fn delete_data(&self, id: Uuid) -> anyhow::Result<()>;
 
+    /// Deletes all data contained within the specified `scope`
     async fn delete_by_scope(&self, scope: DocumentBoxScope) -> anyhow::Result<()>;
+
+    /// Apply a migration by name
+    async fn apply_migration(&self, name: &str) -> anyhow::Result<()>;
 }

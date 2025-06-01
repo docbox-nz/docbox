@@ -1,7 +1,10 @@
+use anyhow::Context;
 use docbox_database::{
     models::{
         document_box::DocumentBoxScope,
+        file::File,
         folder::{Folder, FolderPathSegment},
+        link::Link,
     },
     DbErr, DbPool,
 };
@@ -9,8 +12,9 @@ use futures::StreamExt;
 use thiserror::Error;
 
 use crate::search::{
-    models::{AdminSearchRequest, FlattenedItemResult, SearchRequest, SearchResultData},
-    os::resolve_search_result,
+    models::{
+        AdminSearchRequest, FlattenedItemResult, SearchIndexType, SearchRequest, SearchResultData,
+    },
     TenantSearchIndex,
 };
 
@@ -89,6 +93,29 @@ pub async fn search_document_box(
     })
 }
 
+pub async fn search_document_boxes_admin(
+    db: &DbPool,
+    search: &TenantSearchIndex,
+    request: AdminSearchRequest,
+) -> Result<DocumentBoxSearchResults, SearchDocumentBoxError> {
+    // Query search engine
+    let results = search
+        .search_index(&request.scopes, request.request, None)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query search index");
+            SearchDocumentBoxError::QueryIndex(cause)
+        })?;
+
+    let total_hits = results.total_hits;
+    let results = resolve_search_results(db, results.results).await;
+
+    Ok(DocumentBoxSearchResults {
+        results,
+        total_hits,
+    })
+}
+
 pub async fn resolve_search_results(
     db: &DbPool,
     results: Vec<FlattenedItemResult>,
@@ -111,25 +138,43 @@ pub async fn resolve_search_results(
     chunk_results.into_iter().flatten().collect()
 }
 
-pub async fn search_document_boxes_admin(
+async fn resolve_search_result(
     db: &DbPool,
-    search: &TenantSearchIndex,
-    request: AdminSearchRequest,
-) -> Result<DocumentBoxSearchResults, SearchDocumentBoxError> {
-    // Query search engine
-    let results = search
-        .search_index(&request.scopes, request.request, None)
-        .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query search index");
-            SearchDocumentBoxError::QueryIndex(cause)
-        })?;
+    hit: FlattenedItemResult,
+) -> anyhow::Result<(
+    FlattenedItemResult,
+    SearchResultData,
+    Vec<FolderPathSegment>,
+)> {
+    let (data, path) = match hit.item_ty {
+        SearchIndexType::File => {
+            let file = File::find_with_extra(db, &hit.document_box, hit.item_id)
+                .await
+                .context("failed to query file")?
+                .context("file present in search results doesn't exist")?;
+            let path = File::resolve_path(db, hit.item_id).await?;
 
-    let total_hits = results.total_hits;
-    let results = resolve_search_results(db, results.results).await;
+            (SearchResultData::File(file), path)
+        }
+        SearchIndexType::Folder => {
+            let folder = Folder::find_by_id_with_extra(db, &hit.document_box, hit.item_id)
+                .await
+                .context("failed to query folder")?
+                .context("folder present in search results doesn't exist")?;
+            let path = Folder::resolve_path(db, hit.item_id).await?;
 
-    Ok(DocumentBoxSearchResults {
-        results,
-        total_hits,
-    })
+            (SearchResultData::Folder(folder), path)
+        }
+        SearchIndexType::Link => {
+            let link = Link::find_with_extra(db, &hit.document_box, hit.item_id)
+                .await
+                .context("failed to query link")?
+                .context("link present in search results doesn't exist")?;
+            let path = Link::resolve_path(db, hit.item_id).await?;
+
+            (SearchResultData::Link(link), path)
+        }
+    };
+
+    Ok((hit, data, path))
 }
