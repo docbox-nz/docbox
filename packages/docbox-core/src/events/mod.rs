@@ -15,6 +15,7 @@ use docbox_database::models::{
 };
 use serde::Serialize;
 
+pub mod mpsc;
 pub mod noop;
 pub mod sqs;
 
@@ -52,6 +53,7 @@ impl EventPublisherFactory {
 pub enum TenantEventPublisher {
     Sqs(sqs::SqsEventPublisher),
     Noop(noop::NoopEventPublisher),
+    Mpsc(mpsc::MpscEventPublisher),
 }
 
 impl TenantEventPublisher {
@@ -59,6 +61,7 @@ impl TenantEventPublisher {
         match self {
             TenantEventPublisher::Sqs(inner) => inner.publish_event(event),
             TenantEventPublisher::Noop(inner) => inner.publish_event(event),
+            TenantEventPublisher::Mpsc(inner) => inner.publish_event(event),
         }
     }
 }
