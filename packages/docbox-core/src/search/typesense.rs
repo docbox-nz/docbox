@@ -768,12 +768,12 @@ impl TypesenseIndex {
         if let Some(range) = query.created_at.as_ref() {
             if let Some(start) = range.start {
                 let start = start.timestamp();
-                filter_parts.push(format!(r#"created_at:>"{start}""#));
+                filter_parts.push(format!(r#"created_at:>{start}"#));
             }
 
             if let Some(end) = range.end {
                 let end = end.timestamp();
-                filter_parts.push(format!(r#"created_at:<"{end}""#));
+                filter_parts.push(format!(r#"created_at:<{end}"#));
             }
         }
 
