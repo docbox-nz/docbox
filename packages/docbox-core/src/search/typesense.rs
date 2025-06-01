@@ -608,12 +608,7 @@ impl SearchIndex for TypesenseIndex {
         Ok(())
     }
 
-    async fn apply_migration(&self, name: &str) -> anyhow::Result<()> {
-        match name {
-            "m1_future_migration" => {}
-            _ => {}
-        }
-
+    async fn apply_migration(&self, _name: &str) -> anyhow::Result<()> {
         Ok(())
     }
 }
