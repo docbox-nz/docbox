@@ -1,7 +1,4 @@
-use crate::search::{
-    models::{FlattenedItemResult, PageResult},
-    os_models,
-};
+use crate::search::models::{FlattenedItemResult, PageResult, SearchScore};
 use anyhow::Context;
 use aws_config::SdkConfig;
 use docbox_database::{
@@ -277,7 +274,7 @@ impl SearchIndex for OpenSearchIndex {
 
         tracing::debug!(%response);
 
-        let response: os_models::SearchResponse = serde_json::from_value(response)?;
+        let response: SearchResponse = serde_json::from_value(response)?;
         let total_hits = response.hits.total.value;
 
         const NAME_MATCH_KEYS: [&str; 2] = ["name_match_exact", "name_match_wildcard"];
@@ -316,7 +313,7 @@ impl SearchIndex for OpenSearchIndex {
                     item_ty: item._source.item_type,
                     item_id: item._source.item_id,
                     document_box: item._source.document_box,
-                    score: item._score,
+                    score: SearchScore::Float(item._score),
                     page_matches,
                     total_hits,
                     name_match,
@@ -784,4 +781,66 @@ pub fn create_opensearch_query(
             }
         ]
     })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SearchResponse {
+    pub hits: Hits<SearchResponseHit>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Hits<H> {
+    pub total: HitsTotal,
+    pub max_score: Option<f64>,
+    pub hits: Vec<H>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HitsTotal {
+    pub value: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SearchResponseHit {
+    pub _id: String,
+    pub _score: f32,
+    pub _source: SearchResponseHitSource,
+    pub inner_hits: Option<InnerHits>,
+    pub matched_queries: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SearchResponseHitSource {
+    pub item_id: Uuid,
+    pub item_type: SearchIndexType,
+    pub document_box: DocumentBoxScope,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InnerHits {
+    pub pages: InnerHitsPages,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InnerHitsPages {
+    pub hits: Hits<PagesHit>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PagesHit {
+    pub _score: f32,
+    pub _source: PagesHitSource,
+    pub highlight: PagesHighlight,
+    pub matched_queries: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PagesHitSource {
+    pub page: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PagesHighlight {
+    #[serde(rename = "pages.content")]
+    pub content: Vec<String>,
 }

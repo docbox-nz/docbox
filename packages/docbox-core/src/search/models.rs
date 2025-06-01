@@ -102,13 +102,22 @@ pub struct FlattenedItemResult {
     // Total number of hits against the item
     pub total_hits: u64,
     // Score of the item (Sum of all the content scores)
-    pub score: f32,
+    pub score: SearchScore,
 
     /// Whether the content matches
     pub name_match: bool,
 
     /// Whether the name matches
     pub content_match: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(untagged)]
+pub enum SearchScore {
+    /// Typesense uses integer scoring
+    Integer(u64),
+    /// OpenSearch uses float scoring
+    Float(f32),
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -292,7 +301,7 @@ pub struct AdminSearchResultResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SearchResultItem {
     /// The result score
-    pub score: f32,
+    pub score: SearchScore,
     /// Path to the search result item
     pub path: Vec<FolderPathSegment>,
     /// The item itself

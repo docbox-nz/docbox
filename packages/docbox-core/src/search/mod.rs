@@ -15,7 +15,6 @@ use uuid::Uuid;
 
 pub mod models;
 pub mod os;
-pub mod os_models;
 pub mod typesense;
 
 #[derive(Debug, Clone, Deserialize)]
