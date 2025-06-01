@@ -1,13 +1,16 @@
 use utoipa::OpenApi;
 
-use crate::routes::{
-    admin::{self, ADMIN_TAG},
-    document_box::{self, DOCUMENT_BOX_TAG},
-    file::{self, FILE_TAG},
-    folder::{self, FOLDER_TAG},
-    link::{self, LINK_TAG},
-    task::{self, TASK_TAG},
-    utils::{self, UTILS_TAG},
+use crate::{
+    models::document_box::DocumentBoxScope,
+    routes::{
+        admin::{self, ADMIN_TAG},
+        document_box::{self, DOCUMENT_BOX_TAG},
+        file::{self, FILE_TAG},
+        folder::{self, FOLDER_TAG},
+        link::{self, LINK_TAG},
+        task::{self, TASK_TAG},
+        utils::{self, UTILS_TAG},
+    },
 };
 
 #[derive(OpenApi)]
@@ -28,6 +31,9 @@ use crate::routes::{
         (name = TASK_TAG, description = "Background task related APIs"),
         (name = ADMIN_TAG, description = "Administrator and higher privilege APIs"),
         (name = UTILS_TAG, description = "Utility APIs")
+    ),
+    components(
+        schemas(DocumentBoxScope)
     ),
     paths(
         // Admin routes

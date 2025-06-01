@@ -6,7 +6,7 @@ use crate::{
 };
 use docbox_database::{
     models::{
-        document_box::{DocumentBoxScope, WithScope},
+        document_box::{DocumentBoxScopeRaw, WithScope},
         file::File,
         generated_file::GeneratedFile,
     },
@@ -53,7 +53,7 @@ pub async fn delete_file(
     search: &TenantSearchIndex,
     events: &TenantEventPublisher,
     file: File,
-    scope: DocumentBoxScope,
+    scope: DocumentBoxScopeRaw,
 ) -> Result<(), DeleteFileError> {
     let generated = GeneratedFile::find_all(db, file.id)
         .await

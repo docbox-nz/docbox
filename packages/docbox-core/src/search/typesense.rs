@@ -7,7 +7,7 @@ use super::{
 };
 use crate::search::models::{FlattenedItemResult, PageResult};
 use anyhow::Context;
-use docbox_database::models::{document_box::DocumentBoxScope, folder::FolderId, user::UserId};
+use docbox_database::models::{document_box::DocumentBoxScopeRaw, folder::FolderId, user::UserId};
 use itertools::Itertools;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
@@ -90,7 +90,7 @@ enum TypesenseDataEntryV1 {
 #[skip_serializing_none]
 struct TypesenseDataEntryRootV1 {
     /// Scope the entry is within
-    document_box: DocumentBoxScope,
+    document_box: DocumentBoxScopeRaw,
     /// ID of the folder the entry is within
     folder_id: FolderId,
 
@@ -233,7 +233,7 @@ impl SearchIndex for TypesenseIndex {
 
     async fn search_index_file(
         &self,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         file_id: docbox_database::models::file::FileId,
         query: super::models::FileSearchRequest,
     ) -> anyhow::Result<FileSearchResults> {
@@ -316,7 +316,7 @@ impl SearchIndex for TypesenseIndex {
 
     async fn search_index(
         &self,
-        scopes: &[docbox_database::models::document_box::DocumentBoxScope],
+        scopes: &[docbox_database::models::document_box::DocumentBoxScopeRaw],
         query: super::models::SearchRequest,
         folder_children: Option<Vec<docbox_database::models::folder::FolderId>>,
     ) -> anyhow::Result<super::models::SearchResults> {
@@ -369,6 +369,7 @@ impl SearchIndex for TypesenseIndex {
             ]
         });
 
+        tracing::debug!(?query_json);
         let response = self
             .client
             .post(format!("{}/multi_search", self.base_url,))
@@ -386,7 +387,10 @@ impl SearchIndex for TypesenseIndex {
             return Err(error.into());
         }
 
-        let search: SearchResponse<GroupedSearchResponse> = response.json().await?;
+        let response: serde_json::Value = response.json().await?;
+        tracing::debug!(?response);
+
+        let search: SearchResponse<GroupedSearchResponse> = serde_json::from_value(response)?;
         let search = search
             .results
             .into_iter()
@@ -594,7 +598,7 @@ impl SearchIndex for TypesenseIndex {
 
     async fn delete_by_scope(
         &self,
-        scope: docbox_database::models::document_box::DocumentBoxScope,
+        scope: docbox_database::models::document_box::DocumentBoxScopeRaw,
     ) -> anyhow::Result<()> {
         self.client
             .delete(format!(
@@ -737,7 +741,7 @@ impl TypesenseIndex {
     }
 
     fn create_search_filters(
-        scopes: &[DocumentBoxScope],
+        scopes: &[DocumentBoxScopeRaw],
         query: &SearchRequest,
         folder_children: Option<Vec<FolderId>>,
     ) -> String {

@@ -1,4 +1,4 @@
-use docbox_database::models::document_box::DocumentBoxScope;
+use docbox_database::models::document_box::DocumentBoxScopeRaw;
 use mime::Mime;
 use uuid::Uuid;
 
@@ -11,7 +11,7 @@ pub mod update_file;
 pub mod upload_file;
 pub mod upload_file_presigned;
 
-pub fn create_file_key(document_box: &DocumentBoxScope, name: &str, mime: &Mime) -> String {
+pub fn create_file_key(document_box: &DocumentBoxScopeRaw, name: &str, mime: &Mime) -> String {
     // Try get file extension from name
     let file_ext = get_file_name_ext(name)
         // Fallback to extension from mime type

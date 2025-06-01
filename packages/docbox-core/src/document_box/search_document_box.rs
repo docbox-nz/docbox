@@ -1,7 +1,7 @@
 use anyhow::Context;
 use docbox_database::{
     models::{
-        document_box::DocumentBoxScope,
+        document_box::DocumentBoxScopeRaw,
         file::File,
         folder::{Folder, FolderPathSegment},
         link::Link,
@@ -49,7 +49,7 @@ pub struct DocumentBoxSearchResults {
 pub async fn search_document_box(
     db: &DbPool,
     search: &TenantSearchIndex,
-    scope: DocumentBoxScope,
+    scope: DocumentBoxScopeRaw,
     request: SearchRequest,
 ) -> Result<DocumentBoxSearchResults, SearchDocumentBoxError> {
     // When searching within a specific folder resolve all allowed folder ID's

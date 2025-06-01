@@ -7,7 +7,8 @@ use crate::{
         tenant::{TenantDb, TenantEvents, TenantParams, TenantSearch, TenantStorage},
     },
     models::document_box::{
-        CreateDocumentBoxRequest, DocumentBoxResponse, DocumentBoxStats, HttpDocumentBoxError,
+        CreateDocumentBoxRequest, DocumentBoxResponse, DocumentBoxScope, DocumentBoxStats,
+        HttpDocumentBoxError,
     },
 };
 use axum::{extract::Path, http::StatusCode, Json};
@@ -21,7 +22,7 @@ use docbox_core::{
     search::models::{SearchRequest, SearchResultItem, SearchResultResponse},
 };
 use docbox_database::models::{
-    document_box::{DocumentBox, DocumentBoxScope},
+    document_box::DocumentBox,
     folder::{self, Folder, FolderWithExtra, ResolvedFolderWithExtra},
 };
 
@@ -106,14 +107,14 @@ pub async fn create(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope of the document box"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope of the document box"),
         TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope = %scope))]
 pub async fn get(
     TenantDb(db): TenantDb,
-    Path(scope): Path<DocumentBoxScope>,
+    Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
 ) -> HttpResult<DocumentBoxResponse> {
     let document_box = DocumentBox::find_by_scope(&db, &scope)
         .await
@@ -165,14 +166,14 @@ pub async fn get(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope of the document box"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope of the document box"),
         TenantParams
     )
 )]
 #[tracing::instrument(skip_all, fields(scope = %scope))]
 pub async fn stats(
     TenantDb(db): TenantDb,
-    Path(scope): Path<DocumentBoxScope>,
+    Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
 ) -> HttpResult<DocumentBoxStats> {
     // Assert that the document box exists
     let _document_box = DocumentBox::find_by_scope(&db, &scope)
@@ -226,7 +227,7 @@ pub async fn stats(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope of the document box"),    
+        ("scope" = DocumentBoxScope, Path, description = "Scope of the document box"),    
         TenantParams
     )
 )]
@@ -236,7 +237,7 @@ pub async fn delete(
     TenantSearch(search): TenantSearch,
     TenantStorage(storage): TenantStorage,
     TenantEvents(events): TenantEvents,
-    Path(scope): Path<DocumentBoxScope>,
+    Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
 ) -> HttpStatusResult {
     delete_document_box(&db, &search, &storage, &events, scope)
         .await
@@ -269,7 +270,7 @@ pub async fn delete(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope of the document box"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope of the document box"),
         TenantParams
     )
 )]
@@ -277,7 +278,7 @@ pub async fn delete(
 pub async fn search(
     TenantDb(db): TenantDb,
     TenantSearch(search): TenantSearch,
-    Path(scope): Path<DocumentBoxScope>,
+    Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<SearchRequest>>,
 ) -> HttpResult<SearchResultResponse> {
     let resolved = search_document_box(&db, &search, scope, req)

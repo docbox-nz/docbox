@@ -16,7 +16,7 @@ use chrono::Utc;
 use docbox_database::models::{file::FileId, presigned_upload_task::PresignedUploadTaskId};
 use docbox_database::{
     models::{
-        document_box::DocumentBoxScope,
+        document_box::DocumentBoxScopeRaw,
         folder::Folder,
         presigned_upload_task::{
             CreatePresignedUploadTask, PresignedTaskStatus, PresignedUploadTask,
@@ -79,7 +79,7 @@ pub struct CreatePresigned {
     pub name: String,
 
     /// The document box scope to store within
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
 
     /// Folder to store the file in
     pub folder: Folder,

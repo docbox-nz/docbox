@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{
-    document_box::DocumentBoxScope,
+    document_box::DocumentBoxScopeRaw,
     folder::{FolderId, FolderPathSegment},
     user::{User, UserId},
 };
@@ -296,7 +296,7 @@ impl File {
     /// Finds a specific file using its full path scope -> folder -> file
     pub async fn find(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         file_id: FileId,
     ) -> DbResult<Option<File>> {
         sqlx::query_as(
@@ -371,7 +371,7 @@ impl File {
     /// last modified
     pub async fn find_with_extra(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         file_id: FileId,
     ) -> DbResult<Option<FileWithExtra>> {
         sqlx::query_as(

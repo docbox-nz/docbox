@@ -6,7 +6,10 @@ use crate::{
         action_user::{ActionUser, UserParams},
         tenant::{TenantDb, TenantEvents, TenantParams, TenantSearch, TenantStorage},
     },
-    models::folder::{CreateFolderRequest, FolderResponse, HttpFolderError, UpdateFolderRequest},
+    models::{
+        document_box::DocumentBoxScope,
+        folder::{CreateFolderRequest, FolderResponse, HttpFolderError, UpdateFolderRequest},
+    },
 };
 use axum::{extract::Path, http::StatusCode, Json};
 use axum_valid::Garde;
@@ -16,7 +19,6 @@ use docbox_core::folders::{
     update_folder::{UpdateFolder, UpdateFolderError},
 };
 use docbox_database::models::{
-    document_box::DocumentBoxScope,
     edit_history::EditHistory,
     folder::{self, Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
 };
@@ -37,7 +39,7 @@ pub const FOLDER_TAG: &str = "Folder";
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the folder within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope to create the folder within"),
         TenantParams,
         UserParams
     )
@@ -48,7 +50,7 @@ pub async fn create(
     TenantDb(db): TenantDb,
     TenantSearch(search): TenantSearch,
     TenantEvents(events): TenantEvents,
-    Path(scope): Path<DocumentBoxScope>,
+    Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<CreateFolderRequest>>,
 ) -> Result<(StatusCode, Json<FolderResponse>), DynHttpError> {
     let folder_id = req.folder_id;
@@ -117,7 +119,7 @@ pub async fn create(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the folder resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the folder resides within"),
         ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
         TenantParams
     )
@@ -127,6 +129,8 @@ pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
 ) -> HttpResult<FolderResponse> {
+    let DocumentBoxScope(scope) = scope;
+
     let folder = Folder::find_by_id_with_extra(&db, &scope, folder_id)
         .await
         // Failed to query folder
@@ -160,7 +164,7 @@ pub async fn get(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the folder resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the folder resides within"),
         ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
         TenantParams
     )
@@ -170,6 +174,8 @@ pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
 ) -> HttpResult<Vec<EditHistory>> {
+    let DocumentBoxScope(scope) = scope;
+
     _ = Folder::find_by_id_with_extra(&db, &scope, folder_id)
         .await
         // Failed to query folder
@@ -205,7 +211,7 @@ pub async fn get_edit_history(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the folder resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the folder resides within"),
         ("folder_id" = Uuid, Path, description = "ID of the folder to request"),
         TenantParams,
         UserParams
@@ -219,6 +225,8 @@ pub async fn update(
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
     Garde(Json(req)): Garde<Json<UpdateFolderRequest>>,
 ) -> HttpStatusResult {
+    let DocumentBoxScope(scope) = scope;
+
     let folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
         // Failed to query folder
@@ -274,7 +282,7 @@ pub async fn update(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the folder resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the folder resides within"),
         ("folder_id" = Uuid, Path, description = "ID of the folder to delete"),
         TenantParams
     )
@@ -287,6 +295,8 @@ pub async fn delete(
     TenantSearch(search): TenantSearch,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
 ) -> HttpStatusResult {
+    let DocumentBoxScope(scope) = scope;
+
     let folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
         // Failed to query folder

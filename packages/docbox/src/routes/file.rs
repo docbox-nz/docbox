@@ -7,6 +7,7 @@ use crate::{
         tenant::{TenantDb, TenantEvents, TenantParams, TenantSearch, TenantStorage},
     },
     models::{
+        document_box::DocumentBoxScope,
         file::{
             CreatePresignedRequest, FileResponse, FileUploadResponse, HttpFileError,
             PresignedStatusResponse, PresignedUploadResponse, RawFileQuery, UpdateFileRequest,
@@ -34,7 +35,6 @@ use docbox_core::{
     search::models::{FileSearchRequest, FileSearchResultResponse},
 };
 use docbox_database::models::{
-    document_box::DocumentBoxScope,
     edit_history::EditHistory,
     file::{self, File, FileId, FileWithExtra},
     folder::Folder,
@@ -77,7 +77,7 @@ pub const FILE_TAG: &str = "File";
     ),
     request_body(content = UploadFileRequest, description = "Multipart upload", content_type = "multipart/form-data"),
     params(
-        ("scope" = String, Path, description = "Scope to create the file within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope to create the file within"),
         TenantParams,
         UserParams
     )
@@ -93,7 +93,7 @@ pub async fn upload(
     //
     Extension(processing): Extension<ProcessingLayer>,
     //
-    Path(scope): Path<DocumentBoxScope>,
+    Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
     Garde(TypedMultipart(req)): Garde<TypedMultipart<UploadFileRequest>>,
 ) -> HttpResult<FileUploadResponse> {
     let folder = Folder::find_by_id(&db, &scope, req.folder_id)
@@ -254,7 +254,7 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the file within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope to create the file within"),
         TenantParams,
         UserParams
     )
@@ -264,7 +264,7 @@ pub async fn create_presigned(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
-    Path(scope): Path<DocumentBoxScope>,
+    Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<CreatePresignedRequest>>,
 ) -> Result<(StatusCode, Json<PresignedUploadResponse>), DynHttpError> {
     let folder = Folder::find_by_id(&db, &scope, req.folder_id)
@@ -325,7 +325,7 @@ pub async fn create_presigned(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("task_id" = Uuid, Path, description = "ID of the task to query"),
         TenantParams
     )
@@ -335,6 +335,8 @@ pub async fn get_presigned(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, PresignedUploadTaskId)>,
 ) -> HttpResult<PresignedStatusResponse> {
+    let DocumentBoxScope(scope) = scope;
+
     let task = PresignedUploadTask::find(&db, &scope, task_id)
         .await
         .map_err(|cause| {
@@ -384,7 +386,7 @@ pub async fn get_presigned(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -394,6 +396,7 @@ pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
 ) -> HttpResult<FileResponse> {
+    let DocumentBoxScope(scope) = scope;
     let file = File::find_with_extra(&db, &scope, file_id)
         .await
         .map_err(|cause| {
@@ -427,7 +430,7 @@ pub async fn get(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -437,6 +440,8 @@ pub async fn get_children(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
 ) -> HttpResult<Vec<FileWithExtra>> {
+    let DocumentBoxScope(scope) = scope;
+
     // Request the file first to ensure scoping rules
     _ = File::find_with_extra(&db, &scope, file_id)
         .await
@@ -470,7 +475,7 @@ pub async fn get_children(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -480,6 +485,8 @@ pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
 ) -> HttpResult<Vec<EditHistory>> {
+    let DocumentBoxScope(scope) = scope;
+
     _ = File::find(&db, &scope, file_id)
         .await
         .map_err(|cause| {
@@ -512,7 +519,7 @@ pub async fn get_edit_history(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams,
         UserParams
@@ -526,6 +533,8 @@ pub async fn update(
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
     Garde(Json(req)): Garde<Json<UpdateFileRequest>>,
 ) -> HttpStatusResult {
+    let DocumentBoxScope(scope) = scope;
+
     let file = File::find(&db, &scope, file_id)
         .await
         .map_err(|cause| {
@@ -570,7 +579,7 @@ pub async fn update(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -582,6 +591,8 @@ pub async fn get_raw(
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
     Query(query): Query<RawFileQuery>,
 ) -> Result<Response<Body>, DynHttpError> {
+    let DocumentBoxScope(scope) = scope;
+
     let file = File::find(&db, &scope, file_id)
         .await
         .map_err(|cause| {
@@ -629,7 +640,7 @@ pub async fn get_raw(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         TenantParams
     )
@@ -641,6 +652,8 @@ pub async fn search(
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
     Json(req): Json<FileSearchRequest>,
 ) -> HttpResult<FileSearchResultResponse> {
+    let DocumentBoxScope(scope) = scope;
+
     // Assert the file exists
     _ = File::find(&db, &scope, file_id)
         .await
@@ -678,7 +691,7 @@ pub async fn search(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to delete"),
         TenantParams
     )
@@ -691,6 +704,8 @@ pub async fn delete(
     TenantEvents(events): TenantEvents,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
 ) -> HttpStatusResult {
+    let DocumentBoxScope(scope) = scope;
+
     let file = File::find(&db, &scope, file_id)
         .await
         .map_err(|cause| {
@@ -725,7 +740,7 @@ pub async fn delete(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
         TenantParams
@@ -736,6 +751,8 @@ pub async fn get_generated(
     TenantDb(db): TenantDb,
     Path((scope, file_id, generated_type)): Path<(DocumentBoxScope, FileId, GeneratedFileType)>,
 ) -> HttpResult<GeneratedFile> {
+    let DocumentBoxScope(scope) = scope;
+
     let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
         .await
         .map_err(|cause| {
@@ -762,7 +779,7 @@ pub async fn get_generated(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the file resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
         TenantParams
@@ -774,6 +791,8 @@ pub async fn get_generated_raw(
     TenantStorage(storage): TenantStorage,
     Path((scope, file_id, generated_type)): Path<(DocumentBoxScope, FileId, GeneratedFileType)>,
 ) -> Result<Response<Body>, DynHttpError> {
+    let DocumentBoxScope(scope) = scope;
+
     let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
         .await
         .map_err(|cause| {

@@ -13,7 +13,7 @@ use docbox_core::{
 };
 use docbox_database::{
     models::{
-        document_box::DocumentBoxScope,
+        document_box::DocumentBoxScopeRaw,
         file::{File, FileWithScope},
         folder::Folder,
         generated_file::{GeneratedFile, GeneratedFileType},
@@ -285,7 +285,7 @@ pub async fn create_files_index_data(
 pub async fn try_pdf_compatible_document_pages(
     db: &DbPool,
     storage: &TenantStorageLayer,
-    scope: &DocumentBoxScope,
+    scope: &DocumentBoxScopeRaw,
     file: &File,
 ) -> eyre::Result<Vec<DocumentPage>> {
     // Load the extracted text content for the file

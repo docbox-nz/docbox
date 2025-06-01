@@ -6,7 +6,7 @@ use sqlx::prelude::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::{document_box::DocumentBoxScope, file::FileId};
+use super::{document_box::DocumentBoxScopeRaw, file::FileId};
 use crate::{DbExecutor, DbResult};
 
 pub type GeneratedFileId = Uuid;
@@ -137,7 +137,7 @@ impl GeneratedFile {
     /// Finds a specific file using its full path scope -> folder -> file
     pub async fn find(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         file_id: FileId,
         ty: GeneratedFileType,
     ) -> DbResult<Option<GeneratedFile>> {

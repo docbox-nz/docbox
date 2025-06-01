@@ -1,6 +1,6 @@
 use docbox_database::{
     models::{
-        document_box::DocumentBoxScope,
+        document_box::DocumentBoxScopeRaw,
         edit_history::{
             CreateEditHistory, CreateEditHistoryType, EditHistory, EditHistoryMetadata,
         },
@@ -41,7 +41,7 @@ pub struct UpdateFile {
 pub async fn update_file(
     db: &DbPool,
     search: &TenantSearchIndex,
-    scope: &DocumentBoxScope,
+    scope: &DocumentBoxScopeRaw,
     file: File,
     user_id: Option<String>,
     update: UpdateFile,

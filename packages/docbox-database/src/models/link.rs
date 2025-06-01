@@ -1,5 +1,5 @@
 use super::{
-    document_box::DocumentBoxScope,
+    document_box::DocumentBoxScopeRaw,
     folder::{FolderId, FolderPathSegment},
     user::{User, UserId},
 };
@@ -215,7 +215,7 @@ impl Link {
 
     pub async fn find(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         link_id: LinkId,
     ) -> DbResult<Option<Link>> {
         sqlx::query_as(
@@ -330,7 +330,7 @@ impl Link {
 
     pub async fn find_with_extra(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         link_id: LinkId,
     ) -> DbResult<Option<LinkWithExtra>> {
         sqlx::query_as(

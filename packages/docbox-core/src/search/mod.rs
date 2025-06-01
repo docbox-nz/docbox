@@ -1,7 +1,7 @@
 use anyhow::Context;
 use aws_config::SdkConfig;
 use docbox_database::models::{
-    document_box::DocumentBoxScope, file::FileId, folder::FolderId, tenant::Tenant,
+    document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, tenant::Tenant,
 };
 use models::{
     FileSearchRequest, FileSearchResults, SearchIndexData, SearchRequest, SearchResults,
@@ -108,7 +108,7 @@ impl TenantSearchIndex {
 
     pub async fn search_index(
         &self,
-        scope: &[DocumentBoxScope],
+        scope: &[DocumentBoxScopeRaw],
         query: SearchRequest,
         folder_children: Option<Vec<FolderId>>,
     ) -> anyhow::Result<SearchResults> {
@@ -125,7 +125,7 @@ impl TenantSearchIndex {
     /// Searches the index for matches scoped to a specific file
     pub async fn search_index_file(
         &self,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         file_id: FileId,
         query: FileSearchRequest,
     ) -> anyhow::Result<FileSearchResults> {
@@ -171,7 +171,7 @@ impl TenantSearchIndex {
         }
     }
 
-    pub async fn delete_by_scope(&self, scope: DocumentBoxScope) -> anyhow::Result<()> {
+    pub async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()> {
         match self {
             TenantSearchIndex::OpenSearch(index) => index.delete_by_scope(scope).await,
             TenantSearchIndex::Typesense(index) => index.delete_by_scope(scope).await,
@@ -196,7 +196,7 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
     /// Searches the index for the provided query
     async fn search_index(
         &self,
-        scope: &[DocumentBoxScope],
+        scope: &[DocumentBoxScopeRaw],
         query: SearchRequest,
         folder_children: Option<Vec<FolderId>>,
     ) -> anyhow::Result<SearchResults>;
@@ -204,7 +204,7 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
     /// Searches the index for matches scoped to a specific file
     async fn search_index_file(
         &self,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         file_id: FileId,
         query: FileSearchRequest,
     ) -> anyhow::Result<FileSearchResults>;
@@ -222,7 +222,7 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
     async fn delete_data(&self, id: Uuid) -> anyhow::Result<()>;
 
     /// Deletes all data contained within the specified `scope`
-    async fn delete_by_scope(&self, scope: DocumentBoxScope) -> anyhow::Result<()>;
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()>;
 
     /// Apply a migration by name
     async fn apply_migration(&self, name: &str) -> anyhow::Result<()>;

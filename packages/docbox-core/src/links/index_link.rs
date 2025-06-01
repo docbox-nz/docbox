@@ -2,14 +2,14 @@ use crate::search::{
     models::{SearchIndexData, SearchIndexType},
     TenantSearchIndex,
 };
-use docbox_database::models::{document_box::DocumentBoxScope, link::Link};
+use docbox_database::models::{document_box::DocumentBoxScopeRaw, link::Link};
 
 use super::create_link::CreateLinkError;
 
 pub async fn store_link_index(
     search: &TenantSearchIndex,
     link: &Link,
-    scope: &DocumentBoxScope,
+    scope: &DocumentBoxScopeRaw,
 ) -> Result<(), CreateLinkError> {
     search
         .add_data(SearchIndexData {

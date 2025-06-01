@@ -8,7 +8,7 @@ use crate::{
     files::generated::{upload_generated_files, QueuedUpload},
 };
 use bytes::Bytes;
-use docbox_database::models::document_box::DocumentBoxScope;
+use docbox_database::models::document_box::DocumentBoxScopeRaw;
 use docbox_database::models::folder::FolderId;
 use docbox_database::{
     models::{
@@ -83,7 +83,7 @@ pub struct UploadFile {
     pub folder_id: FolderId,
 
     /// Document box the file and folder are contained within
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
 
     /// File name
     pub name: String,

@@ -5,13 +5,10 @@
 use crate::{
     error::{HttpCommonError, HttpErrorResponse, HttpResult},
     middleware::tenant::{TenantDb, TenantParams},
-    models::task::HttpTaskError,
+    models::{document_box::DocumentBoxScope, task::HttpTaskError},
 };
 use axum::{extract::Path, Json};
-use docbox_database::models::{
-    document_box::DocumentBoxScope,
-    tasks::{Task, TaskId},
-};
+use docbox_database::models::tasks::{Task, TaskId};
 
 pub const TASK_TAG: &str = "Task";
 
@@ -40,6 +37,8 @@ pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, TaskId)>,
 ) -> HttpResult<Task> {
+    let DocumentBoxScope(scope) = scope;
+
     let task = Task::find(&db, task_id, &scope)
         .await
         // Failed to query the database

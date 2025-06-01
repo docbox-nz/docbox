@@ -7,7 +7,7 @@ use sqlx::{error::BoxDynError, prelude::FromRow, Database, Decode};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::document_box::DocumentBoxScope;
+use super::document_box::DocumentBoxScopeRaw;
 
 pub type TaskId = Uuid;
 
@@ -18,7 +18,7 @@ pub struct Task {
     pub id: Uuid,
 
     /// ID of the document box the task belongs to
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
 
     /// Status of the task
     pub status: TaskStatus,
@@ -63,7 +63,7 @@ where
 
 pub async fn background_task<Fut>(
     db: DbPool,
-    scope: DocumentBoxScope,
+    scope: DocumentBoxScopeRaw,
     future: Fut,
 ) -> DbResult<(TaskId, DateTime<Utc>)>
 where
@@ -90,7 +90,10 @@ where
 
 impl Task {
     /// Stores / updates the stored user data, returns back the user ID
-    pub async fn create(db: impl DbExecutor<'_>, document_box: DocumentBoxScope) -> DbResult<Task> {
+    pub async fn create(
+        db: impl DbExecutor<'_>,
+        document_box: DocumentBoxScopeRaw,
+    ) -> DbResult<Task> {
         let task_id = Uuid::new_v4();
         let status = TaskStatus::Pending;
         let created_at = Utc::now();
@@ -121,7 +124,7 @@ impl Task {
     pub async fn find(
         db: impl DbExecutor<'_>,
         id: TaskId,
-        document_box: &DocumentBoxScope,
+        document_box: &DocumentBoxScopeRaw,
     ) -> DbResult<Option<Task>> {
         sqlx::query_as(r#"SELECT * FROM "docbox_tasks" WHERE "id" = $1 AND "document_box" = $2"#)
             .bind(id)

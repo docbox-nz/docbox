@@ -1,6 +1,6 @@
 use docbox_database::{
     models::{
-        document_box::DocumentBoxScope,
+        document_box::DocumentBoxScopeRaw,
         edit_history::{
             CreateEditHistory, CreateEditHistoryType, EditHistory, EditHistoryMetadata,
         },
@@ -44,7 +44,7 @@ pub struct UpdateLink {
 pub async fn update_link(
     db: &DbPool,
     search: &TenantSearchIndex,
-    scope: &DocumentBoxScope,
+    scope: &DocumentBoxScopeRaw,
     link: Link,
     user_id: Option<String>,
     update: UpdateLink,

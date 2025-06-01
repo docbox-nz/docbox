@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{
-    document_box::DocumentBoxScope,
+    document_box::DocumentBoxScopeRaw,
     file::{File, FileWithExtra},
     link::{Link, LinkWithExtra},
     user::{User, UserId},
@@ -101,7 +101,7 @@ pub struct Folder {
     pub name: String,
 
     /// ID of the document box the folder belongs to
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
     /// Parent folder ID if the folder is a child
     pub folder_id: Option<FolderId>,
 
@@ -182,7 +182,7 @@ impl<'r> FromRow<'r, PgRow> for LastModifiedByUser {
 
 pub struct CreateFolder {
     pub name: String,
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
     pub folder_id: Option<FolderId>,
     pub created_by: Option<UserId>,
 }
@@ -345,7 +345,7 @@ impl Folder {
 
     pub async fn find_by_id(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         id: FolderId,
     ) -> DbResult<Option<Folder>> {
         sqlx::query_as(r#"SELECT * FROM "docbox_folders" WHERE "id" = $1 AND "document_box" = $2"#)
@@ -389,7 +389,7 @@ impl Folder {
 
     pub async fn find_root(
         db: impl DbExecutor<'_>,
-        document_box: &DocumentBoxScope,
+        document_box: &DocumentBoxScopeRaw,
     ) -> DbResult<Option<Folder>> {
         sqlx::query_as(
             r#"SELECT * FROM "docbox_folders" WHERE "document_box" = $1 AND "folder_id" IS NULL"#,
@@ -449,7 +449,7 @@ impl Folder {
 
     pub async fn find_by_id_with_extra(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         id: FolderId,
     ) -> DbResult<Option<FolderWithExtra>> {
         sqlx::query_as(
@@ -533,7 +533,7 @@ impl Folder {
 
     pub async fn find_root_with_extra(
         db: impl DbExecutor<'_>,
-        document_box: &DocumentBoxScope,
+        document_box: &DocumentBoxScopeRaw,
     ) -> DbResult<Option<FolderWithExtra>> {
         sqlx::query_as(
             r#"

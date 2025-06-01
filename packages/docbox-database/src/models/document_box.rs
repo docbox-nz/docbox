@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use utoipa::ToSchema;
 
-pub type DocumentBoxScope = String;
+pub type DocumentBoxScopeRaw = String;
 
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
 pub struct DocumentBox {
     /// Scope for the document box
-    pub scope: DocumentBoxScope,
+    pub scope: DocumentBoxScopeRaw,
     /// Date of creation for the document box
     pub created_at: DateTime<Utc>,
 }
@@ -18,11 +18,11 @@ pub struct DocumentBox {
 pub struct WithScope<T> {
     #[serde(flatten)]
     pub data: T,
-    pub scope: DocumentBoxScope,
+    pub scope: DocumentBoxScopeRaw,
 }
 
 impl<T> WithScope<T> {
-    pub fn new(data: T, scope: DocumentBoxScope) -> WithScope<T> {
+    pub fn new(data: T, scope: DocumentBoxScopeRaw) -> WithScope<T> {
         WithScope { data, scope }
     }
 }
@@ -38,7 +38,7 @@ impl DocumentBox {
     /// Find a specific document box by scope within a tenant
     pub async fn find_by_scope(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
     ) -> DbResult<Option<DocumentBox>> {
         sqlx::query_as(r#"SELECT * FROM "docbox_boxes" WHERE "scope" = $1"#)
             .bind(scope)

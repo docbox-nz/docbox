@@ -255,7 +255,7 @@
             "description": "Scope of the document box",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -324,7 +324,7 @@
             "description": "Scope of the document box",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -388,7 +388,7 @@
             "description": "Scope to create the file within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -526,7 +526,7 @@
             "description": "Scope to create the file within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -653,7 +653,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -734,7 +734,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -813,7 +813,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -941,7 +941,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1015,7 +1015,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1099,7 +1099,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1183,7 +1183,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1273,7 +1273,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1356,7 +1356,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1430,7 +1430,7 @@
             "description": "Scope the file resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1531,7 +1531,7 @@
             "description": "Scope to create the folder within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1648,7 +1648,7 @@
             "description": "Scope the folder resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1727,7 +1727,7 @@
             "description": "Scope the folder resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1855,7 +1855,7 @@
             "description": "Scope the folder resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -1929,7 +1929,7 @@
             "description": "Scope the folder resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2013,7 +2013,7 @@
             "description": "Scope to create the link within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2130,7 +2130,7 @@
             "description": "Scope the link resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2209,7 +2209,7 @@
             "description": "Scope the link resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2327,7 +2327,7 @@
             "description": "Scope the link resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2401,7 +2401,7 @@
             "description": "Scope the link resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2485,7 +2485,7 @@
             "description": "Scope the link resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2566,7 +2566,7 @@
             "description": "Scope the link resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2647,7 +2647,7 @@
             "description": "Scope the link resides within",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2728,7 +2728,7 @@
             "description": "Scope of the document box",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -2819,7 +2819,7 @@
             "description": "Scope of the document box",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DocumentBoxScope"
             }
           },
           {
@@ -3215,6 +3215,11 @@
             "description": "Root folder of the document box"
           }
         }
+      },
+      "DocumentBoxScope": {
+        "type": "string",
+        "description": "Valid document box scope string, must be: A-Z, a-z, 0-9, ':', '-', '_', '.'",
+        "example": "user:1:files"
       },
       "DocumentBoxStats": {
         "type": "object",
@@ -4279,8 +4284,7 @@
                 "description": "Path to the search result item"
               },
               "score": {
-                "type": "number",
-                "format": "float",
+                "$ref": "#/components/schemas/SearchScore",
                 "description": "The result score"
               },
               "total_hits": {
@@ -4311,6 +4315,21 @@
             "minimum": 0
           }
         }
+      },
+      "SearchScore": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "Typesense uses integer scoring",
+            "minimum": 0
+          },
+          {
+            "type": "number",
+            "format": "float",
+            "description": "OpenSearch uses float scoring"
+          }
+        ]
       },
       "String": {
         "type": "string"
@@ -4613,8 +4632,7 @@
                     "description": "Path to the search result item"
                   },
                   "score": {
-                    "type": "number",
-                    "format": "float",
+                    "$ref": "#/components/schemas/SearchScore",
                     "description": "The result score"
                   },
                   "total_hits": {

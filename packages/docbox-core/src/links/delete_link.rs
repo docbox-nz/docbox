@@ -4,7 +4,7 @@ use crate::{
 };
 use docbox_database::{
     models::{
-        document_box::{DocumentBoxScope, WithScope},
+        document_box::{DocumentBoxScopeRaw, WithScope},
         link::Link,
     },
     DbPool,
@@ -15,7 +15,7 @@ pub async fn delete_link(
     search: &TenantSearchIndex,
     events: &TenantEventPublisher,
     link: Link,
-    scope: DocumentBoxScope,
+    scope: DocumentBoxScopeRaw,
 ) -> anyhow::Result<()> {
     // Delete the indexed file contents
     search.delete_data(link.id).await?;

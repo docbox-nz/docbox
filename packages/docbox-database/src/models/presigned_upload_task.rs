@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, types::Json};
 use uuid::Uuid;
 
-use super::{document_box::DocumentBoxScope, file::FileId, folder::FolderId, user::UserId};
+use super::{document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, user::UserId};
 use crate::{DbErr, DbExecutor, DbResult};
 
 pub type PresignedUploadTaskId = Uuid;
@@ -31,7 +31,7 @@ pub struct PresignedUploadTask {
     pub size: i32,
 
     /// ID of the document box the folder belongs to
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
     /// Target folder to store the file in
     pub folder_id: FolderId,
     /// S3 key where the file should be stored
@@ -65,7 +65,7 @@ pub enum PresignedTaskStatus {
 pub struct CreatePresignedUploadTask {
     pub name: String,
     pub mime: String,
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
     pub folder_id: FolderId,
     pub size: i32,
     pub file_key: String,
@@ -167,7 +167,7 @@ impl PresignedUploadTask {
     /// Find a specific presigned upload task
     pub async fn find(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScope,
+        scope: &DocumentBoxScopeRaw,
         task_id: PresignedUploadTaskId,
     ) -> DbResult<Option<PresignedUploadTask>> {
         sqlx::query_as(

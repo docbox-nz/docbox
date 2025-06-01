@@ -9,7 +9,7 @@ use crate::search::models::{FlattenedItemResult, PageResult, SearchScore};
 use anyhow::Context;
 use aws_config::SdkConfig;
 use docbox_database::models::{
-    document_box::DocumentBoxScope, folder::FolderId, tenant::Tenant, user::UserId,
+    document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant, user::UserId,
 };
 use opensearch::{
     http::{
@@ -115,7 +115,7 @@ pub struct OsSearchIndexData {
     /// Document box scope that this item is within
     ///
     /// (For restricting search scope)
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
 
     /// Unique ID for the actual document
     ///
@@ -233,7 +233,7 @@ impl SearchIndex for OpenSearchIndex {
 
     async fn search_index_file(
         &self,
-        _scope: &DocumentBoxScope,
+        _scope: &DocumentBoxScopeRaw,
         _file_id: docbox_database::models::file::FileId,
         _query: super::models::FileSearchRequest,
     ) -> anyhow::Result<FileSearchResults> {
@@ -242,7 +242,7 @@ impl SearchIndex for OpenSearchIndex {
 
     async fn search_index(
         &self,
-        scope: &[DocumentBoxScope],
+        scope: &[DocumentBoxScopeRaw],
         query: SearchRequest,
         folder_children: Option<Vec<FolderId>>,
     ) -> anyhow::Result<SearchResults> {
@@ -474,7 +474,7 @@ impl SearchIndex for OpenSearchIndex {
         Ok(())
     }
 
-    async fn delete_by_scope(&self, scope: DocumentBoxScope) -> anyhow::Result<()> {
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()> {
         self.client
             .delete_by_query(DeleteByQueryParts::Index(&[&self.search_index.0]))
             .body(json!({
@@ -541,7 +541,7 @@ struct DateRange {
 
 pub fn create_opensearch_query(
     req: SearchRequest,
-    scopes: &[DocumentBoxScope],
+    scopes: &[DocumentBoxScopeRaw],
     folder_children: Option<Vec<FolderId>>,
 ) -> serde_json::Value {
     let mut filters = vec![];
@@ -767,7 +767,7 @@ pub struct SearchResponseHit {
 pub struct SearchResponseHitSource {
     pub item_id: Uuid,
     pub item_type: SearchIndexType,
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
 }
 
 #[derive(Debug, Deserialize)]

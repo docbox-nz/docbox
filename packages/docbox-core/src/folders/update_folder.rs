@@ -1,6 +1,6 @@
 use docbox_database::{
     models::{
-        document_box::DocumentBoxScope,
+        document_box::DocumentBoxScopeRaw,
         edit_history::{
             CreateEditHistory, CreateEditHistoryType, EditHistory, EditHistoryMetadata,
         },
@@ -48,7 +48,7 @@ pub struct UpdateFolder {
 pub async fn update_folder(
     db: &DbPool,
     search: &TenantSearchIndex,
-    scope: &DocumentBoxScope,
+    scope: &DocumentBoxScopeRaw,
     folder: Folder,
     user_id: Option<String>,
     update: UpdateFolder,

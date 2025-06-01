@@ -5,7 +5,7 @@
 
 use chrono::{DateTime, Utc};
 use docbox_database::models::{
-    document_box::{DocumentBoxScope, WithScope},
+    document_box::{DocumentBoxScopeRaw, WithScope},
     file::FileWithExtra,
     folder::{FolderId, FolderPathSegment, FolderWithExtra},
     link::LinkWithExtra,
@@ -39,7 +39,7 @@ pub struct SearchIndexData {
     /// Document box scope that this item is within
     ///
     /// (For restricting search scope)
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
 
     /// Unique ID for the actual document
     ///
@@ -96,7 +96,7 @@ pub struct FlattenedItemResult {
     /// ID of the item itself
     pub item_id: Uuid,
     /// Scope the item is within
-    pub document_box: DocumentBoxScope,
+    pub document_box: DocumentBoxScopeRaw,
     /// Matches within the page content
     pub page_matches: Vec<PageResult>,
     // Total number of hits against the item
@@ -133,7 +133,7 @@ pub struct PageResult {
 pub struct AdminSearchRequest {
     #[garde(skip)]
     #[schema(value_type = Vec<String>)]
-    pub scopes: Vec<DocumentBoxScope>,
+    pub scopes: Vec<DocumentBoxScopeRaw>,
 
     #[serde(flatten)]
     #[garde(dive)]

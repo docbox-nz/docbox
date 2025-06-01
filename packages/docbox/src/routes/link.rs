@@ -3,6 +3,7 @@
 use crate::error::{HttpCommonError, HttpErrorResponse};
 use crate::middleware::action_user::UserParams;
 use crate::middleware::tenant::TenantParams;
+use crate::models::document_box::DocumentBoxScope;
 use crate::{
     error::{DynHttpError, HttpResult, HttpStatusResult},
     middleware::{
@@ -27,7 +28,6 @@ use docbox_core::links::{
     create_link::safe_create_link, create_link::CreateLinkData, delete_link::delete_link,
 };
 use docbox_database::models::{
-    document_box::DocumentBoxScope,
     edit_history::EditHistory,
     folder::Folder,
     link::{CreatedByUser, LastModifiedByUser, Link, LinkId, LinkWithExtra},
@@ -51,7 +51,7 @@ pub const LINK_TAG: &str = "Link";
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope to create the link within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope to create the link within"),
         TenantParams,
         UserParams
     )
@@ -62,7 +62,7 @@ pub async fn create(
     TenantDb(db): TenantDb,
     TenantSearch(search): TenantSearch,
     TenantEvents(events): TenantEvents,
-    Path(scope): Path<DocumentBoxScope>,
+    Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<CreateLink>>,
 ) -> Result<(StatusCode, Json<LinkWithExtra>), DynHttpError> {
     let folder_id = req.folder_id;
@@ -124,7 +124,7 @@ pub async fn create(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
         TenantParams
     )
@@ -134,6 +134,8 @@ pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpResult<LinkWithExtra> {
+    let DocumentBoxScope(scope) = scope;
+
     let link = Link::find_with_extra(&db, &scope, link_id)
         .await
         // Failed to query link
@@ -163,7 +165,7 @@ pub async fn get(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
         TenantParams
     )
@@ -174,6 +176,8 @@ pub async fn get_metadata(
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpResult<LinkMetadataResponse> {
+    let DocumentBoxScope(scope) = scope;
+
     let link = Link::find_with_extra(&db, &scope, link_id)
         .await
         // Failed to query link
@@ -218,7 +222,7 @@ pub async fn get_metadata(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
         TenantParams
     )
@@ -229,6 +233,8 @@ pub async fn get_favicon(
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> Result<Response<Body>, DynHttpError> {
+    let DocumentBoxScope(scope) = scope;
+
     let link = Link::find_with_extra(&db, &scope, link_id)
         .await
         // Failed to query link
@@ -271,7 +277,7 @@ pub async fn get_favicon(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
         TenantParams
     )
@@ -282,6 +288,8 @@ pub async fn get_image(
     Extension(website_service): Extension<Arc<WebsiteMetaService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> Result<Response<Body>, DynHttpError> {
+    let DocumentBoxScope(scope) = scope;
+
     let link = Link::find_with_extra(&db, &scope, link_id)
         .await
         // Failed to query link
@@ -322,7 +330,7 @@ pub async fn get_image(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
         TenantParams
     )
@@ -332,6 +340,8 @@ pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpResult<Vec<EditHistory>> {
+    let DocumentBoxScope(scope) = scope;
+
     // Ensure the link itself exists
     _ = Link::find(&db, &scope, link_id)
         .await
@@ -368,7 +378,7 @@ pub async fn get_edit_history(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to request"),
         TenantParams,
         UserParams
@@ -382,6 +392,8 @@ pub async fn update(
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
     Garde(Json(req)): Garde<Json<UpdateLinkRequest>>,
 ) -> HttpStatusResult {
+    let DocumentBoxScope(scope) = scope;
+
     let link = Link::find(&db, &scope, link_id)
         .await
         // Failed to query link
@@ -428,7 +440,7 @@ pub async fn update(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = String, Path, description = "Scope the link resides within"),
+        ("scope" = DocumentBoxScope, Path, description = "Scope the link resides within"),
         ("link_id" = Uuid, Path, description = "ID of the link to delete"),
         TenantParams
     )
@@ -440,6 +452,8 @@ pub async fn delete(
     TenantEvents(events): TenantEvents,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpStatusResult {
+    let DocumentBoxScope(scope) = scope;
+
     let link = Link::find(&db, &scope, link_id)
         .await
         // Failed to query link

@@ -5,14 +5,14 @@ use crate::{
         TenantSearchIndex,
     },
 };
-use docbox_database::models::{document_box::DocumentBoxScope, file::File};
+use docbox_database::models::{document_box::DocumentBoxScopeRaw, file::File};
 
 use super::upload_file::UploadFileError;
 
 pub async fn store_file_index(
     search: &TenantSearchIndex,
     file: &File,
-    document_box: &DocumentBoxScope,
+    document_box: &DocumentBoxScopeRaw,
     index_metadata: Option<ProcessingIndexMetadata>,
 ) -> Result<(), UploadFileError> {
     // Use index from previous step or create new index
