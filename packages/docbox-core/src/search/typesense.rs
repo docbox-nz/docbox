@@ -269,7 +269,10 @@ impl SearchIndex for TypesenseIndex {
             .post(format!("{}/multi_search", self.base_url,))
             .json(&query_json)
             .send()
-            .await?;
+            .await
+            .inspect_err(|error| {
+                tracing::error!(?error, "failed to query typesense multi_search")
+            })?;
 
         if let Err(error) = response.error_for_status_ref() {
             let body = response.text().await;
@@ -371,7 +374,10 @@ impl SearchIndex for TypesenseIndex {
             .post(format!("{}/multi_search", self.base_url,))
             .json(&query_json)
             .send()
-            .await?;
+            .await
+            .inspect_err(|error| {
+                tracing::error!(?error, "failed to query typesense multi_search")
+            })?;
 
         if let Err(error) = response.error_for_status_ref() {
             let body = response.text().await;
@@ -621,8 +627,12 @@ impl TypesenseIndex {
             ))
             .body(bulk_data)
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .inspect_err(|error| tracing::error!(?error, "failed to send import documents"))?
+            .error_for_status()
+            .inspect_err(|error| {
+                tracing::error!(?error, "error status when importing documents")
+            })?;
 
         Ok(())
     }
@@ -639,8 +649,11 @@ impl TypesenseIndex {
                 format!(r#"item_id:="{item_id}"&&entry_type="Page""#),
             )])
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .inspect_err(|error| tracing::error!(?error, "failed to send delete documents"))?
+            .error_for_status()
+            .inspect_err(|error| tracing::error!(?error, "error status when deleting documents"))?;
+
         Ok(())
     }
 
@@ -661,6 +674,12 @@ impl TypesenseIndex {
         item_id: Uuid,
         update: &UpdateSearchIndexData,
     ) -> anyhow::Result<()> {
+        let request = json!({
+            "folder_id": update.folder_id,
+            "name": update.name,
+            "value": update.content,
+        });
+
         // Update all the existing items so they have the current root data
         self.client
             .patch(format!(
@@ -668,14 +687,12 @@ impl TypesenseIndex {
                 self.base_url, self.index
             ))
             .query(&[("filter_by", format!(r#"item_id:="{item_id}""#))])
-            .json(&json!({
-                "folder_id":  update.folder_id,
-                "name": update.name.clone(),
-                "value": update.content.clone(),
-            }))
+            .json(&request)
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .inspect_err(|error| tracing::error!(?error, "failed to send update documents"))?
+            .error_for_status()
+            .inspect_err(|error| tracing::error!(?error, "error status when updating documents"))?;
 
         Ok(())
     }
@@ -696,10 +713,12 @@ impl TypesenseIndex {
                 format!(r#"item_id:="{item_id}"&&entry_type=Root"#),
             )])
             .send()
-            .await?
+            .await
+            .inspect_err(|error| tracing::error!(?error, "failed to query documents search"))?
             .error_for_status()?
             .json()
-            .await?;
+            .await
+            .inspect_err(|error| tracing::error!(?error, "error when deserializing response"))?;
 
         let item = response
             .hits
