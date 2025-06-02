@@ -813,13 +813,6 @@ impl TypesenseIndex {
             ));
         }
 
-        if let Some(item_id) = query.item_id {
-            filter_parts.push(format!(
-                r#"item_id:="{}""#,
-                escape_typesense_value(&item_id.to_string())
-            ));
-        }
-
         filter_parts.join("&&")
     }
 }

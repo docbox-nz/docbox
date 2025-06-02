@@ -182,24 +182,9 @@ pub struct SearchRequest {
     #[garde(skip)]
     pub include_content: bool,
 
-    /// Maximum size of text fragments to extract when highlighting
-    /// content (only works when "include_content" is true)
-    #[garde(range(max = 150))]
-    #[schema(maximum = 150)]
-    pub max_fragment_size: Option<u16>,
-
-    /// Max number of highlighted fragments to extract per page
-    #[garde(range(max = 100))]
-    #[schema(maximum = 100)]
-    pub max_fragments: Option<u16>,
-
     /// Creation date range search
     #[garde(dive)]
     pub created_at: Option<SearchRange>,
-
-    /// Modified date range search
-    #[garde(dive)]
-    pub modified: Option<SearchRange>,
 
     /// Search by a created user
     #[garde(skip)]
@@ -211,13 +196,6 @@ pub struct SearchRequest {
     #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
 
-    /// Enforce search to a specific file,link,folder
-    ///
-    /// Deprecated: use the /search endpoint on the file itself instead
-    #[garde(skip)]
-    #[schema(deprecated)]
-    pub item_id: Option<Uuid>,
-
     /// Number of items to include in the response
     #[garde(skip)]
     pub size: Option<u16>,
@@ -226,12 +204,9 @@ pub struct SearchRequest {
     #[garde(skip)]
     pub offset: Option<u64>,
 
-    /// Maximum number of pages too return
-    ///
-    /// Deprecated: use the /search endpoint on the file itself with an offset instead
+    /// Maximum number of pages too return per file
     #[garde(range(max = 100))]
     #[schema(maximum = 100)]
-    #[schema(deprecated)]
     pub max_pages: Option<u16>,
 
     /// Offset to start at when aggregating page results

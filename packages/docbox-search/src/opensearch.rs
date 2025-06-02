@@ -571,12 +571,12 @@ pub fn create_opensearch_query(
         "terms": { "document_box": scopes }
     }));
 
-    // Filter results to a specific file
-    if let Some(item_id) = req.item_id {
-        filters.push(json!({
-            "term": { "item_id": item_id }
-        }));
-    }
+    // // Filter results to a specific file
+    // if let Some(item_id) = req.item_id {
+    //     filters.push(json!({
+    //         "term": { "item_id": item_id }
+    //     }));
+    // }
 
     let query = req
         .query
@@ -640,8 +640,8 @@ pub fn create_opensearch_query(
                         "highlight": {
                             "fields": {
                                 "pages.content": {
-                                    "fragment_size": req.max_fragment_size.unwrap_or(150),
-                                    "number_of_fragments": req.max_fragments.unwrap_or(3),
+                                    "fragment_size": 150,
+                                    "number_of_fragments": 3,
                                     "type": "unified"
                                 }
                             }
@@ -656,7 +656,7 @@ pub fn create_opensearch_query(
                         ],
                         // Pagination
                         "size": req.max_pages.unwrap_or(3),
-                        "from": req.pages_offset.unwrap_or(0),
+                        // "from": req.pages_offset.unwrap_or(0),
                     }
                 }
             }));
