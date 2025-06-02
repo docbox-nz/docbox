@@ -13,7 +13,7 @@ output "ec2_instance_id" {
   value = aws_instance.api.id
 }
 
-# Role required for accesing docbox s3/opensearch resources
+# Role provided to the docbox instance
 output "docbox_role" {
   value = aws_iam_role.docbox_role.id
 }

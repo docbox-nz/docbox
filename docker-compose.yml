@@ -104,6 +104,5 @@ volumes:
   typesense-data:
   
 networks:
-  opensearch-net:
   docbox:
     driver: bridge
