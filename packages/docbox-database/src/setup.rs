@@ -1,3 +1,5 @@
+use sqlx::query;
+
 use super::{DbPool, DbResult, DbTransaction};
 use std::ops::DerefMut;
 
@@ -43,9 +45,18 @@ const MIGRATIONS: &[(&str, &str)] = &[
 /// Creates all the tables for a specific tenant
 pub async fn create_tenant_tables(db: &mut DbTransaction<'_>) -> DbResult<()> {
     for (name, sql) in MIGRATIONS {
-        if let Err(cause) = sqlx::query(sql).execute(db.deref_mut()).await {
-            tracing::error!(?cause, ?name, "failed to perform migration");
-            return Err(cause);
+        let queries = sql.split(';');
+
+        for query in queries {
+            let query = query.trim();
+            if query.is_empty() {
+                continue;
+            }
+
+            if let Err(cause) = sqlx::query(query).execute(db.deref_mut()).await {
+                tracing::error!(?cause, ?name, "failed to perform migration");
+                return Err(cause);
+            }
         }
     }
 
@@ -58,9 +69,17 @@ pub async fn apply_migration(db: &DbPool, migration_name: &str) -> DbResult<()> 
 
     for (name, sql) in MIGRATIONS {
         if (*name).eq(migration_name) {
-            if let Err(cause) = sqlx::query(sql).execute(t.deref_mut()).await {
-                tracing::error!(?cause, ?name, "failed to perform migration");
-                return Err(cause);
+            let queries = sql.split(';');
+            for query in queries {
+                let query = query.trim();
+                if query.is_empty() {
+                    continue;
+                }
+
+                if let Err(cause) = sqlx::query(query).execute(t.deref_mut()).await {
+                    tracing::error!(?cause, ?name, "failed to perform migration");
+                    return Err(cause);
+                }
             }
         }
     }
