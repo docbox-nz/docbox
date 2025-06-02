@@ -5,43 +5,45 @@ edition = "2021"
 license = "MIT"
 
 [features]
-default = []
+default = ["opensearch", "typesense"]
+opensearch = ["dep:opensearch"]
+typesense = []
 
 [dependencies]
 # Database access
 docbox-database = { version = "0.1.0", path = "../docbox-database" }
 
 # HTTP client
-reqwest = { workspace = true }
+reqwest.workspace = true
 
 # Error handling
-anyhow = { workspace = true }
-thiserror = { workspace = true }
+anyhow.workspace = true
 
 # Serialization and JSON
-serde = { workspace = true }
-serde_json = { workspace = true }
-serde_with = { workspace = true }
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
 
 # Logging
-tracing = { workspace = true }
+tracing.workspace = true
 
-# Opensearch client
-opensearch = { version = "2.2.0", default-features = false, features = [
-    "rustls-tls",
-    "aws-auth",
-] }
+# Validation
+garde.workspace = true
 
-# Validation & Axum validation integration
-garde = { workspace = true }
+# AWS config
+aws-config.workspace = true
 
-# AWS Config, AWS S3 sdk, AWS typing internals
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
+uuid.workspace = true
+chrono.workspace = true
+mime.workspace = true
+utoipa.workspace = true
 
-bytes = { workspace = true }
-uuid = { workspace = true }
-chrono = { workspace = true }
-mime = { workspace = true }
-
-utoipa = { workspace = true }
 itertools = "0.14.0"
+
+
+# Opensearch client for Opensearch backend
+[dependencies.opensearch]
+version = "2.0.0"
+default-features = false
+optional = true
+features = ["rustls-tls", "aws-auth"]

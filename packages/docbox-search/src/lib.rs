@@ -1,4 +1,3 @@
-use anyhow::Context;
 use aws_config::SdkConfig;
 use docbox_database::models::{
     document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, tenant::Tenant,
@@ -7,24 +6,29 @@ use models::{
     FileSearchRequest, FileSearchResults, SearchIndexData, SearchRequest, SearchResults,
     UpdateSearchIndexData,
 };
-use opensearch::{
-    create_open_search, OpenSearchIndex, OpenSearchIndexFactory, TenantSearchIndexName,
-};
-use reqwest::Url;
 use serde::Deserialize;
-use typesense::{TypesenseIndex, TypesenseIndexFactory};
 use uuid::Uuid;
 
 pub mod models;
-pub mod opensearch;
 mod serialize;
-pub mod typesense;
+
+#[cfg(feature = "opensearch")]
+pub use opensearch::OpenSearchConfig;
+#[cfg(feature = "typesense")]
+pub use typesense::TypesenseSearchConfig;
+
+#[cfg(feature = "opensearch")]
+mod opensearch;
+#[cfg(feature = "typesense")]
+mod typesense;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SearchIndexFactoryConfig {
-    Typesense { url: String, api_key: String },
-    OpenSearch { url: String },
+    #[cfg(feature = "typesense")]
+    Typesense(typesense::TypesenseSearchConfig),
+    #[cfg(feature = "opensearch")]
+    OpenSearch(opensearch::OpenSearchConfig),
 }
 
 impl SearchIndexFactoryConfig {
@@ -32,24 +36,31 @@ impl SearchIndexFactoryConfig {
         let variant = std::env::var("DOCBOX_SEARCH_INDEX_FACTORY")
             .unwrap_or_else(|_| "typesense".to_string());
         match variant.as_str() {
-            "open_search" => {
-                let url = std::env::var("OPENSEARCH_URL").context("missing OPENSEARCH_URL env")?;
-                Ok(Self::OpenSearch { url })
-            }
-            _ => {
-                let url = std::env::var("TYPESENSE_URL").context("missing TYPESENSE_URL env")?;
-                let api_key =
-                    std::env::var("TYPESENSE_API_KEY").context("missing TYPESENSE_API_KEY env")?;
-                Ok(Self::Typesense { url, api_key })
-            }
+            #[cfg(feature = "opensearch")]
+            "open_search" => opensearch::OpenSearchConfig::from_env().map(Self::OpenSearch),
+            #[cfg(feature = "typesense")]
+            "typesense" => typesense::TypesenseSearchConfig::from_env().map(Self::Typesense),
+
+            // Default when typesense is enabled
+            #[cfg(feature = "typesense")]
+            _ => typesense::TypesenseSearchConfig::from_env().map(Self::Typesense),
+            // Default when typesense is disabled
+            #[cfg(not(feature = "typesense"))]
+            _ => opensearch::OpenSearchConfig::from_env().map(Self::OpenSearch),
+
+            // Fallback error when no features are available
+            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            _ => compile_error!("missing search index feature flag"),
         }
     }
 }
 
 #[derive(Clone)]
 pub enum SearchIndexFactory {
-    OpenSearch(OpenSearchIndexFactory),
-    Typesense(TypesenseIndexFactory),
+    #[cfg(feature = "typesense")]
+    Typesense(typesense::TypesenseIndexFactory),
+    #[cfg(feature = "opensearch")]
+    OpenSearch(opensearch::OpenSearchIndexFactory),
 }
 
 impl SearchIndexFactory {
@@ -57,19 +68,21 @@ impl SearchIndexFactory {
         aws_config: &SdkConfig,
         config: SearchIndexFactoryConfig,
     ) -> anyhow::Result<Self> {
+        #[cfg(not(feature = "opensearch"))]
+        let _ = aws_config;
+
         match config {
-            SearchIndexFactoryConfig::Typesense { url, api_key } => {
+            #[cfg(feature = "typesense")]
+            SearchIndexFactoryConfig::Typesense(config) => {
                 tracing::debug!("using typesense search index");
-                let typesense_factory = TypesenseIndexFactory::new(url, api_key)?;
-                Ok(SearchIndexFactory::Typesense(typesense_factory))
+                typesense::TypesenseIndexFactory::from_config(config)
+                    .map(SearchIndexFactory::Typesense)
             }
-            SearchIndexFactoryConfig::OpenSearch { url } => {
+            #[cfg(feature = "opensearch")]
+            SearchIndexFactoryConfig::OpenSearch(config) => {
                 tracing::debug!("using opensearch search index");
-                let url = Url::parse(&url).context("failed to parse opensearch url")?;
-                let open_search =
-                    create_open_search(aws_config, url).context("failed to create open search")?;
-                let os_index_factory = OpenSearchIndexFactory::new(open_search);
-                Ok(SearchIndexFactory::OpenSearch(os_index_factory))
+                opensearch::OpenSearchIndexFactory::from_config(aws_config, config)
+                    .map(SearchIndexFactory::OpenSearch)
             }
         }
     }
@@ -77,35 +90,43 @@ impl SearchIndexFactory {
     /// Create a new "OpenSearch" search index for the tenant
     pub fn create_search_index(&self, tenant: &Tenant) -> TenantSearchIndex {
         match self {
-            SearchIndexFactory::OpenSearch(factory) => {
-                let search_index = TenantSearchIndexName::from_tenant(tenant);
-                TenantSearchIndex::OpenSearch(factory.create_search_index(search_index))
-            }
+            #[cfg(feature = "typesense")]
             SearchIndexFactory::Typesense(factory) => {
                 let search_index = tenant.os_index_name.clone();
                 TenantSearchIndex::Typesense(factory.create_search_index(search_index))
+            }
+            #[cfg(feature = "opensearch")]
+            SearchIndexFactory::OpenSearch(factory) => {
+                let search_index = opensearch::TenantSearchIndexName::from_tenant(tenant);
+                TenantSearchIndex::OpenSearch(factory.create_search_index(search_index))
             }
         }
     }
 }
 
 pub enum TenantSearchIndex {
-    OpenSearch(OpenSearchIndex),
-    Typesense(TypesenseIndex),
+    #[cfg(feature = "typesense")]
+    Typesense(typesense::TypesenseIndex),
+    #[cfg(feature = "opensearch")]
+    OpenSearch(opensearch::OpenSearchIndex),
 }
 
 impl TenantSearchIndex {
     pub async fn create_index(&self) -> anyhow::Result<()> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => index.create_index().await,
+            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.create_index().await,
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => index.create_index().await,
         }
     }
 
     pub async fn delete_index(&self) -> anyhow::Result<()> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => index.delete_index().await,
+            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.delete_index().await,
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => index.delete_index().await,
         }
     }
 
@@ -116,10 +137,12 @@ impl TenantSearchIndex {
         folder_children: Option<Vec<FolderId>>,
     ) -> anyhow::Result<SearchResults> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => {
+            #[cfg(feature = "typesense")]
+            TenantSearchIndex::Typesense(index) => {
                 index.search_index(scope, query, folder_children).await
             }
-            TenantSearchIndex::Typesense(index) => {
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => {
                 index.search_index(scope, query, folder_children).await
             }
         }
@@ -133,10 +156,12 @@ impl TenantSearchIndex {
         query: FileSearchRequest,
     ) -> anyhow::Result<FileSearchResults> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => {
+            #[cfg(feature = "typesense")]
+            TenantSearchIndex::Typesense(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
-            TenantSearchIndex::Typesense(index) => {
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
         }
@@ -144,15 +169,19 @@ impl TenantSearchIndex {
 
     pub async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => index.add_data(data).await,
+            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.add_data(data).await,
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => index.add_data(data).await,
         }
     }
 
     pub async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> anyhow::Result<()> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => index.bulk_add_data(data).await,
+            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.bulk_add_data(data).await,
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => index.bulk_add_data(data).await,
         }
     }
 
@@ -162,29 +191,37 @@ impl TenantSearchIndex {
         data: UpdateSearchIndexData,
     ) -> anyhow::Result<()> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => index.update_data(item_id, data).await,
+            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.update_data(item_id, data).await,
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => index.update_data(item_id, data).await,
         }
     }
 
     pub async fn delete_data(&self, id: Uuid) -> anyhow::Result<()> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => index.delete_data(id).await,
+            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.delete_data(id).await,
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => index.delete_data(id).await,
         }
     }
 
     pub async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => index.delete_by_scope(scope).await,
+            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.delete_by_scope(scope).await,
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => index.delete_by_scope(scope).await,
         }
     }
 
     pub async fn apply_migration(&self, name: &str) -> anyhow::Result<()> {
         match self {
-            TenantSearchIndex::OpenSearch(index) => index.apply_migration(name).await,
+            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.apply_migration(name).await,
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => index.apply_migration(name).await,
         }
     }
 }

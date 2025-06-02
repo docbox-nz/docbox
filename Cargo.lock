@@ -1854,7 +1854,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-config",
- "bytes",
  "chrono",
  "docbox-database",
  "garde",
@@ -1865,7 +1864,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "thiserror 1.0.69",
  "tracing",
  "utoipa",
  "uuid",

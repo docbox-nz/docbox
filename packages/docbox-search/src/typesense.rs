@@ -14,6 +14,21 @@ use serde_json::json;
 use serde_with::skip_serializing_none;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct TypesenseSearchConfig {
+    pub url: String,
+    pub api_key: String,
+}
+
+impl TypesenseSearchConfig {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let url = std::env::var("TYPESENSE_URL").context("missing TYPESENSE_URL env")?;
+        let api_key =
+            std::env::var("TYPESENSE_API_KEY").context("missing TYPESENSE_API_KEY env")?;
+        Ok(Self { url, api_key })
+    }
+}
+
 #[derive(Clone)]
 pub struct TypesenseIndexFactory {
     client: reqwest::Client,
@@ -21,6 +36,10 @@ pub struct TypesenseIndexFactory {
 }
 
 impl TypesenseIndexFactory {
+    pub fn from_config(config: TypesenseSearchConfig) -> anyhow::Result<Self> {
+        Self::new(config.url, config.api_key)
+    }
+
     pub fn new(base_url: String, api_key: String) -> anyhow::Result<Self> {
         let mut headers = HeaderMap::new();
         headers.insert(

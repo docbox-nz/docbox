@@ -15,7 +15,9 @@ dotenvy = "0.15.7"
 # Database access
 docbox-database = { version = "0.1.0", path = "../docbox-database" }
 docbox-web-scraper = { version = "0.1.0", path = "../docbox-web-scraper" }
-docbox-search = { version = "0.1.0", path = "../docbox-search" }
+docbox-search = { version = "0.1.0", default-features = false, path = "../docbox-search", features = [
+    "typesense",
+] }
 
 # PDF to image conversion, text extraction 
 pdf_process = { version = "0.2.0" }

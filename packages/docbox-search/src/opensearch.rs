@@ -25,12 +25,31 @@ use serde_json::json;
 use serde_with::skip_serializing_none;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct OpenSearchConfig {
+    pub url: String,
+}
+
+impl OpenSearchConfig {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let url = std::env::var("OPENSEARCH_URL").context("missing OPENSEARCH_URL env")?;
+        Ok(Self { url })
+    }
+}
+
 #[derive(Clone)]
 pub struct OpenSearchIndexFactory {
     client: OpenSearch,
 }
 
 impl OpenSearchIndexFactory {
+    pub fn from_config(aws_config: &SdkConfig, config: OpenSearchConfig) -> anyhow::Result<Self> {
+        let url = reqwest::Url::parse(&config.url).context("failed to parse opensearch url")?;
+        let opensearch =
+            create_open_search(aws_config, url).context("failed to create open search")?;
+        Ok(Self::new(opensearch))
+    }
+
     pub fn new(client: OpenSearch) -> Self {
         Self { client }
     }
@@ -738,63 +757,61 @@ pub fn create_opensearch_query(
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SearchResponse {
-    pub hits: Hits<SearchResponseHit>,
+struct SearchResponse {
+    hits: Hits<SearchResponseHit>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Hits<H> {
-    pub total: HitsTotal,
-    pub max_score: Option<f64>,
-    pub hits: Vec<H>,
+struct Hits<H> {
+    total: HitsTotal,
+    hits: Vec<H>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct HitsTotal {
-    pub value: u64,
+struct HitsTotal {
+    value: u64,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SearchResponseHit {
-    pub _id: String,
-    pub _score: f32,
-    pub _source: SearchResponseHitSource,
-    pub inner_hits: Option<InnerHits>,
-    pub matched_queries: Option<Vec<String>>,
+struct SearchResponseHit {
+    _id: String,
+    _score: f32,
+    _source: SearchResponseHitSource,
+    inner_hits: Option<InnerHits>,
+    matched_queries: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SearchResponseHitSource {
-    pub item_id: Uuid,
-    pub item_type: SearchIndexType,
-    pub document_box: DocumentBoxScopeRaw,
+struct SearchResponseHitSource {
+    item_id: Uuid,
+    item_type: SearchIndexType,
+    document_box: DocumentBoxScopeRaw,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InnerHits {
-    pub pages: InnerHitsPages,
+struct InnerHits {
+    pages: InnerHitsPages,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InnerHitsPages {
-    pub hits: Hits<PagesHit>,
+struct InnerHitsPages {
+    hits: Hits<PagesHit>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PagesHit {
-    pub _score: f32,
-    pub _source: PagesHitSource,
-    pub highlight: PagesHighlight,
-    pub matched_queries: Option<Vec<String>>,
+struct PagesHit {
+    _score: f32,
+    _source: PagesHitSource,
+    highlight: PagesHighlight,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PagesHitSource {
-    pub page: u64,
+struct PagesHitSource {
+    page: u64,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PagesHighlight {
+struct PagesHighlight {
     #[serde(rename = "pages.content")]
-    pub content: Vec<String>,
+    content: Vec<String>,
 }
