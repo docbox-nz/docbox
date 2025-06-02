@@ -351,20 +351,26 @@ impl SearchIndex for TypesenseIndex {
             query_by.push("page_content");
         }
 
+        let filter_by = Self::create_search_filters(scopes, &query, folder_children);
+        let search_query = query.query.unwrap_or_default();
+
         // Must query at least one field
         if query_by.is_empty() {
-            return Err(anyhow::anyhow!(
-                "must provide either include_name or include_content"
-            ));
-        }
+            // When specifing a query atleast one field must be specified
+            if !search_query.is_empty() && !filter_by.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "must provide either include_name or include_content"
+                ));
+            }
 
-        let filter_by = Self::create_search_filters(scopes, &query, folder_children);
+            // For facet only queries the name is used as a dummy value
+            query_by.push("name");
+        }
 
         let size = query.size.unwrap_or(50);
         let offset = query.offset.unwrap_or(0);
 
         let max_pages = query.max_pages.unwrap_or(3);
-        let query = query.query.unwrap_or_default();
 
         let query_by = query_by.join(",");
 
@@ -372,7 +378,7 @@ impl SearchIndex for TypesenseIndex {
             "searches": [
                 {
                     "collection": self.index,
-                    "q": query,
+                    "q": search_query,
                     "query_by": query_by,
                     "group_by": "item_id",
                     "group_limit": max_pages,
