@@ -21,6 +21,7 @@ docbox-database = { version = "0.1.0", path = "../docbox-database" }
 # Search access
 docbox-search = { version = "0.1.0", default-features = false, path = "../docbox-search", features = [
     "typesense",
+    "opensearch",
 ] }
 
 # Web scraping

@@ -22,9 +22,7 @@ docbox-core = { version = "0.1.0", path = "../docbox-core" }
 docbox-database = { version = "0.1.0", path = "../docbox-database" }
 
 # Search access
-docbox-search = { version = "0.1.0", default-features = false, path = "../docbox-search", features = [
-    "typesense",
-] }
+docbox-search = { version = "0.1.0", path = "../docbox-search" }
 
 # Asynchronous runtime & Helpers
 tokio = { version = "1", features = ["full"] }

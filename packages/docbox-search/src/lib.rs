@@ -50,7 +50,7 @@ impl SearchIndexFactoryConfig {
 
             // Fallback error when no features are available
             #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
-            _ => compile_error!("missing search index feature flag"),
+            _ => panic!("no matching search index factory is available"),
         }
     }
 }
