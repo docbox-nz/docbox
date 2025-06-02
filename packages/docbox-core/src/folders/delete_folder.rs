@@ -1,7 +1,7 @@
 use crate::files::delete_file::delete_file;
+use crate::links::delete_link::delete_link;
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
-    search::TenantSearchIndex,
     storage::TenantStorageLayer,
 };
 use docbox_database::{
@@ -13,9 +13,8 @@ use docbox_database::{
     },
     DbPool,
 };
+use docbox_search::TenantSearchIndex;
 use std::collections::VecDeque;
-
-use crate::links::delete_link::delete_link;
 
 /// Item to be removed
 pub enum RemoveStackItem {

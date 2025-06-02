@@ -2,10 +2,10 @@ use crate::{
     files::generated::QueuedUpload,
     image::create_img_bytes,
     processing::{ProcessingError, ProcessingIndexMetadata, ProcessingOutput},
-    search::models::DocumentPage,
 };
 use anyhow::Context;
 use docbox_database::models::generated_file::GeneratedFileType;
+use docbox_search::models::DocumentPage;
 use futures::TryFutureExt;
 use image::{DynamicImage, ImageFormat};
 use mime::Mime;

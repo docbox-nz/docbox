@@ -1,14 +1,15 @@
 use std::path::PathBuf;
 
 use docbox_core::{
-    aws::aws_config, search::SearchIndexFactory, secrets::AppSecretManager,
-    storage::StorageLayerFactory, tenant::create_tenant::safe_create_tenant,
+    aws::aws_config, secrets::AppSecretManager, storage::StorageLayerFactory,
+    tenant::create_tenant::safe_create_tenant,
 };
 use docbox_database::{
     create::{create_database, create_tenant_user},
     models::tenant::TenantId,
     DatabasePoolCache,
 };
+use docbox_search::SearchIndexFactory;
 use eyre::Context;
 use serde::Deserialize;
 use serde_json::json;

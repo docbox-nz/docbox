@@ -32,7 +32,6 @@ use docbox_core::{
         upload_file_presigned::{create_presigned_upload, CreatePresigned},
     },
     processing::ProcessingLayer,
-    search::models::{FileSearchRequest, FileSearchResultResponse},
 };
 use docbox_database::models::{
     edit_history::EditHistory,
@@ -43,6 +42,7 @@ use docbox_database::models::{
     tasks::{background_task, TaskStatus},
     user::User,
 };
+use docbox_search::models::{FileSearchRequest, FileSearchResultResponse};
 use mime::Mime;
 use std::str::FromStr;
 

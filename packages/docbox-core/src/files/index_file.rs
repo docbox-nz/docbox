@@ -1,11 +1,9 @@
-use crate::{
-    processing::ProcessingIndexMetadata,
-    search::{
-        models::{SearchIndexData, SearchIndexType},
-        TenantSearchIndex,
-    },
-};
+use crate::processing::ProcessingIndexMetadata;
 use docbox_database::models::{document_box::DocumentBoxScopeRaw, file::File};
+use docbox_search::{
+    models::{SearchIndexData, SearchIndexType},
+    TenantSearchIndex,
+};
 
 use super::upload_file::UploadFileError;
 

@@ -9,10 +9,9 @@ use docbox_database::{
     },
     DbErr, DbPool, DbResult, DbTransaction,
 };
+use docbox_search::{models::UpdateSearchIndexData, TenantSearchIndex};
 use std::ops::DerefMut;
 use thiserror::Error;
-
-use crate::search::{models::UpdateSearchIndexData, TenantSearchIndex};
 
 #[derive(Debug, Error)]
 pub enum UpdateFolderError {

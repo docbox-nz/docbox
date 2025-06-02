@@ -1,7 +1,6 @@
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
     folders::index_folder::store_folder_index,
-    search::TenantSearchIndex,
 };
 use docbox_database::{
     models::{
@@ -11,6 +10,7 @@ use docbox_database::{
     },
     DbErr, DbPool,
 };
+use docbox_search::TenantSearchIndex;
 use std::ops::DerefMut;
 use thiserror::Error;
 use uuid::Uuid;

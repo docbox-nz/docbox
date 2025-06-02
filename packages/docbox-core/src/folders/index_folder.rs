@@ -1,9 +1,9 @@
 use super::create_folder::CreateFolderError;
-use crate::search::{
+use docbox_database::models::folder::{Folder, FolderId};
+use docbox_search::{
     models::{SearchIndexData, SearchIndexType},
     TenantSearchIndex,
 };
-use docbox_database::models::folder::{Folder, FolderId};
 
 pub async fn store_folder_index(
     search: &TenantSearchIndex,

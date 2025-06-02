@@ -9,11 +9,11 @@ use axum_valid::Garde;
 use docbox_core::{
     document_box::search_document_box::{search_document_boxes_admin, ResolvedSearchResult},
     files::upload_file_presigned::purge_expired_presigned_tasks,
-    search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem},
     secrets::AppSecretManager,
     storage::StorageLayerFactory,
 };
 use docbox_database::{models::document_box::WithScope, DatabasePoolCache};
+use docbox_search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem};
 use std::sync::Arc;
 
 pub const ADMIN_TAG: &str = "Admin";

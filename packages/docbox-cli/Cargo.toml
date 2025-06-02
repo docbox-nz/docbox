@@ -21,6 +21,9 @@ docbox-core = { version = "0.1.0", path = "../docbox-core" }
 # Database access
 docbox-database = { version = "0.1.0", path = "../docbox-database" }
 
+# Search access
+docbox-search = { version = "0.1.0", path = "../docbox-search" }
+
 # Asynchronous runtime & Helpers
 tokio = { version = "1", features = ["full"] }
 

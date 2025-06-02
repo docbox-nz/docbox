@@ -1,3 +1,4 @@
+use super::models::{FlattenedItemResult, PageResult, SearchScore};
 use super::{
     models::{
         DocumentPage, FileSearchResults, SearchIndexData, SearchIndexType, SearchRequest,
@@ -5,7 +6,6 @@ use super::{
     },
     SearchIndex,
 };
-use crate::search::models::{FlattenedItemResult, PageResult, SearchScore};
 use anyhow::Context;
 use aws_config::SdkConfig;
 use docbox_database::models::{

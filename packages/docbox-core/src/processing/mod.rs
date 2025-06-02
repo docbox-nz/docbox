@@ -7,11 +7,11 @@ use crate::{
         office::process_office,
         pdf::process_pdf,
     },
-    search::models::DocumentPage,
 };
 use ::image::{ImageError, ImageFormat};
 use bytes::Bytes;
 use docbox_database::models::file::FileId;
+use docbox_search::models::DocumentPage;
 use mime::Mime;
 use office::OfficeProcessingLayer;
 use pdf::is_pdf_file;

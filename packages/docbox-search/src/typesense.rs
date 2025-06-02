@@ -1,11 +1,10 @@
 use super::{
     models::{
-        DocumentPage, FileSearchResults, SearchIndexType, SearchRequest, SearchResults,
-        SearchScore, UpdateSearchIndexData,
+        DocumentPage, FileSearchResults, FlattenedItemResult, PageResult, SearchIndexType,
+        SearchRequest, SearchResults, SearchScore, UpdateSearchIndexData,
     },
     SearchIndex,
 };
-use crate::search::models::{FlattenedItemResult, PageResult};
 use anyhow::Context;
 use docbox_database::models::{document_box::DocumentBoxScopeRaw, folder::FolderId, user::UserId};
 use itertools::Itertools;

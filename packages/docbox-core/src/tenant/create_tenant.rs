@@ -1,6 +1,5 @@
 //! Business logic for interacting with a tenant
 
-use crate::search::{SearchIndexFactory, TenantSearchIndex};
 use crate::secrets::AppSecretManager;
 use crate::storage::{StorageLayerFactory, TenantStorageLayer};
 use docbox_database::models::tenant::TenantId;
@@ -8,6 +7,7 @@ use docbox_database::DbConnectErr;
 use docbox_database::{
     models::tenant::Tenant, setup::create_tenant_tables, DatabasePoolCache, DbErr,
 };
+use docbox_search::{SearchIndexFactory, TenantSearchIndex};
 use std::ops::DerefMut;
 use thiserror::Error;
 

@@ -7,11 +7,11 @@ use docbox_core::{
     notifications::{process_notification_queue, AppNotificationQueue, NotificationQueueData},
     office::{convert_server::OfficeConverterServer, OfficeConverter},
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
-    search::{SearchIndexFactory, SearchIndexFactoryConfig},
     secrets::{AppSecretManager, SecretsManagerConfig},
     storage::{StorageLayerFactory, StorageLayerFactoryConfig},
 };
 use docbox_database::DatabasePoolCache;
+use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
 use docbox_web_scraper::WebsiteMetaService;
 use logging::{init_logging, init_logging_with_sentry};
 use routes::router;

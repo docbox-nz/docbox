@@ -4,10 +4,6 @@ use docbox_core::{
     aws::aws_config,
     office::is_pdf_compatible,
     processing::pdf::PAGE_END_CHARACTER,
-    search::{
-        models::{DocumentPage, SearchIndexData, SearchIndexType},
-        SearchIndexFactory,
-    },
     secrets::AppSecretManager,
     storage::{StorageLayerFactory, TenantStorageLayer},
 };
@@ -21,6 +17,10 @@ use docbox_database::{
         tenant::Tenant,
     },
     DatabasePoolCache, DbPool,
+};
+use docbox_search::{
+    models::{DocumentPage, SearchIndexData, SearchIndexType},
+    SearchIndexFactory,
 };
 use eyre::{Context, ContextCompat};
 use futures::{future::LocalBoxFuture, stream::FuturesUnordered, StreamExt};

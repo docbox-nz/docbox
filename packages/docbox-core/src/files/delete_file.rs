@@ -1,7 +1,6 @@
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
     files::generated::{delete_generated_files, GeneratedFileDeleteResult},
-    search::TenantSearchIndex,
     storage::TenantStorageLayer,
 };
 use docbox_database::{
@@ -12,6 +11,7 @@ use docbox_database::{
     },
     DbErr, DbPool,
 };
+use docbox_search::TenantSearchIndex;
 use futures::{stream::FuturesUnordered, StreamExt};
 use thiserror::Error;
 use tracing::error;

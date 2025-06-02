@@ -1,8 +1,6 @@
 use clap::{Parser, Subcommand};
-use docbox_core::{
-    search::SearchIndexFactoryConfig, secrets::SecretsManagerConfig,
-    storage::StorageLayerFactoryConfig,
-};
+use docbox_core::{secrets::SecretsManagerConfig, storage::StorageLayerFactoryConfig};
+use docbox_search::SearchIndexFactoryConfig;
 use eyre::Context;
 use serde::Deserialize;
 use sqlx::{postgres::PgConnectOptions, PgPool};

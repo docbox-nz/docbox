@@ -1,5 +1,6 @@
-use docbox_core::{aws::aws_config, search::SearchIndexFactory, secrets::AppSecretManager};
+use docbox_core::{aws::aws_config, secrets::AppSecretManager};
 use docbox_database::{models::tenant::Tenant, DatabasePoolCache};
+use docbox_search::SearchIndexFactory;
 use eyre::Context;
 use uuid::Uuid;
 

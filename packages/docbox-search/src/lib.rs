@@ -7,14 +7,17 @@ use models::{
     FileSearchRequest, FileSearchResults, SearchIndexData, SearchRequest, SearchResults,
     UpdateSearchIndexData,
 };
-use os::{create_open_search, OpenSearchIndex, OpenSearchIndexFactory, TenantSearchIndexName};
+use opensearch::{
+    create_open_search, OpenSearchIndex, OpenSearchIndexFactory, TenantSearchIndexName,
+};
 use reqwest::Url;
 use serde::Deserialize;
 use typesense::{TypesenseIndex, TypesenseIndexFactory};
 use uuid::Uuid;
 
 pub mod models;
-pub mod os;
+pub mod opensearch;
+mod serialize;
 pub mod typesense;
 
 #[derive(Debug, Clone, Deserialize)]

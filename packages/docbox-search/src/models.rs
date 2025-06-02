@@ -17,7 +17,7 @@ use serde_with::skip_serializing_none;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::utils::serialize::WrappedMime;
+use crate::serialize::WrappedMime;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum SearchIndexType {

@@ -9,12 +9,12 @@ use crate::storage::StorageLayerFactory;
 use crate::{
     events::EventPublisherFactory,
     files::upload_file_presigned::{safe_complete_presigned, CompletePresigned},
-    search::SearchIndexFactory,
 };
 use docbox_database::{
     models::{folder::Folder, presigned_upload_task::PresignedUploadTask, tenant::Tenant},
     DatabasePoolCache,
 };
+use docbox_search::SearchIndexFactory;
 use std::sync::Arc;
 
 mod mpsc;

@@ -1,7 +1,6 @@
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
     links::index_link::store_link_index,
-    search::TenantSearchIndex,
 };
 use docbox_database::{
     models::{
@@ -12,6 +11,7 @@ use docbox_database::{
     },
     DbErr, DbPool,
 };
+use docbox_search::TenantSearchIndex;
 use std::ops::DerefMut;
 use thiserror::Error;
 use tracing::error;

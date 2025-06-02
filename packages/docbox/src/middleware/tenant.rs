@@ -13,11 +13,11 @@ use axum::{
 };
 use docbox_core::{
     events::{EventPublisherFactory, TenantEventPublisher},
-    search::{SearchIndexFactory, TenantSearchIndex},
     secrets::AppSecretManager,
     storage::{StorageLayerFactory, TenantStorageLayer},
 };
 use docbox_database::{models::tenant::Tenant, DatabasePoolCache, DbPool};
+use docbox_search::{SearchIndexFactory, TenantSearchIndex};
 use thiserror::Error;
 use tracing::Instrument;
 use utoipa::IntoParams;

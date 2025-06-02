@@ -4,6 +4,7 @@ members = [
     "packages/docbox",
     "packages/docbox-cli",
     "packages/docbox-core",
+    "packages/docbox-search",
     "packages/docbox-database",
     "packages/docbox-web-scraper",
 ]

@@ -1,13 +1,13 @@
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
     folders::delete_folder::delete_folder,
-    search::TenantSearchIndex,
     storage::TenantStorageLayer,
 };
 use docbox_database::{
     models::{document_box::DocumentBox, folder::Folder},
     DbErr, DbPool,
 };
+use docbox_search::TenantSearchIndex;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

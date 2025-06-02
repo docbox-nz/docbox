@@ -8,15 +8,14 @@ use docbox_database::{
     },
     DbErr, DbPool,
 };
-use futures::StreamExt;
-use thiserror::Error;
-
-use crate::search::{
+use docbox_search::{
     models::{
         AdminSearchRequest, FlattenedItemResult, SearchIndexType, SearchRequest, SearchResultData,
     },
     TenantSearchIndex,
 };
+use futures::StreamExt;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SearchDocumentBoxError {

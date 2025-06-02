@@ -13,18 +13,16 @@ use crate::{
 };
 use axum::{extract::Path, http::StatusCode, Json};
 use axum_valid::Garde;
-use docbox_core::{
-    document_box::{
-        create_document_box::{create_document_box, CreateDocumentBox, CreateDocumentBoxError},
-        delete_document_box::{delete_document_box, DeleteDocumentBoxError},
-        search_document_box::{search_document_box, ResolvedSearchResult},
-    },
-    search::models::{SearchRequest, SearchResultItem, SearchResultResponse},
+use docbox_core::document_box::{
+    create_document_box::{create_document_box, CreateDocumentBox, CreateDocumentBoxError},
+    delete_document_box::{delete_document_box, DeleteDocumentBoxError},
+    search_document_box::{search_document_box, ResolvedSearchResult},
 };
 use docbox_database::models::{
     document_box::DocumentBox,
     folder::{self, Folder, FolderWithExtra, ResolvedFolderWithExtra},
 };
+use docbox_search::models::{SearchRequest, SearchResultItem, SearchResultResponse};
 
 pub const DOCUMENT_BOX_TAG: &str = "Document Box";
 

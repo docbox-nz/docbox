@@ -1738,6 +1738,7 @@ dependencies = [
  "chrono",
  "docbox-core",
  "docbox-database",
+ "docbox-search",
  "docbox-web-scraper",
  "dotenvy",
  "garde",
@@ -1768,6 +1769,7 @@ dependencies = [
  "color-eyre",
  "docbox-core",
  "docbox-database",
+ "docbox-search",
  "dotenvy",
  "eyre",
  "futures",
@@ -1801,6 +1803,7 @@ dependencies = [
  "bytes-utils",
  "chrono",
  "docbox-database",
+ "docbox-search",
  "docbox-web-scraper",
  "dotenvy",
  "futures",
@@ -1840,6 +1843,29 @@ dependencies = [
  "testcontainers-modules",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "docbox-search"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "bytes",
+ "chrono",
+ "docbox-database",
+ "garde",
+ "itertools 0.14.0",
+ "mime",
+ "opensearch",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 1.0.69",
  "tracing",
  "utoipa",
  "uuid",

@@ -9,7 +9,6 @@ pub mod links;
 pub mod notifications;
 pub mod office;
 pub mod processing;
-pub mod search;
 pub mod secrets;
 pub mod storage;
 pub mod tenant;

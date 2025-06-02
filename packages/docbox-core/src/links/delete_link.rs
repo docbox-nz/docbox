@@ -1,7 +1,4 @@
-use crate::{
-    events::{TenantEventMessage, TenantEventPublisher},
-    search::TenantSearchIndex,
-};
+use crate::events::{TenantEventMessage, TenantEventPublisher};
 use docbox_database::{
     models::{
         document_box::{DocumentBoxScopeRaw, WithScope},
@@ -9,6 +6,7 @@ use docbox_database::{
     },
     DbPool,
 };
+use docbox_search::TenantSearchIndex;
 
 pub async fn delete_link(
     db: &DbPool,

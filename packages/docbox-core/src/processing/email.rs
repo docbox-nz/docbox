@@ -1,8 +1,8 @@
-use crate::search::models::DocumentPage;
 use crate::{files::generated::QueuedUpload, files::upload_file::ProcessingConfig};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
+use docbox_search::models::DocumentPage;
 use mail_parser::{Address, MessageParser, MimeHeaders};
 use mime::Mime;
 use serde::Serialize;

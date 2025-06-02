@@ -1,8 +1,8 @@
-use crate::search::{
+use docbox_database::models::{document_box::DocumentBoxScopeRaw, link::Link};
+use docbox_search::{
     models::{SearchIndexData, SearchIndexType},
     TenantSearchIndex,
 };
-use docbox_database::models::{document_box::DocumentBoxScopeRaw, link::Link};
 
 use super::create_link::CreateLinkError;
 
