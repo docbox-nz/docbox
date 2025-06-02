@@ -1,3 +1,5 @@
+use crate::models::FileSearchRequest;
+
 use super::models::{FlattenedItemResult, PageResult, SearchScore};
 use super::{
     models::{
@@ -8,6 +10,7 @@ use super::{
 };
 use anyhow::Context;
 use aws_config::SdkConfig;
+use docbox_database::models::file::FileId;
 use docbox_database::models::{
     document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant, user::UserId,
 };
@@ -252,11 +255,57 @@ impl SearchIndex for OpenSearchIndex {
 
     async fn search_index_file(
         &self,
-        _scope: &DocumentBoxScopeRaw,
-        _file_id: docbox_database::models::file::FileId,
-        _query: super::models::FileSearchRequest,
+        scope: &DocumentBoxScopeRaw,
+        file_id: docbox_database::models::file::FileId,
+        query: super::models::FileSearchRequest,
     ) -> anyhow::Result<FileSearchResults> {
-        anyhow::bail!("search index file is not currently supported on the opensearch backend");
+        let offset = query.offset;
+        let query = create_opensearch_file_query(query, scope, file_id);
+
+        tracing::debug!(%query, "searching with query");
+
+        // Search for field in content
+        let response = self
+            .client
+            .search(SearchParts::Index(&[&self.search_index.0]))
+            .from(offset.unwrap_or(0) as i64)
+            .body(query)
+            .send()
+            .await?;
+
+        let response: serde_json::Value =
+            response.json().await.context("failed to parse response")?;
+
+        tracing::debug!(%response);
+
+        let response: SearchResponse = serde_json::from_value(response)?;
+
+        let (total_hits, results) = response
+            .hits
+            .hits
+            .into_iter()
+            .next()
+            .and_then(|item| item.inner_hits)
+            .map(|inner_hits| {
+                let total_hits = inner_hits.pages.hits.total.value;
+                let page_matches: Vec<PageResult> = inner_hits
+                    .pages
+                    .hits
+                    .hits
+                    .into_iter()
+                    .map(|value| PageResult {
+                        page: value._source.page,
+                        matches: value.highlight.content,
+                    })
+                    .collect();
+                (total_hits, page_matches)
+            })
+            .unwrap_or_default();
+
+        Ok(FileSearchResults {
+            total_hits,
+            results,
+        })
     }
 
     async fn search_index(
@@ -571,13 +620,6 @@ pub fn create_opensearch_query(
         "terms": { "document_box": scopes }
     }));
 
-    // // Filter results to a specific file
-    // if let Some(item_id) = req.item_id {
-    //     filters.push(json!({
-    //         "term": { "item_id": item_id }
-    //     }));
-    // }
-
     let query = req
         .query
         // Filter out empty queries
@@ -656,34 +698,10 @@ pub fn create_opensearch_query(
                         ],
                         // Pagination
                         "size": req.max_pages.unwrap_or(3),
-                        // "from": req.pages_offset.unwrap_or(0),
                     }
                 }
             }));
         }
-
-        // if req.neural {
-        //     let model_id = std::env::var("OPENSEARCH_MODEL_ID");
-        //     if let Ok(model_id) = model_id {
-        //         must.push(json!({
-        //                 "neural": {
-        //                     "content_embedding": {
-        //                         "query_text": query,
-        //                         "model_id": model_id,
-        //                         "k": 200
-        //                     }
-        //                 }
-        //         }))
-        //     }
-        // } else if !fields.is_empty() {
-        //     must.push(json!({
-        //             "multi_match": {
-        //                 "query": query,
-        //                 "type": "bool_prefix",
-        //                 "fields": fields
-        //             }
-        //     }))
-        // }
     }
 
     if let Some(folder_children) = folder_children {
@@ -737,6 +755,91 @@ pub fn create_opensearch_query(
         "size": req.size.unwrap_or(50),
         // Offset within results
         "from": req.offset.unwrap_or(0),
+
+        // Only include relevant source fields
+        "_source": [
+            "item_id",
+            "item_type",
+            "document_box"
+        ],
+
+        // Sort results by match score
+        "sort": [
+            {
+                "_score": {
+                    "order": "desc"
+                }
+            }
+        ]
+    })
+}
+
+pub fn create_opensearch_file_query(
+    req: FileSearchRequest,
+    scope: &DocumentBoxScopeRaw,
+    file_id: FileId,
+) -> serde_json::Value {
+    let query = req.query.unwrap_or_default();
+
+    json!({
+        // Search query itself
+        "query": {
+            "bool": {
+                "filter": [
+                    {
+                        "term": { "document_box": scope }
+                    },
+                    {
+                        "term": { "item_id": file_id }
+                    }
+                ],
+                "should": [
+                    {
+                        "nested": {
+                            "path": "pages",
+                            // Match nested page content
+                            "query": {
+                                "match": {
+                                    "pages.content": {
+                                        "query": query,
+                                        // Name the match for scoring later
+                                        "_name": "content_match"
+                                    },
+                                }
+                            },
+                            "inner_hits": {
+                                "_source": ["pages.page"],
+                                // Highlight
+                                "highlight": {
+                                    "fields": {
+                                        "pages.content": {
+                                            "fragment_size": 150,
+                                            "number_of_fragments": 1,
+                                            "type": "unified"
+                                        }
+                                    }
+                                },
+                                // Order results by score
+                                "sort": [
+                                    {
+                                    "_score": {
+                                        "order": "desc"
+                                    }
+                                    }
+                                ],
+                                // Pagination
+                                "size": req.limit.unwrap_or(3),
+                                "from": req.offset.unwrap_or(0),
+                            }
+                        }
+                    }
+                ],
+                "minimum_should_match": 1
+            },
+        },
+
+        "size": 1,
+        "from": 0,
 
         // Only include relevant source fields
         "_source": [
