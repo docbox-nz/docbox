@@ -198,9 +198,14 @@ pub async fn upload_file(
     upload_state: &mut UploadFileState,
 ) -> Result<UploadedFileData, UploadFileError> {
     let s3_upload = upload.file_key.is_none();
-    let file_key = upload
-        .file_key
-        .unwrap_or_else(|| create_file_key(&upload.document_box, &upload.name, &upload.mime));
+    let file_key = upload.file_key.unwrap_or_else(|| {
+        create_file_key(
+            &upload.document_box,
+            &upload.name,
+            &upload.mime,
+            Uuid::new_v4(),
+        )
+    });
 
     let mime = upload.mime;
     let file_bytes = upload.file_bytes;

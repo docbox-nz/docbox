@@ -44,3 +44,74 @@ pub fn get_mime_ext(mime: &Mime) -> Option<&'static str> {
         }
     })
 }
+
+#[cfg(test)]
+mod test {
+    use mime::Mime;
+
+    use crate::utils::file::{get_file_name_ext, get_mime_ext, make_s3_safe};
+
+    #[test]
+    fn test_make_s3_safe_basic() {
+        let input = "my file-name 123";
+        let expected = "my_file_name_123";
+        assert_eq!(make_s3_safe(input), expected);
+    }
+
+    #[test]
+    fn test_make_s3_safe_only_allowed_chars() {
+        let input = "abcXYZ0123";
+        let expected = "abcXYZ0123";
+        assert_eq!(make_s3_safe(input), expected);
+    }
+
+    #[test]
+    fn test_make_s3_safe_removes_disallowed_chars() {
+        let input = "file*name$with%chars!";
+        let expected = "filenamewithchars";
+        assert_eq!(make_s3_safe(input), expected);
+    }
+
+    #[test]
+    fn test_make_s3_safe_max_length() {
+        let input = "a".repeat(60); // 60 'a's
+        let expected = "a".repeat(50); // only 50 allowed
+        assert_eq!(make_s3_safe(&input), expected);
+    }
+
+    #[test]
+    fn test_get_file_name_ext_basic() {
+        let input = "file.txt";
+        assert_eq!(get_file_name_ext(input), Some("txt".to_string()));
+    }
+
+    #[test]
+    fn test_get_file_name_ext_no_ext() {
+        let input = "file";
+        assert_eq!(get_file_name_ext(input), None);
+    }
+
+    #[test]
+    fn test_get_file_name_ext_hidden_file() {
+        let input = ".hidden";
+        assert_eq!(get_file_name_ext(input), None);
+    }
+
+    #[test]
+    fn test_get_file_name_ext_multiple_dots() {
+        let input = "archive.tar.gz";
+        assert_eq!(get_file_name_ext(input), Some("gz".to_string()));
+    }
+
+    #[test]
+    fn test_get_mime_ext_known_mime() {
+        let mime: Mime = "image/png".parse().unwrap();
+        assert_eq!(get_mime_ext(&mime), Some("png"));
+    }
+
+    #[test]
+    fn test_get_mime_ext_unknown_mime() {
+        let mime: Mime = "unknown/mime".parse().unwrap();
+        assert_eq!(get_mime_ext(&mime), None);
+    }
+}

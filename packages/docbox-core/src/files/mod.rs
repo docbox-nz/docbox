@@ -1,4 +1,3 @@
-use docbox_database::models::document_box::DocumentBoxScopeRaw;
 use mime::Mime;
 use uuid::Uuid;
 
@@ -11,7 +10,7 @@ pub mod update_file;
 pub mod upload_file;
 pub mod upload_file_presigned;
 
-pub fn create_file_key(document_box: &DocumentBoxScopeRaw, name: &str, mime: &Mime) -> String {
+pub fn create_file_key(document_box: &str, name: &str, mime: &Mime, file_key: Uuid) -> String {
     // Try get file extension from name
     let file_ext = get_file_name_ext(name)
         // Fallback to extension from mime type
@@ -25,12 +24,46 @@ pub fn create_file_key(document_box: &DocumentBoxScopeRaw, name: &str, mime: &Mi
     // Strip unwanted characters from the file name
     let clean_file_name = make_s3_safe(file_name);
 
-    // Unique portion of the file key
-    let file_key_unique = Uuid::new_v4().to_string();
-
     // Key is composed of the {Unique ID}_{File Name}.{File Ext}
-    let file_key = format!("{file_key_unique}_{clean_file_name}.{file_ext}");
+    let file_key = format!("{file_key}_{clean_file_name}.{file_ext}");
 
     // Prefix file key with the scope directory
     format!("{}/{}", document_box, file_key)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::files::create_file_key;
+    use mime::Mime;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_create_file_key_ext_from_mime() {
+        let scope = "scope";
+        let mime: Mime = "image/png".parse().unwrap();
+        let file_key = Uuid::new_v4();
+        let key = create_file_key(scope, "photo", &mime, file_key);
+
+        assert_eq!(key, format!("scope/{file_key}_photo.png"));
+    }
+
+    #[test]
+    fn test_create_file_key_fallback_bin() {
+        let scope = "scope";
+        let mime: Mime = "unknown/unknown".parse().unwrap();
+        let file_key = Uuid::new_v4();
+        let key = create_file_key(scope, "file", &mime, file_key);
+
+        assert_eq!(key, format!("scope/{file_key}_file.bin"));
+    }
+
+    #[test]
+    fn test_create_file_key_strips_special_chars() {
+        let scope = "scope";
+        let mime: Mime = "text/plain".parse().unwrap();
+        let file_key = Uuid::new_v4();
+        let key = create_file_key(scope, "some file$name.txt", &mime, file_key);
+
+        assert_eq!(key, format!("scope/{file_key}_some_filename.txt"));
+    }
 }

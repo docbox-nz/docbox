@@ -30,6 +30,7 @@ use mime::Mime;
 use serde::Serialize;
 use std::{collections::HashMap, ops::DerefMut, str::FromStr, sync::Arc};
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Serialize)]
 pub struct PresignedUploadOutcome {
@@ -106,7 +107,12 @@ pub async fn create_presigned_upload(
     storage: &TenantStorageLayer,
     create: CreatePresigned,
 ) -> anyhow::Result<PresignedUploadOutcome> {
-    let file_key = create_file_key(&create.folder.document_box, &create.name, &create.mime);
+    let file_key = create_file_key(
+        &create.folder.document_box,
+        &create.name,
+        &create.mime,
+        Uuid::new_v4(),
+    );
     let (signed_request, expires_at) = storage
         .create_presigned(&file_key, create.size as i64)
         .await?;
