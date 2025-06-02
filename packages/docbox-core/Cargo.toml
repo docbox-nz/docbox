@@ -23,9 +23,7 @@ pdf_process = { version = "0.2.0" }
 office-convert-client = { version = "0.4.0" }
 
 # Image conversion and manipulation
-image = "0.25.2"
-# Image EXIF metadata parsing
-kamadak-exif = "0.6.1"
+image = "0.25.6"
 
 # Asynchronous runtime & Helpers
 tokio = { version = "1", features = ["full"] }

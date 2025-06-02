@@ -1,12 +1,7 @@
-use std::{io::Cursor, path::Path};
-
 use bytes::Bytes;
-use docbox_core::{
-    image::{apply_exif_orientation, read_exif_orientation, Orientation},
-    processing::image::process_image_async,
-    utils::file::get_file_name_ext,
-};
-use image::{ImageFormat, ImageReader};
+use docbox_core::{processing::image::process_image_async, utils::file::get_file_name_ext};
+use image::{metadata::Orientation, DynamicImage, ImageDecoder, ImageFormat, ImageReader};
+use std::{io::Cursor, path::Path};
 
 /// Tests that samples of supported image formats can be successfully processed
 #[tokio::test]
@@ -35,72 +30,34 @@ async fn test_image_formats_supported() {
     }
 }
 
-/// Tests that samples with an associated exif orientation are detected
-#[tokio::test]
-async fn test_image_exif_data() {
-    let samples = [
-        ("sample_exif_horizontal.jpg", Orientation::Horizontal),
-        (
-            "sample_exif_mirror_horizontal_rotate_90.jpg",
-            Orientation::MirrorHorizontalRotate90,
-        ),
-        (
-            "sample_exif_mirror_horizontal_rotate_270.jpg",
-            Orientation::MirrorHorizontalRotate270,
-        ),
-        (
-            "sample_exif_mirror_horizontal.jpg",
-            Orientation::MirrorHorizontal,
-        ),
-        (
-            "sample_exif_mirror_vertical.jpg",
-            Orientation::MirrorVertical,
-        ),
-        ("sample_exif_rotate_90.jpg", Orientation::Rotate90),
-        ("sample_exif_rotate_180.jpg", Orientation::Rotate180),
-        ("sample_exif_rotate_270.jpg", Orientation::Rotate270),
-    ];
-
-    let samples_path = Path::new("tests/samples/image_processing/exif");
-
-    for (sample, sample_orientation) in samples {
-        let sample_file = samples_path.join(sample);
-        let bytes = tokio::fs::read(sample_file).await.unwrap();
-        let bytes = Bytes::from(bytes);
-
-        let orientation = read_exif_orientation(&bytes).unwrap();
-        assert_eq!(orientation, sample_orientation);
-    }
-}
-
 /// Tests that when applying orientation to samples the sample image size
 /// matches the expected size for the new orientation
 #[tokio::test]
 async fn test_image_exif_data_apply() {
     let samples = [
         (
-            "sample_exif_horizontal.jpg",
-            Orientation::Horizontal,
+            "sample_exif_no_transforms.jpg",
+            Orientation::NoTransforms,
             (32, 128),
         ),
         (
-            "sample_exif_mirror_horizontal_rotate_90.jpg",
-            Orientation::MirrorHorizontalRotate90,
+            "sample_exif_rotate_90_flip_h.jpg",
+            Orientation::Rotate90FlipH,
             (128, 32),
         ),
         (
-            "sample_exif_mirror_horizontal_rotate_270.jpg",
-            Orientation::MirrorHorizontalRotate270,
+            "sample_exif_rotate_270_flip_h.jpg",
+            Orientation::Rotate270FlipH,
             (128, 32),
         ),
         (
-            "sample_exif_mirror_horizontal.jpg",
-            Orientation::MirrorHorizontal,
+            "sample_exif_flip_horizontal.jpg",
+            Orientation::FlipHorizontal,
             (32, 128),
         ),
         (
-            "sample_exif_mirror_vertical.jpg",
-            Orientation::MirrorVertical,
+            "sample_exif_flip_vertical.jpg",
+            Orientation::FlipVertical,
             (32, 128),
         ),
         (
@@ -127,14 +84,17 @@ async fn test_image_exif_data_apply() {
         let bytes = tokio::fs::read(sample_file).await.unwrap();
         let bytes = Bytes::from(bytes);
 
-        let orientation = read_exif_orientation(&bytes).unwrap();
-        assert_eq!(orientation, sample_orientation);
-
-        let img = ImageReader::with_format(Cursor::new(&bytes), ImageFormat::Jpeg)
-            .decode()
+        let mut decoder = ImageReader::with_format(Cursor::new(&bytes), ImageFormat::Jpeg)
+            .into_decoder()
             .unwrap();
 
-        let img = apply_exif_orientation(img, orientation);
+        // Extract the image orientation
+        let orientation = decoder.orientation().unwrap();
+        assert_eq!(orientation, sample_orientation);
+
+        let mut img = DynamicImage::from_decoder(decoder).unwrap();
+
+        img.apply_orientation(orientation);
 
         let image_size = (img.width(), img.height());
         assert_eq!(image_size, expected_size);

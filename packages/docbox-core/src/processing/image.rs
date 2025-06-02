@@ -1,13 +1,10 @@
 use std::io::Cursor;
 
 use super::{ProcessingError, ProcessingOutput};
-use crate::{
-    files::generated::QueuedUpload,
-    image::{apply_exif_orientation, create_img_bytes, read_exif_orientation},
-};
+use crate::{files::generated::QueuedUpload, image::create_img_bytes};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
-use image::{DynamicImage, ImageFormat, ImageReader, ImageResult};
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, ImageResult};
 
 /// Image processing is CPU intensive, this async variant moves the image processing
 /// to a separate thread where blocking is acceptable to prevent blocking other
@@ -27,19 +24,19 @@ fn process_image(
     file_bytes: Bytes,
     format: ImageFormat,
 ) -> Result<ProcessingOutput, ProcessingError> {
-    let mut img = ImageReader::with_format(Cursor::new(&file_bytes), format)
-        .decode()
+    let mut decoder = ImageReader::with_format(Cursor::new(&file_bytes), format)
+        .into_decoder()
         .map_err(ProcessingError::DecodeImage)?;
 
-    // Process EXIF compatible formats to apply the right orientation
-    if matches!(
-        format,
-        ImageFormat::Jpeg | ImageFormat::Tiff | ImageFormat::Png | ImageFormat::WebP
-    ) {
-        if let Some(orientation) = read_exif_orientation(&file_bytes) {
-            img = apply_exif_orientation(img, orientation)
-        }
-    }
+    // Extract the image orientation
+    let orientation = decoder
+        .orientation()
+        .map_err(ProcessingError::DecodeImage)?;
+
+    let mut img = DynamicImage::from_decoder(decoder).map_err(ProcessingError::DecodeImage)?;
+
+    // Apply image exif orientation
+    img.apply_orientation(orientation);
 
     tracing::debug!("generated image thumbnails");
 
