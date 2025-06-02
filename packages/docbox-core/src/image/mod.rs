@@ -30,6 +30,7 @@ pub fn read_exif_orientation(file: &[u8]) -> Option<Orientation> {
     Some(Orientation::from(orientation))
 }
 // Valid orientations (From EXIF spec)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Orientation {
     // 1 = Horizontal (normal)
     Horizontal,

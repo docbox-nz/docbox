@@ -7,7 +7,7 @@ use crate::{
 };
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
-use image::{DynamicImage, ImageFormat, ImageReader};
+use image::{DynamicImage, ImageFormat, ImageReader, ImageResult};
 
 /// Image processing is CPU intensive, this async variant moves the image processing
 /// to a separate thread where blocking is acceptable to prevent blocking other
@@ -80,18 +80,27 @@ fn generate_image_preview(
 ) -> anyhow::Result<GeneratedPreviewImages> {
     tracing::debug!("rendering image preview variants");
 
-    let thumbnail_jpeg = {
-        let thumbnail = image.thumbnail(64, 64);
-        create_img_bytes(&thumbnail, format)?
-    };
-
-    let large_thumbnail_jpeg = {
-        let cover_page_preview = image.resize(512, 512, image::imageops::FilterType::Triangle);
-        create_img_bytes(&cover_page_preview, format)?
-    };
+    let thumbnail_jpeg = create_thumbnail(&image, format)?;
+    let large_thumbnail_jpeg = create_thumbnail_large(&image, format)?;
 
     Ok(GeneratedPreviewImages {
         thumbnail_jpeg,
         large_thumbnail_jpeg,
     })
+}
+
+fn create_thumbnail(image: &DynamicImage, format: ImageFormat) -> ImageResult<Vec<u8>> {
+    let thumbnail = image.thumbnail(64, 64);
+    create_img_bytes(&thumbnail, format)
+}
+
+fn create_thumbnail_large(image: &DynamicImage, format: ImageFormat) -> ImageResult<Vec<u8>> {
+    let (width, height) = match format {
+        // .ico format has specific max size requirements
+        ImageFormat::Ico => (256, 256),
+        _ => (512, 512),
+    };
+
+    let cover_page_preview = image.resize(width, height, image::imageops::FilterType::Triangle);
+    create_img_bytes(&cover_page_preview, format)
 }

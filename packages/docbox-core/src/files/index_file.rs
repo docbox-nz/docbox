@@ -15,7 +15,6 @@ pub async fn store_file_index(
     document_box: &DocumentBoxScopeRaw,
     index_metadata: Option<ProcessingIndexMetadata>,
 ) -> Result<(), UploadFileError> {
-    // Use index from previous step or create new index
     let index = SearchIndexData {
         ty: SearchIndexType::File,
         item_id: file.id,
