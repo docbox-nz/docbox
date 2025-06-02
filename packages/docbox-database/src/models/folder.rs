@@ -472,13 +472,11 @@ impl Folder {
         LEFT JOIN "docbox_users" AS "cu" 
             ON "folder"."created_by" = "cu"."id" 
         -- Join on the edit history (Latest only)
-        LEFT JOIN LATERAL (
+        LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT "folder_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
             FROM "docbox_edit_history"
-            WHERE "folder_id" = "folder"."id" 
-            ORDER BY "created_at" DESC 
-            LIMIT 1
+            ORDER BY "folder_id", "created_at" DESC 
         ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
         -- Join on the editor history latest edit user
         LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
@@ -514,13 +512,11 @@ impl Folder {
         LEFT JOIN "docbox_users" AS "cu" 
             ON "folder"."created_by" = "cu"."id" 
         -- Join on the edit history (Latest only)
-        LEFT JOIN LATERAL (
+        LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT "folder_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
             FROM "docbox_edit_history"
-            WHERE "folder_id" = "folder"."id" 
-            ORDER BY "created_at" DESC 
-            LIMIT 1
+            ORDER BY "folder_id", "created_at" DESC
         ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
         -- Join on the editor history latest edit user
         LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
@@ -555,13 +551,11 @@ impl Folder {
         LEFT JOIN "docbox_users" AS "cu" 
             ON "folder"."created_by" = "cu"."id" 
         -- Join on the edit history (Latest only)
-        LEFT JOIN LATERAL (
+        LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT "folder_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
             FROM "docbox_edit_history"
-            WHERE "folder_id" = "folder"."id" 
-            ORDER BY "created_at" DESC 
-            LIMIT 1
+            ORDER BY "folder_id", "created_at" DESC 
         ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
         -- Join on the editor history latest edit user
         LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 

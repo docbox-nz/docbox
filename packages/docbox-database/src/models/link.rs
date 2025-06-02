@@ -313,11 +313,9 @@ impl Link {
         -- Join on the edit history (Latest only)
         LEFT JOIN LATERAL (
             -- Get the latest edit history entry
-            SELECT "link_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at" 
             FROM "docbox_edit_history"
-            WHERE "link_id" = "link"."id" 
-            ORDER BY "created_at" DESC 
-            LIMIT 1
+            ORDER BY "link_id", "created_at" DESC 
         ) AS "ehl" ON "link"."id" = "ehl"."link_id" 
         -- Join on the editor history latest edit user
         LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
@@ -355,13 +353,11 @@ impl Link {
         -- Join on the parent folder
         INNER JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
         -- Join on the edit history (Latest only)
-        LEFT JOIN LATERAL (
+        LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT "link_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at" 
             FROM "docbox_edit_history"
-            WHERE "link_id" = "link"."id" 
-            ORDER BY "created_at" DESC 
-            LIMIT 1
+            ORDER BY "link_id", "created_at" DESC 
         ) AS "ehl" ON "link"."id" = "ehl"."link_id" 
         -- Join on the editor history latest edit user
         LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
