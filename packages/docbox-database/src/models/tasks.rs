@@ -146,11 +146,13 @@ impl Task {
             r#"UPDATE "docbox_tasks" SET 
             "status" = $1, 
             "output_data" = $2, 
-            "completed_at" = $3"#,
+            "completed_at" = $3
+            WHERE "id" = $4"#,
         )
         .bind(status.to_string())
         .bind(output_data.clone())
         .bind(completed_at)
+        .bind(self.id)
         .execute(db)
         .await?;
 
