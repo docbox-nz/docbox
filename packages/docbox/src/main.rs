@@ -9,6 +9,7 @@ use docbox_core::{
     processing::{office::OfficeProcessingLayer, ProcessingLayer},
     secrets::{AppSecretManager, SecretsManagerConfig},
     storage::{StorageLayerFactory, StorageLayerFactoryConfig},
+    tenant::tenant_cache::TenantCache,
 };
 use docbox_database::DatabasePoolCache;
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
@@ -124,6 +125,9 @@ async fn server() -> anyhow::Result<()> {
     let storage_factory_config = StorageLayerFactoryConfig::from_env()?;
     let storage_factory = StorageLayerFactory::from_config(&aws_config, storage_factory_config);
 
+    // Create tenant cache
+    let tenant_cache = Arc::new(TenantCache::new());
+
     // Setup notification queue
     let notification_queue = match (
         std::env::var("DOCBOX_MPSC_QUEUE"),
@@ -186,6 +190,7 @@ async fn server() -> anyhow::Result<()> {
         .layer(Extension(website_meta_service))
         .layer(Extension(event_publisher_factory))
         .layer(Extension(processing))
+        .layer(Extension(tenant_cache))
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(MAX_FILE_SIZE))
         .layer(TraceLayer::new_for_http());

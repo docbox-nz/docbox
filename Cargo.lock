@@ -1813,6 +1813,7 @@ dependencies = [
  "itertools 0.14.0",
  "mail-parser",
  "mime",
+ "moka",
  "office-convert-client",
  "opensearch",
  "pdf_process",

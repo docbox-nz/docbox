@@ -11,6 +11,7 @@ use docbox_core::{
     files::upload_file_presigned::purge_expired_presigned_tasks,
     secrets::AppSecretManager,
     storage::StorageLayerFactory,
+    tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{models::document_box::WithScope, DatabasePoolCache};
 use docbox_search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem};
@@ -99,6 +100,27 @@ pub async fn flush_database_pool_cache(
     Extension(db_cache): Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
 ) -> HttpStatusResult {
     db_cache.flush().await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Flush tenant cache
+///
+/// Clears the tenant cache, you can use this endpoint if you've updated the
+/// tenant configuration and want it to be applied immediately without
+/// restarting the server
+#[utoipa::path(
+    post,
+    operation_id = "admin_flush_tenant_cache",
+    tag = ADMIN_TAG,
+    path = "/admin/flush-tenant-cache",
+    responses(
+        (status = 204, description = "Tenant cache flushed"),
+    )
+)]
+pub async fn flush_tenant_cache(
+    Extension(tenant_cache): Extension<Arc<TenantCache>>,
+) -> HttpStatusResult {
+    tenant_cache.flush().await;
     Ok(StatusCode::NO_CONTENT)
 }
 

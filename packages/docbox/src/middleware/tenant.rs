@@ -15,6 +15,7 @@ use docbox_core::{
     events::{EventPublisherFactory, TenantEventPublisher},
     secrets::AppSecretManager,
     storage::{StorageLayerFactory, TenantStorageLayer},
+    tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{models::tenant::Tenant, DatabasePoolCache, DbPool};
 use docbox_search::{SearchIndexFactory, TenantSearchIndex};
@@ -46,11 +47,12 @@ pub struct TenantParams {
 pub async fn tenant_auth_middleware(
     headers: HeaderMap,
     db_cache: Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
+    tenant_cache: Extension<Arc<TenantCache>>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, DynHttpError> {
     // Extract the request tenant
-    let tenant = extract_tenant(&headers, &db_cache).await?;
+    let tenant = extract_tenant(&headers, &db_cache, &tenant_cache).await?;
 
     // Provide a request span that contains the tenant metadata
     let span = tracing::info_span!("tenant", tenant_id = %tenant.id, tenant_env = %tenant.env);
@@ -103,6 +105,7 @@ impl HttpError for ExtractTenantError {
 pub async fn extract_tenant(
     headers: &HeaderMap,
     db_cache: &DatabasePoolCache<AppSecretManager>,
+    tenant_cache: &TenantCache,
 ) -> Result<Tenant, DynHttpError> {
     #[cfg(feature = "mock-browser")]
     let tenant_id = uuid::uuid!("e3bab7bd-07a5-4b81-be38-e4790e80c0d1");
@@ -133,10 +136,11 @@ pub async fn extract_tenant(
         HttpCommonError::ServerError
     })?;
 
-    let tenant = Tenant::find_by_id(&db, tenant_id, &env)
+    let tenant = tenant_cache
+        .get_tenant(&db, env, tenant_id)
         .await
         .map_err(|cause| {
-            tracing::error!(?cause, "failed to connect to root database");
+            tracing::error!(?cause, "failed to query root tenant");
             HttpCommonError::ServerError
         })?
         .ok_or(ExtractTenantError::TenantNotFound)?;
