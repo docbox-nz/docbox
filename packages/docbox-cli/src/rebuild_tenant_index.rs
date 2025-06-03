@@ -42,8 +42,6 @@ pub async fn rebuild_tenant_index(
     // Connect to secrets manager
     let secrets = AppSecretManager::from_config(&aws_config, config.secrets.clone());
 
-    tracing::info!("created database secret");
-
     // Setup database cache / connector
     let db_cache = DatabasePoolCache::new(
         config.database.host.clone(),

@@ -7,7 +7,7 @@ use docbox_core::{
 use docbox_database::{
     create::{create_database, create_tenant_user},
     models::tenant::TenantId,
-    DatabasePoolCache,
+    DatabasePoolCache, ROOT_DATABASE_NAME,
 };
 use docbox_search::SearchIndexFactory;
 use eyre::Context;
@@ -71,7 +71,7 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
         config.database.port,
         &config.database.username,
         &config.database.password,
-        "docbox",
+        ROOT_DATABASE_NAME,
     )
     .await
     .context("failed to connect to docbox database")?;
