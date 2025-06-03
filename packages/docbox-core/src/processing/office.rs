@@ -6,6 +6,8 @@ use crate::{
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 
+const DISALLOW_MALFORMED_OFFICE: bool = true;
+
 #[derive(Clone)]
 pub struct OfficeProcessingLayer {
     pub converter: OfficeConverter,
@@ -31,9 +33,13 @@ pub async fn process_office(
 
         // Malformed document
         Err(PdfConvertError::MalformedDocument) => {
-            return Err(ProcessingError::MalformedFile(
-                "office file appears to be malformed failed conversion".to_string(),
-            ))
+            if DISALLOW_MALFORMED_OFFICE {
+                return Err(ProcessingError::MalformedFile(
+                    "office file appears to be malformed failed conversion".to_string(),
+                ));
+            }
+
+            return Ok(ProcessingOutput::default());
         }
 
         // Other error
