@@ -85,6 +85,11 @@ bytes-utils = "0.1.4"
 utoipa = { workspace = true }
 itertools = "0.14.0"
 
+# HTML parser for email HTML to text
+tl = "0.7.8"
+# Decode HTML entities
+html-escape = "0.2"
+
 [dev-dependencies]
 testcontainers-modules = { version = "0.12.1", features = ["postgres"] }
 tokio = { version = "1", features = ["full"] }

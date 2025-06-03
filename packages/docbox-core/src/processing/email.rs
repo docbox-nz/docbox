@@ -3,7 +3,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 use docbox_search::models::DocumentPage;
-use mail_parser::{Address, MessageParser, MimeHeaders};
+use mail_parser::{decoders::html::html_to_text, Address, MessageParser, MimeHeaders};
 use mime::Mime;
 use serde::Serialize;
 
@@ -144,7 +144,10 @@ pub fn process_email(
     let mut attachments: Vec<EmailAttachment> = Vec::new();
     let mut additional_files: Vec<AdditionalProcessingFile> = Vec::new();
 
-    let text_body = message.text_bodies().next().map(|body| body.contents());
+    let text_body = message
+        .text_bodies()
+        .next()
+        .and_then(|body| body.text_contents());
 
     // Get the HTML body
     let mut html_body = message
@@ -152,6 +155,14 @@ pub fn process_email(
         .next()
         .and_then(|body| body.text_contents())
         .map(|value| value.to_string());
+
+    let text_content = match (text_body.as_ref(), html_body.as_ref()) {
+        // Clean the text content removing any HTML
+        (Some(value), _) => Some(html_to_text(value)),
+        // Attempt extracting text content from the HTMl
+        (_, Some(value)) => Some(html_to_text(value)),
+        _ => None,
+    };
 
     for attachment in message.attachments() {
         let name = match attachment.attachment_name().map(|value| value.to_string()) {
@@ -245,14 +256,12 @@ pub fn process_email(
         }
     };
 
-    let pages = text_body
-        .map(|value| String::from_utf8_lossy(value).to_string())
-        .map(|value| {
-            vec![DocumentPage {
-                content: value,
-                page: 0,
-            }]
-        });
+    let pages = text_content.as_ref().map(|value| {
+        vec![DocumentPage {
+            content: value.to_string(),
+            page: 0,
+        }]
+    });
 
     let index_metadata = ProcessingIndexMetadata { pages };
     let mut upload_queue = vec![QueuedUpload::new(
@@ -269,11 +278,11 @@ pub fn process_email(
         ));
     }
 
-    if let Some(text_body) = text_body {
+    if let Some(text_body) = text_content {
         upload_queue.push(QueuedUpload::new(
             mime::TEXT_PLAIN,
             GeneratedFileType::TextContent,
-            text_body.to_vec().into(),
+            text_body.into_bytes().into(),
         ));
     }
 
