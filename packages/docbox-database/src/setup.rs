@@ -1,5 +1,3 @@
-use sqlx::query;
-
 use super::{DbPool, DbResult, DbTransaction};
 use std::ops::DerefMut;
 

@@ -22,3 +22,6 @@ CREATE TABLE "docbox_files"
             REFERENCES "docbox_users" ("id")
             ON DELETE RESTRICT
 );
+
+CREATE INDEX idx_files_folder_id 
+ON "docbox_files" ("folder_id");

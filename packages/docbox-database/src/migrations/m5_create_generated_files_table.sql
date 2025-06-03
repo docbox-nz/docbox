@@ -12,3 +12,7 @@ CREATE TABLE "docbox_generated_files"
     "file_key"   VARCHAR                  NOT NULL,
     "created_at" TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+CREATE INDEX idx_generated_files_file_id
+ON "docbox_generated_files" ("file_id", "type");
+

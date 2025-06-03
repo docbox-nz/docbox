@@ -14,3 +14,6 @@ CREATE TABLE "docbox_links"
             REFERENCES "docbox_users" ("id")
             ON DELETE RESTRICT
 );
+
+CREATE INDEX idx_links_folder_id 
+ON "docbox_links" ("folder_id");
