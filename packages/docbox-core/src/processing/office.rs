@@ -30,7 +30,11 @@ pub async fn process_office(
         }
 
         // Malformed document
-        Err(PdfConvertError::MalformedDocument) => return Err(ProcessingError::MalformedFile),
+        Err(PdfConvertError::MalformedDocument) => {
+            return Err(ProcessingError::MalformedFile(
+                "office file appears to be malformed failed conversion".to_string(),
+            ))
+        }
 
         // Other error
         Err(cause) => {

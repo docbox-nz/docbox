@@ -27,8 +27,8 @@ pub mod pdf;
 #[derive(Debug, Error)]
 pub enum ProcessingError {
     /// Uploaded file is malformed or unprocessable
-    #[error("file is invalid or malformed")]
-    MalformedFile,
+    #[error("file is invalid or malformed: {0}")]
+    MalformedFile(String),
 
     /// Internal server error
     #[error("internal server error")]

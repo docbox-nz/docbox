@@ -35,7 +35,11 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
             });
         }
         // Handle invalid file
-        Err(PdfInfoError::NotPdfFile) => return Err(ProcessingError::MalformedFile),
+        Err(PdfInfoError::NotPdfFile) => {
+            return Err(ProcessingError::MalformedFile(
+                "file was not a pdf file".to_string(),
+            ))
+        }
 
         // Handle other errors
         Err(cause) => {
@@ -46,8 +50,14 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
 
     let page_count = pdf_info
         .pages()
-        .ok_or(ProcessingError::MalformedFile)?
-        .map_err(|_| ProcessingError::MalformedFile)?;
+        .ok_or_else(|| {
+            ProcessingError::MalformedFile("failed to determine page count".to_string())
+        })?
+        .map_err(|err| {
+            ProcessingError::MalformedFile(format!(
+                "failed to convert pages number to integer: {err}"
+            ))
+        })?;
 
     // For processing the pdf file must have minimum 1 page
     if page_count < 1 {

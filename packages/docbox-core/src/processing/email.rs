@@ -117,7 +117,9 @@ pub fn process_email(
     let from = from
         .first()
         // Email must have at least one sender
-        .ok_or(ProcessingError::MalformedFile)?
+        .ok_or_else(|| {
+            ProcessingError::MalformedFile("email must have at least one sender".to_string())
+        })?
         .clone();
 
     let to = map_email_address(message.to());
