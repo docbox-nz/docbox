@@ -2,11 +2,10 @@
 
 use crate::secrets::AppSecretManager;
 use crate::storage::{StorageLayerFactory, TenantStorageLayer};
+use docbox_database::migrations::apply_tenant_migrations;
 use docbox_database::models::tenant::TenantId;
 use docbox_database::DbConnectErr;
-use docbox_database::{
-    models::tenant::Tenant, setup::create_tenant_tables, DatabasePoolCache, DbErr,
-};
+use docbox_database::{models::tenant::Tenant, DatabasePoolCache, DbErr};
 use docbox_search::{SearchIndexFactory, TenantSearchIndex};
 use std::ops::DerefMut;
 use thiserror::Error;
@@ -155,9 +154,14 @@ async fn create_tenant(
         .inspect_err(|error| tracing::error!(?error, "failed to begin tenant transaction"))?;
 
     // Setup the tenant database
-    create_tenant_tables(&mut tenant_transaction)
-        .await
-        .inspect_err(|error| tracing::error!(?error, "failed to create tenant tables"))?;
+    apply_tenant_migrations(
+        &mut root_transaction,
+        &mut tenant_transaction,
+        &tenant,
+        None,
+    )
+    .await
+    .inspect_err(|error| tracing::error!(?error, "failed to create tenant tables"))?;
 
     tracing::debug!("creating tenant s3 bucket");
 

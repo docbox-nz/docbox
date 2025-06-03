@@ -17,24 +17,15 @@ pub async fn create_database(db: &DbPool, db_name: &str) -> DbResult<()> {
 
 /// Setup the tenants table in the main docbox database
 pub async fn create_tenants_table(db: &DbPool) -> DbResult<()> {
-    sqlx::raw_sql(
-        r#"
--- Setup the tenants table
-CREATE TABLE IF NOT EXISTS "docbox_tenants"
-(
-    "id"              uuid    NOT NULL,
-    "db_name"         varchar NOT NULL UNIQUE,
-    "db_secret_name"  varchar NOT NULL UNIQUE,
-    "s3_name"         varchar NOT NULL UNIQUE,
-    "os_index_name"   varchar NOT NULL UNIQUE,
-    "env"             varchar NOT NULL,
-    "event_queue_url" varchar NULL
-);
+    sqlx::raw_sql(include_str!(
+        "./migrations/root/m1_create_tenants_table.sql"
+    ))
+    .execute(db)
+    .await?;
 
--- Index tenants across the id and environment (ID alone can be present across multiple tenants)
-CREATE UNIQUE INDEX IF NOT EXISTS "idx-tenant-id-env" ON "docbox_tenants" ("id", "env");
-    "#,
-    )
+    sqlx::raw_sql(include_str!(
+        "./migrations/root/m2_create_tenant_migrations_table.sql"
+    ))
     .execute(db)
     .await?;
 

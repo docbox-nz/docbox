@@ -1,9 +1,0 @@
-DROP TABLE IF EXISTS "docbox_presigned_upload_tasks" CASCADE;
-DROP TABLE IF EXISTS "docbox_tasks" CASCADE;
-DROP TABLE IF EXISTS "docbox_edit_history" CASCADE;
-DROP TABLE IF EXISTS "docbox_generated_files" CASCADE;
-DROP TABLE IF EXISTS "docbox_links" CASCADE;
-DROP TABLE IF EXISTS "docbox_files" CASCADE;
-DROP TABLE IF EXISTS "docbox_folders" CASCADE;
-DROP TABLE IF EXISTS "docbox_users" CASCADE;
-DROP TABLE IF EXISTS "docbox_boxes" CASCADE;

@@ -1,4 +1,6 @@
-use docbox_database::{setup::create_tenant_tables, DbPool, PgConnectOptions, PgPoolOptions};
+use docbox_database::{
+    migrations::force_apply_tenant_migrations, DbPool, PgConnectOptions, PgPoolOptions,
+};
 use testcontainers_modules::{postgres::Postgres, testcontainers::ContainerAsync};
 
 /// Testing utility to create and setup a database for a tenant to use in tests that
@@ -29,7 +31,9 @@ pub async fn create_test_tenant_database() -> (ContainerAsync<Postgres>, DbPool)
 
     let db = PgPoolOptions::new().connect_with(options).await.unwrap();
     let mut trans = db.begin().await.unwrap();
-    create_tenant_tables(&mut trans).await.unwrap();
+    force_apply_tenant_migrations(&mut trans, None)
+        .await
+        .unwrap();
     trans.commit().await.unwrap();
     (container, db)
 }

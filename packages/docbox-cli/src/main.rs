@@ -95,13 +95,9 @@ pub enum Commands {
         // Environment to target
         #[arg(short, long)]
         env: String,
-        /// File containing the migration
-        #[arg(short, long)]
-        file: PathBuf,
         /// Specific tenant to run against
         #[arg(short, long)]
         tenant_id: Option<Uuid>,
-
         #[arg(short, long)]
         skip_failed: bool,
     },
@@ -180,11 +176,10 @@ async fn main() -> eyre::Result<()> {
         }
         Commands::Migrate {
             env,
-            file,
             tenant_id,
             skip_failed,
         } => {
-            migrate::migrate(&config, env, file, tenant_id, skip_failed).await?;
+            migrate::migrate(&config, env, tenant_id, skip_failed).await?;
             Ok(())
         }
         Commands::MigrateSearch {

@@ -48,9 +48,7 @@ pub async fn rebuild_tenant_index(
     let db_cache = DatabasePoolCache::new(
         config.database.host.clone(),
         config.database.port,
-        // In the CLI the db credentials have high enough access to be used as the
-        // "root secret"
-        "postgres/docbox/config".to_string(),
+        config.database.root_secret_name.clone(),
         secrets,
     );
 
