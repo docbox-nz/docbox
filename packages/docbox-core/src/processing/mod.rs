@@ -2,7 +2,7 @@ use crate::{
     files::{generated::QueuedUpload, upload_file::ProcessingConfig},
     office::{is_pdf_compatible, PdfConvertError},
     processing::{
-        email::{is_mail_mime, process_email, EXPERIMENTAL_EMAIL_PARSING},
+        email::{is_mail_mime, process_email},
         image::process_image_async,
         office::process_office,
         pdf::process_pdf,
@@ -20,10 +20,10 @@ use thiserror::Error;
 use tokio::task::JoinError;
 
 pub mod email;
+pub mod html_to_text;
 pub mod image;
 pub mod office;
 pub mod pdf;
-pub mod html_to_text;
 
 #[derive(Debug, Error)]
 pub enum ProcessingError {
@@ -129,7 +129,7 @@ pub async fn process_file(
         Ok(Some(output))
     }
     // File is an email
-    else if EXPERIMENTAL_EMAIL_PARSING && is_mail_mime(mime) {
+    else if is_mail_mime(mime) {
         tracing::debug!("processing email file");
 
         let output = process_email(config, &bytes)?;

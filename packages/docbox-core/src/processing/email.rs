@@ -9,8 +9,6 @@ use serde::Serialize;
 
 use super::{AdditionalProcessingFile, ProcessingError, ProcessingIndexMetadata, ProcessingOutput};
 
-pub const EXPERIMENTAL_EMAIL_PARSING: bool = true;
-
 /// Checks if the provided mime is for an email
 pub fn is_mail_mime(mime: &Mime) -> bool {
     mime.essence_str() == "message/rfc822"
