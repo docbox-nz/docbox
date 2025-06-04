@@ -1,12 +1,15 @@
 use anyhow::Context;
-use axum::{extract::DefaultBodyLimit, routing::post, Extension};
+use axum::{Extension, extract::DefaultBodyLimit, routing::post};
 use docbox_core::{
-    aws::{aws_config, SqsClient},
-    background::{perform_background_tasks, BackgroundTaskData},
-    events::{sqs::SqsEventPublisherFactory, EventPublisherFactory},
-    notifications::{process_notification_queue, AppNotificationQueue, NotificationQueueData},
-    office::{convert_server::OfficeConverterServer, OfficeConverter},
-    processing::{office::OfficeProcessingLayer, ProcessingLayer},
+    aws::{SqsClient, aws_config},
+    background::{BackgroundTaskData, perform_background_tasks},
+    events::{EventPublisherFactory, sqs::SqsEventPublisherFactory},
+    notifications::{
+        AppNotificationQueue, NotificationConfig,
+        process::{NotificationQueueData, process_notification_queue},
+    },
+    office::{OfficeConverter, convert_server::OfficeConverterServer},
+    processing::{ProcessingLayer, office::OfficeProcessingLayer},
     secrets::{AppSecretManager, SecretsManagerConfig},
     storage::{StorageLayerFactory, StorageLayerFactoryConfig},
     tenant::tenant_cache::TenantCache,
@@ -33,17 +36,9 @@ pub mod routes;
 // Current size limit 100MB, adjust according to our decided max size
 const MAX_FILE_SIZE: usize = 100 * 1000 * 1024;
 
-/// Environment variable to use for the server address
-const SERVER_ADDRESS_ENV: &str = "SERVER_ADDRESS";
-
 /// Default server address when not specified
 const DEFAULT_SERVER_ADDRESS: SocketAddr =
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8080));
-
-/// Environment variable to use for the convert server address
-const CONVERT_SERVER_ADDRESS_ENV: &str = "CONVERT_SERVER_ADDRESS";
-
-const DEFAULT_CONVERT_SERVER_ADDRESS: &str = "http://localhost:8081";
 
 fn main() -> anyhow::Result<()> {
     _ = dotenvy::dotenv();
@@ -70,8 +65,8 @@ fn main() -> anyhow::Result<()> {
 
 async fn server() -> anyhow::Result<()> {
     // Create the converter
-    let convert_server_addresses = std::env::var(CONVERT_SERVER_ADDRESS_ENV)
-        .unwrap_or(DEFAULT_CONVERT_SERVER_ADDRESS.to_string());
+    let convert_server_addresses =
+        std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://localhost:8081".to_string());
     let converter_server =
         OfficeConverterServer::from_addresses(convert_server_addresses.split(','))?;
     let converter = OfficeConverter::ConverterServer(converter_server);
@@ -102,9 +97,6 @@ async fn server() -> anyhow::Result<()> {
     let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
         .context("missing environment variable DOCBOX_DB_CREDENTIAL_NAME")?;
 
-    // Setup router
-    let mut app = router();
-
     // Setup database cache / connector
     let db_cache = DatabasePoolCache::new(db_host, db_port, db_root_secret_name, secrets);
     let db_cache = Arc::new(db_cache);
@@ -129,30 +121,23 @@ async fn server() -> anyhow::Result<()> {
     let tenant_cache = Arc::new(TenantCache::new());
 
     // Setup notification queue
-    let notification_queue = match (
-        std::env::var("DOCBOX_MPSC_QUEUE"),
-        std::env::var("DOCBOX_SQS_URL"),
-    ) {
-        (Ok(_), _) => {
-            tracing::debug!("DOCBOX_MPSC_QUEUE is set using local webhook notification queue");
-            let (queue, tx) = AppNotificationQueue::create_mpsc();
+    let notification_config = NotificationConfig::from_env()?;
+    let mut notification_queue =
+        AppNotificationQueue::from_config(sqs_client, notification_config)?;
 
-            // Append the webhook handling endpoint and sender extension
-            app = app
-                .route("/webhook/s3", post(routes::utils::webhook_s3))
-                .layer(Extension(tx));
+    // Setup router
+    let mut app = router();
 
-            queue
-        }
-        (_, Ok(notification_queue_url)) => {
-            tracing::debug!(queue_url = %notification_queue_url, "using SQS notification queue");
-            AppNotificationQueue::create_sqs(sqs_client, notification_queue_url)
-        }
-        _ => {
-            tracing::warn!("queue not specified, falling back to no-op queue");
-            AppNotificationQueue::create_noop()
-        }
-    };
+    if let AppNotificationQueue::Mpsc(queue) = &mut notification_queue {
+        let sender = queue
+            .take_sender()
+            .context("missing sender for in memory notification queue")?;
+
+        // Append the webhook handling endpoint and sender extension
+        app = app
+            .route("/webhook/s3", post(routes::utils::webhook_s3))
+            .layer(Extension(sender));
+    }
 
     // Spawn background task to process notification queue messages
     tokio::spawn(process_notification_queue(
@@ -173,13 +158,9 @@ async fn server() -> anyhow::Result<()> {
     }));
 
     // Determine the socket address to bind against
-    let server_address = std::env::var(SERVER_ADDRESS_ENV)
-        .context("missing or invalid server address")
-        .and_then(|value| {
-            value
-                .parse::<SocketAddr>()
-                .context("SERVER_ADDRESS was not a valid socket address")
-        })
+    let server_address = std::env::var("SERVER_ADDRESS")
+        .ok()
+        .and_then(|value| value.parse::<SocketAddr>().ok())
         .unwrap_or(DEFAULT_SERVER_ADDRESS);
 
     // Setup app layers and extension

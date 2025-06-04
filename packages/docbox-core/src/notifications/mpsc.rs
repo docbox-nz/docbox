@@ -5,6 +5,9 @@ use tokio::sync::mpsc;
 /// a webhook endpoint on the server as a notification source
 pub struct MpscNotificationQueue {
     rx: mpsc::Receiver<NotificationQueueMessage>,
+
+    /// Sender held by the queue until its consumed
+    sender: Option<MpscNotificationQueueSender>,
 }
 
 #[derive(Clone)]
@@ -19,12 +22,16 @@ impl MpscNotificationQueueSender {
 }
 
 impl MpscNotificationQueue {
-    pub fn create() -> (MpscNotificationQueue, MpscNotificationQueueSender) {
+    pub fn create() -> MpscNotificationQueue {
         let (tx, rx) = mpsc::channel(10);
-        (
-            MpscNotificationQueue { rx },
-            MpscNotificationQueueSender { tx },
-        )
+        MpscNotificationQueue {
+            rx,
+            sender: Some(MpscNotificationQueueSender { tx }),
+        }
+    }
+
+    pub fn take_sender(&mut self) -> Option<MpscNotificationQueueSender> {
+        self.sender.take()
     }
 }
 

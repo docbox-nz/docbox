@@ -4,8 +4,8 @@ use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
 pub use sqlx::postgres::PgSslMode;
 pub use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
     PgPool, Postgres, Transaction,
+    postgres::{PgConnectOptions, PgPoolOptions},
 };
 
 use std::{error::Error, time::Duration};
