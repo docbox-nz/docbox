@@ -1742,6 +1742,7 @@ dependencies = [
  "dotenvy",
  "garde",
  "mime",
+ "mime_guess",
  "sentry",
  "sentry-tracing",
  "serde",

@@ -17,10 +17,10 @@ use crate::{
     },
 };
 use axum::{
+    Extension, Json,
     body::Body,
     extract::{Path, Query},
-    http::{header, HeaderValue, Response, StatusCode},
-    Extension, Json,
+    http::{HeaderValue, Response, StatusCode, header},
 };
 use axum_typed_multipart::TypedMultipart;
 use axum_valid::Garde;
@@ -28,10 +28,11 @@ use docbox_core::{
     files::{
         delete_file::delete_file,
         update_file::{UpdateFile, UpdateFileError},
-        upload_file::{safe_upload_file, ProcessingConfig, UploadFile, UploadedFileData},
-        upload_file_presigned::{create_presigned_upload, CreatePresigned},
+        upload_file::{ProcessingConfig, UploadFile, UploadedFileData, safe_upload_file},
+        upload_file_presigned::{CreatePresigned, create_presigned_upload},
     },
     processing::ProcessingLayer,
+    utils::file::get_file_name_ext,
 };
 use docbox_database::models::{
     edit_history::EditHistory,
@@ -39,7 +40,7 @@ use docbox_database::models::{
     folder::Folder,
     generated_file::{GeneratedFile, GeneratedFileType},
     presigned_upload_task::{PresignedTaskStatus, PresignedUploadTask, PresignedUploadTaskId},
-    tasks::{background_task, TaskStatus},
+    tasks::{TaskStatus, background_task},
     user::User,
 };
 use docbox_search::models::{FileSearchRequest, FileSearchResultResponse};
@@ -122,7 +123,20 @@ pub async fn upload(
         .or(req.file.metadata.content_type)
         .ok_or(HttpFileError::MissingMimeType)?;
 
-    let mime = Mime::from_str(&content_type).map_err(|_| HttpFileError::InvalidMimeType)?;
+    let mut mime = Mime::from_str(&content_type).map_err(|_| HttpFileError::InvalidMimeType)?;
+
+    // Attempt to guess the file mime type when application/octet-stream is specified
+    // (Likely from old browsers)
+    if mime == mime::APPLICATION_OCTET_STREAM {
+        let guessed_mime = get_file_name_ext(&req.name).and_then(|ext| {
+            let guesses = mime_guess::from_ext(&ext);
+            guesses.first()
+        });
+
+        if let Some(guessed_mime) = guessed_mime {
+            mime = guessed_mime
+        }
+    }
 
     // Parse task processing config
     let processing_config: Option<ProcessingConfig> = match &req.processing_config {
@@ -278,6 +292,21 @@ pub async fn create_presigned(
     // Update stored editing user data
     let created_by = action_user.store_user(&db).await?;
 
+    let mut mime = req.mime;
+
+    // Attempt to guess the file mime type when application/octet-stream is specified
+    // (Likely from old browsers)
+    if mime == mime::APPLICATION_OCTET_STREAM {
+        let guessed_mime = get_file_name_ext(&req.name).and_then(|ext| {
+            let guesses = mime_guess::from_ext(&ext);
+            guesses.first()
+        });
+
+        if let Some(guessed_mime) = guessed_mime {
+            mime = guessed_mime
+        }
+    }
+
     let response = create_presigned_upload(
         &db,
         &storage,
@@ -286,7 +315,7 @@ pub async fn create_presigned(
             document_box: scope,
             folder,
             size: req.size,
-            mime: req.mime,
+            mime,
             created_by: created_by.map(|user| user.id),
             parent_id: req.parent_id,
             processing_config: req.processing_config,
@@ -349,7 +378,7 @@ pub async fn get_presigned(
         PresignedTaskStatus::Pending => return Ok(Json(PresignedStatusResponse::Pending)),
         PresignedTaskStatus::Completed { file_id } => file_id,
         PresignedTaskStatus::Failed { error } => {
-            return Ok(Json(PresignedStatusResponse::Failed { error }))
+            return Ok(Json(PresignedStatusResponse::Failed { error }));
         }
     };
 
