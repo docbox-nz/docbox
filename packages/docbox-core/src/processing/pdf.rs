@@ -10,8 +10,8 @@ use futures::TryFutureExt;
 use image::{DynamicImage, ImageFormat};
 use mime::Mime;
 use pdf_process::{
-    pdf_info, render_single_page, text_all_pages_split, OutputFormat, PdfInfo, PdfInfoArgs,
-    PdfInfoError, PdfTextArgs, RenderArgs,
+    OutputFormat, PdfInfo, PdfInfoArgs, PdfInfoError, PdfTextArgs, RenderArgs, pdf_info,
+    render_single_page, text_all_pages_split,
 };
 
 pub use pdf_process::text::PAGE_END_CHARACTER;
@@ -38,7 +38,7 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
         Err(PdfInfoError::NotPdfFile) => {
             return Err(ProcessingError::MalformedFile(
                 "file was not a pdf file".to_string(),
-            ))
+            ));
         }
 
         // Handle other errors
@@ -130,7 +130,16 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
 
 #[inline]
 pub fn is_pdf_file(mime: &Mime) -> bool {
-    mime.eq(&mime::APPLICATION_PDF)
+    if mime.eq(&mime::APPLICATION_PDF) {
+        return true;
+    }
+
+    // Some outdated clients use application/x-pdf for pdfs
+    if mime.type_() == mime::APPLICATION && mime.subtype().as_str() == "x-pdf" {
+        return true;
+    }
+
+    false
 }
 
 /// Renders the cover page for a PDF file
