@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, prelude::FromRow};
 use tokio::try_join;
 use utoipa::ToSchema;
@@ -75,7 +75,7 @@ impl ResolvedFolderWithExtra {
     }
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct FolderPathSegment {
     #[schema(value_type = Uuid)]
     pub id: FolderId,
@@ -136,6 +136,15 @@ pub struct FolderWithExtra {
     #[sqlx(flatten)]
     #[schema(nullable, value_type = User)]
     pub last_modified_by: LastModifiedByUser,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize, ToSchema)]
+pub struct WithFullPath<T> {
+    #[serde(flatten)]
+    #[sqlx(flatten)]
+    pub data: T,
+    #[sqlx(json)]
+    pub full_path: Vec<FolderPathSegment>,
 }
 
 /// Wrapper type for extracting a [User] that was joined
@@ -445,6 +454,85 @@ impl Folder {
             .execute(db)
             .await?;
         Ok(())
+    }
+
+    /// Finds a collection of folders that are all within the same document box, resolves
+    /// both the folders themselves and the folder path to traverse to get to each folder
+    pub async fn resolve_with_extra(
+        db: impl DbExecutor<'_>,
+        scope: &DocumentBoxScopeRaw,
+        folder_ids: Vec<Uuid>,
+    ) -> DbResult<Vec<WithFullPath<FolderWithExtra>>> {
+        if folder_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        sqlx::query_as(
+        
+            r#"
+        -- Recursively resolve the folder paths for each folder creating a JSON array for the path
+        WITH RECURSIVE "folder_hierarchy" AS (
+            SELECT
+                "f"."id" AS "item_id",
+                "folder"."id" AS "folder_id",
+                "folder"."name" AS "folder_name",
+                "folder"."folder_id" AS "parent_folder_id",
+                0 AS "depth",
+                jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
+            FROM "docbox_folders" "f"
+            JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
+            WHERE "f"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2
+            UNION ALL
+            SELECT
+                "fh"."item_id",
+                "parent"."id",
+                "parent"."name",
+                "parent"."folder_id",
+                "fh"."depth" + 1,
+                jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
+            FROM "folder_hierarchy" "fh"
+            JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
+        ),
+        "folder_paths" AS (
+            SELECT "item_id", "path", ROW_NUMBER() OVER (PARTITION BY "item_id" ORDER BY "depth" DESC) AS "rn"
+            FROM "folder_hierarchy"
+        )
+        SELECT 
+            -- folder itself 
+            "folder".*,
+            -- Creator user details
+            "cu"."id" AS "cb_id", 
+            "cu"."name" AS "cb_name", 
+            "cu"."image_id" AS "cb_image_id", 
+            -- Last modified date
+            "ehl"."created_at" AS "last_modified_at", 
+            -- Last modified user details
+            "mu"."id" AS "lmb_id",  
+            "mu"."name" AS "lmb_name", 
+            "mu"."image_id" AS "lmb_image_id" ,
+            -- folder path from path lookup
+            "fp"."path" AS "full_path" 
+        FROM "docbox_folders" AS "folder"
+        -- Join on the creator
+        LEFT JOIN "docbox_users" AS "cu" 
+            ON "folder"."created_by" = "cu"."id" 
+        -- Join on the edit history (Latest only)
+        LEFT JOIN (
+            -- Get the latest edit history entry
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
+            FROM "docbox_edit_history"
+            ORDER BY "folder_id", "created_at" DESC 
+        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
+        -- Join on the editor history latest edit user
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        -- Join on the resolved folder path
+        LEFT JOIN "folder_paths" "fp" ON "folder".id = "fp"."item_id" AND "fp".rn = 1
+        WHERE "folder"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2"#,
+        )
+        .bind(folder_ids)
+        .bind(scope)
+        .fetch_all(db)
+        .await
     }
 
     pub async fn find_by_id_with_extra(

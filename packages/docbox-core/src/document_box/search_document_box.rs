@@ -1,18 +1,20 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 use docbox_database::{
+    DbErr, DbPool, DbResult,
     models::{
         document_box::DocumentBoxScopeRaw,
-        file::File,
-        folder::{Folder, FolderPathSegment},
-        link::Link,
+        file::{File, FileId, FileWithExtra},
+        folder::{Folder, FolderId, FolderPathSegment, FolderWithExtra},
+        link::{Link, LinkId, LinkWithExtra},
     },
-    DbErr, DbPool,
 };
 use docbox_search::{
+    TenantSearchIndex,
     models::{
         AdminSearchRequest, FlattenedItemResult, SearchIndexType, SearchRequest, SearchResultData,
     },
-    TenantSearchIndex,
 };
 use futures::StreamExt;
 use thiserror::Error;
@@ -76,7 +78,7 @@ pub async fn search_document_box(
 
     // Query search engine
     let results = search
-        .search_index(&[scope], request, search_folder_ids)
+        .search_index(&[scope.clone()], request, search_folder_ids)
         .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to query search index");
@@ -84,7 +86,7 @@ pub async fn search_document_box(
         })?;
 
     let total_hits = results.total_hits;
-    let results = resolve_search_results(db, results.results).await;
+    let results = resolve_search_results_same_scope(db, results.results, scope).await?;
 
     Ok(DocumentBoxSearchResults {
         results,
@@ -135,6 +137,70 @@ pub async fn resolve_search_results(
         .await;
 
     chunk_results.into_iter().flatten().collect()
+}
+
+pub async fn resolve_search_results_same_scope(
+    db: &DbPool,
+    results: Vec<FlattenedItemResult>,
+    scope: DocumentBoxScopeRaw,
+) -> DbResult<Vec<ResolvedSearchResult>> {
+    // Collect the IDs to lookup
+    let mut file_ids = Vec::new();
+    let mut folder_ids = Vec::new();
+    let mut link_ids = Vec::new();
+    for hit in &results {
+        match hit.item_ty {
+            SearchIndexType::File => file_ids.push(hit.item_id),
+            SearchIndexType::Folder => folder_ids.push(hit.item_id),
+            SearchIndexType::Link => link_ids.push(hit.item_id),
+        }
+    }
+
+    // Resolve the results from the database
+    let files = File::resolve_with_extra(db, &scope, file_ids);
+    let folders = Folder::resolve_with_extra(db, &scope, folder_ids);
+    let links = Link::resolve_with_extra(db, &scope, link_ids);
+    let (files, folders, links) = tokio::try_join!(files, folders, links)?;
+
+    // Create maps to take the results from
+    let mut files: HashMap<FileId, (FileWithExtra, Vec<FolderPathSegment>)> = files
+        .into_iter()
+        .map(|item| (item.data.id, (item.data, item.full_path)))
+        .collect();
+
+    let mut folders: HashMap<FolderId, (FolderWithExtra, Vec<FolderPathSegment>)> = folders
+        .into_iter()
+        .map(|item| (item.data.id, (item.data, item.full_path)))
+        .collect();
+
+    let mut links: HashMap<LinkId, (LinkWithExtra, Vec<FolderPathSegment>)> = links
+        .into_iter()
+        .map(|item| (item.data.id, (item.data, item.full_path)))
+        .collect();
+
+    Ok(results
+        .into_iter()
+        .filter_map(|result| {
+            let (result, data, path) = match result.item_ty {
+                SearchIndexType::File => {
+                    let file = files.remove(&result.item_id);
+                    file.map(|(file, full_path)| (result, SearchResultData::File(file), full_path))
+                }
+                SearchIndexType::Folder => {
+                    let folder = folders.remove(&result.item_id);
+                    folder.map(|(folder, full_path)| {
+                        (result, SearchResultData::Folder(folder), full_path)
+                    })
+                }
+                SearchIndexType::Link => {
+                    let link = links.remove(&result.item_id);
+                    link.map(|(link, full_path)| (result, SearchResultData::Link(link), full_path))
+                }
+            }?;
+
+            Some(ResolvedSearchResult { result, data, path })
+        })
+        .collect())
 }
 
 async fn resolve_search_result(
