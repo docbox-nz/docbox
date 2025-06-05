@@ -1,9 +1,9 @@
 use super::{
+    SearchIndex,
     models::{
         DocumentPage, FileSearchResults, FlattenedItemResult, PageResult, SearchIndexType,
         SearchRequest, SearchResults, SearchScore, UpdateSearchIndexData,
     },
-    SearchIndex,
 };
 use anyhow::Context;
 use docbox_database::models::{document_box::DocumentBoxScopeRaw, folder::FolderId, user::UserId};
@@ -184,21 +184,11 @@ struct Highlight {
 }
 
 fn escape_typesense_value(input: &str) -> String {
-    input
-        .replace('\\', "\\\\")
-        .replace('(', "\\(")
-        .replace(')', "\\)")
-        .replace('[', "\\[")
-        .replace(']', "\\]")
-        .replace('{', "\\{")
-        .replace('}', "\\}")
-        .replace(':', "\\:")
-        .replace(',', "\\,")
-        .replace('\'', "\\'")
-        .replace('"', "\\\"")
-        .replace('<', "\\<")
-        .replace('>', "\\>")
-        .replace('=', "\\=")
+    // Escape backticks within the text
+    let escaped = input.replace('`', "\\`");
+
+    // Surround the text with backticks
+    format!("`{escaped}`")
 }
 
 impl SearchIndex for TypesenseIndex {
@@ -261,7 +251,8 @@ impl SearchIndex for TypesenseIndex {
         let filter_by = format!(
             r#"document_box:="{}"&&item_id:="{}"&&entry_type:="Page""#,
             escape_typesense_value(scope),
-            escape_typesense_value(&file_id.to_string())
+            // UUID does not need to be escaped
+            &file_id
         );
 
         let query_json = json!({
@@ -775,7 +766,7 @@ impl TypesenseIndex {
         {
             let scopes = scopes
                 .iter()
-                .map(|value| format!("\"{}\"", escape_typesense_value(value)))
+                .map(|value| escape_typesense_value(value))
                 .join(", ");
 
             filter_parts.push(format!("document_box:=[{scopes}]"));
@@ -786,7 +777,8 @@ impl TypesenseIndex {
             if !folder_children.is_empty() {
                 let ids = folder_children
                     .into_iter()
-                    .map(|value| format!("\"{}\"", escape_typesense_value(&value.to_string())))
+                    // No need to escape UUIDs
+                    .map(|value| value.to_string())
                     .join(", ");
 
                 filter_parts.push(format!("folder_id:=[{ids}]"));
@@ -808,6 +800,7 @@ impl TypesenseIndex {
         if let Some(created_by) = query.created_by.as_ref() {
             filter_parts.push(format!(
                 r#"created_by:="{}""#,
+                // User ID's must be escaped
                 escape_typesense_value(created_by)
             ));
         }
@@ -815,7 +808,8 @@ impl TypesenseIndex {
         if let Some(folder_id) = query.folder_id {
             filter_parts.push(format!(
                 r#"folder_id:="{}""#,
-                escape_typesense_value(&folder_id.to_string())
+                // UUID does not need to be escaped
+                folder_id
             ));
         }
 
