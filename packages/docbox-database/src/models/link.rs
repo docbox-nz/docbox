@@ -3,7 +3,10 @@ use super::{
     folder::{FolderId, FolderPathSegment},
     user::{User, UserId},
 };
-use crate::{DbExecutor, DbResult, models::folder::WithFullPath};
+use crate::{
+    DbExecutor, DbResult,
+    models::folder::{WithFullPath, WithFullPathScope},
+};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::{postgres::PgRow, prelude::FromRow};
@@ -294,6 +297,99 @@ impl Link {
             .await?;
 
         Ok(())
+    }
+
+    /// Finds a collection of links that are within various document box scopes, resolves
+    /// both the links themselves and the folder path to traverse to get to each link
+    pub async fn resolve_with_extra_mixed_scopes(
+        db: impl DbExecutor<'_>,
+        links_scope_with_id: Vec<(DocumentBoxScopeRaw, LinkId)>,
+    ) -> DbResult<Vec<WithFullPathScope<LinkWithExtra>>> {
+        if links_scope_with_id.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (scopes, link_ids): (Vec<String>, Vec<LinkId>) =
+            links_scope_with_id.into_iter().unzip();
+
+        sqlx::query_as(
+            r#"
+        -- Recursively resolve the link paths for each link creating a JSON array for the path
+        WITH RECURSIVE 
+            "input_links" AS (
+                SELECT link_id, document_box
+                FROM UNNEST($1::text[], $2::uuid[]) AS t(document_box, link_id)
+            ),
+            "folder_hierarchy" AS (
+                SELECT
+                    "f"."id" AS "link_id",
+                    "folder"."id" AS "folder_id",
+                    "folder"."name" AS "folder_name",
+                    "folder"."folder_id" AS "parent_folder_id",
+                    0 AS "depth",
+                    jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
+                FROM "docbox_links" "f"
+                JOIN "input_links" "i" ON "f"."id" = "i"."link_id"
+                JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
+                WHERE "folder"."document_box" = "i"."document_box"
+                UNION ALL
+                SELECT
+                    "fh"."link_id",
+                    "parent"."id",
+                    "parent"."name",
+                    "parent"."folder_id",
+                    "fh"."depth" + 1,
+                    jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
+                FROM "folder_hierarchy" "fh"
+                JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
+            ),
+            "folder_paths" AS (
+                SELECT "link_id", "path", ROW_NUMBER() OVER (PARTITION BY "link_id" ORDER BY "depth" DESC) AS "rn"
+                FROM "folder_hierarchy"
+            )
+        SELECT 
+            -- link itself 
+            "link".*,
+            -- Creator user details
+            "cu"."id" AS "cb_id", 
+            "cu"."name" AS "cb_name", 
+            "cu"."image_id" AS "cb_image_id", 
+            -- Last modified date
+            "ehl"."created_at" AS "last_modified_at", 
+            -- Last modified user details
+            "mu"."id" AS "lmb_id",  
+            "mu"."name" AS "lmb_name", 
+            "mu"."image_id" AS "lmb_image_id" ,
+            -- link path from path lookup
+            "fp"."path" AS "full_path",
+            -- Include document box in response
+            "folder"."document_box" AS "document_box" 
+        FROM "docbox_links" AS "link"
+        -- Join on the creator
+        LEFT JOIN "docbox_users" AS "cu" 
+            ON "link"."created_by" = "cu"."id" 
+        -- Join on the parent folder
+        INNER JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
+        -- Join on the edit history (Latest only)
+        LEFT JOIN (
+            -- Get the latest edit history entry
+            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at" 
+            FROM "docbox_edit_history"
+            ORDER BY "link_id", "created_at" DESC 
+        ) AS "ehl" ON "link"."id" = "ehl"."link_id" 
+        -- Join on the editor history latest edit user
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        -- Join on the resolved folder path
+        LEFT JOIN "folder_paths" "fp" ON "link".id = "fp"."link_id" AND "fp".rn = 1
+        -- Join on the input files for filtering
+        JOIN "input_links" "i" ON "link"."id" = "i"."link_id"
+        -- Ensure correct document box
+        WHERE "folder"."document_box" = "i"."document_box""#,
+        )
+        .bind(scopes)
+        .bind(link_ids)
+        .fetch_all(db)
+        .await
     }
 
     /// Finds a collection of links that are all within the same document box, resolves

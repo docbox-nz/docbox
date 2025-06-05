@@ -9,7 +9,10 @@ use super::{
     folder::{FolderId, FolderPathSegment},
     user::{User, UserId},
 };
-use crate::{DbExecutor, DbResult, models::folder::WithFullPath};
+use crate::{
+    DbExecutor, DbResult,
+    models::folder::{WithFullPath, WithFullPathScope},
+};
 
 pub type FileId = Uuid;
 
@@ -134,6 +137,12 @@ impl<'r> FromRow<'r, PgRow> for LastModifiedByUser {
 
         Ok(LastModifiedByUser(None))
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct FileIdWithScope {
+    pub file_id: FileId,
+    pub scope: DocumentBoxScopeRaw,
 }
 
 pub struct CreateFile {
@@ -452,6 +461,99 @@ impl File {
         )
         .bind(file_ids)
         .bind(scope)
+        .fetch_all(db)
+        .await
+    }
+
+    /// Finds a collection of files that are within various document box scopes, resolves
+    /// both the files themselves and the folder path to traverse to get to each file
+    pub async fn resolve_with_extra_mixed_scopes(
+        db: impl DbExecutor<'_>,
+        files_scope_with_id: Vec<(DocumentBoxScopeRaw, FileId)>,
+    ) -> DbResult<Vec<WithFullPathScope<FileWithExtra>>> {
+        if files_scope_with_id.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (scopes, file_ids): (Vec<String>, Vec<FileId>) =
+            files_scope_with_id.into_iter().unzip();
+
+        sqlx::query_as(
+            r#"
+        -- Recursively resolve the file paths for each file creating a JSON array for the path
+        WITH RECURSIVE 
+            "input_files" AS (
+                SELECT file_id, document_box
+                FROM UNNEST($1::text[], $2::uuid[]) AS t(document_box, file_id)
+            ),
+            "folder_hierarchy" AS (
+                SELECT
+                    "f"."id" AS "file_id",
+                    "folder"."id" AS "folder_id",
+                    "folder"."name" AS "folder_name",
+                    "folder"."folder_id" AS "parent_folder_id",
+                    0 AS "depth",
+                    jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
+                FROM "docbox_files" "f"
+                JOIN "input_files" "i" ON "f"."id" = "i"."file_id"
+                JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
+                WHERE "folder"."document_box" = "i"."document_box"
+                UNION ALL
+                SELECT
+                    "fh"."file_id",
+                    "parent"."id",
+                    "parent"."name",
+                    "parent"."folder_id",
+                    "fh"."depth" + 1,
+                    jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
+                FROM "folder_hierarchy" "fh"
+                JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
+            ),
+            "folder_paths" AS (
+                SELECT "file_id", "path", ROW_NUMBER() OVER (PARTITION BY "file_id" ORDER BY "depth" DESC) AS "rn"
+                FROM "folder_hierarchy"
+            )
+        SELECT 
+            -- File itself 
+            "file".*,
+            -- Creator user details
+            "cu"."id" AS "cb_id", 
+            "cu"."name" AS "cb_name", 
+            "cu"."image_id" AS "cb_image_id", 
+            -- Last modified date
+            "ehl"."created_at" AS "last_modified_at", 
+            -- Last modified user details
+            "mu"."id" AS "lmb_id",  
+            "mu"."name" AS "lmb_name", 
+            "mu"."image_id" AS "lmb_image_id" ,
+            -- File path from path lookup
+            "fp"."path" AS "full_path",
+            -- Include document box in response
+            "folder"."document_box" AS "document_box" 
+        FROM "docbox_files" AS "file"
+        -- Join on the creator
+        LEFT JOIN "docbox_users" AS "cu" 
+            ON "file"."created_by" = "cu"."id" 
+        -- Join on the parent folder
+        INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
+        -- Join on the edit history (Latest only)
+        LEFT JOIN (
+            -- Get the latest edit history entry
+            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at" 
+            FROM "docbox_edit_history"
+            ORDER BY "file_id", "created_at" DESC 
+        ) AS "ehl" ON "file"."id" = "ehl"."file_id" 
+        -- Join on the editor history latest edit user
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        -- Join on the resolved folder path
+        LEFT JOIN "folder_paths" "fp" ON "file".id = "fp"."file_id" AND "fp".rn = 1
+        -- Join on the input files for filtering
+        JOIN "input_files" "i" ON "file"."id" = "i"."file_id"
+        -- Ensure correct document box
+        WHERE "folder"."document_box" = "i"."document_box""#,
+        )
+        .bind(scopes)
+        .bind(file_ids)
         .fetch_all(db)
         .await
     }

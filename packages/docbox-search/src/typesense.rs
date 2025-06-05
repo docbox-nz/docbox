@@ -358,6 +358,15 @@ impl SearchIndex for TypesenseIndex {
             query_by.push("name");
         }
 
+        let has_wildcard = scopes.iter().any(|scope| scope.ends_with('*'));
+
+        let max_filter_by_candidates = if has_wildcard {
+            // Allow filtering over a much larger set when selecting a wildcard scope
+            10_000
+        } else {
+            4
+        };
+
         let size = query.size.unwrap_or(50);
         let offset = query.offset.unwrap_or(0);
 
@@ -379,7 +388,8 @@ impl SearchIndex for TypesenseIndex {
                     "exclude_fields": "page_content",
                     "highlight_fields": "name,value,page_content",
                     "highlight_start_tag": "<em>",
-                    "highlight_end_tag": "</em>"
+                    "highlight_end_tag": "</em>",
+                    "max_filter_by_candidates": max_filter_by_candidates
                 }
             ]
         });
