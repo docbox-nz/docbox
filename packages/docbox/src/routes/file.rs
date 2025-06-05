@@ -127,7 +127,9 @@ pub async fn upload(
 
     // Attempt to guess the file mime type when application/octet-stream is specified
     // (Likely from old browsers)
-    if mime == mime::APPLICATION_OCTET_STREAM {
+    if mime == mime::APPLICATION_OCTET_STREAM
+        && req.disable_mime_sniffing.is_none_or(|value| !value)
+    {
         let guessed_mime = get_file_name_ext(&req.name).and_then(|ext| {
             let guesses = mime_guess::from_ext(&ext);
             guesses.first()
@@ -296,7 +298,9 @@ pub async fn create_presigned(
 
     // Attempt to guess the file mime type when application/octet-stream is specified
     // (Likely from old browsers)
-    if mime == mime::APPLICATION_OCTET_STREAM {
+    if mime == mime::APPLICATION_OCTET_STREAM
+        && req.disable_mime_sniffing.is_none_or(|value| !value)
+    {
         let guessed_mime = get_file_name_ext(&req.name).and_then(|ext| {
             let guesses = mime_guess::from_ext(&ext);
             guesses.first()

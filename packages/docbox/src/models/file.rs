@@ -1,4 +1,4 @@
-use crate::{error::HttpError, MAX_FILE_SIZE};
+use crate::{MAX_FILE_SIZE, error::HttpError};
 use axum::http::StatusCode;
 use axum_typed_multipart::{FieldData, TryFromMultipart};
 use bytes::Bytes;
@@ -52,6 +52,12 @@ pub struct CreatePresignedRequest {
     /// Optional processing config
     #[garde(skip)]
     pub processing_config: Option<ProcessingConfig>,
+
+    /// Whether to disable mime sniffing for the file. When false/not specified
+    /// if a application/octet-stream mime type is provided the file name
+    /// will be used to attempt to determine the real mime type
+    #[garde(skip)]
+    pub disable_mime_sniffing: Option<bool>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -104,6 +110,12 @@ pub struct UploadFileRequest {
     /// response instead of waiting for the upload
     #[garde(skip)]
     pub asynchronous: Option<bool>,
+
+    /// Whether to disable mime sniffing for the file. When false/not specified
+    /// if a application/octet-stream mime type is provided the file name
+    /// will be used to attempt to determine the real mime type
+    #[garde(skip)]
+    pub disable_mime_sniffing: Option<bool>,
 
     /// Fixed file ID the file must use. Should only be used for
     /// migrating existing files and maintaining the same UUID.
