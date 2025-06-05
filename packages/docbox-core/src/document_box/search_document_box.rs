@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-
-use anyhow::Context;
 use docbox_database::{
     DbErr, DbPool, DbResult,
     models::{
@@ -16,7 +13,7 @@ use docbox_search::{
         AdminSearchRequest, FlattenedItemResult, SearchIndexType, SearchRequest, SearchResultData,
     },
 };
-use futures::StreamExt;
+use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
