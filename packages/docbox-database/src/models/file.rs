@@ -186,6 +186,32 @@ impl File {
         .await
     }
 
+    pub async fn all_by_mime(
+        db: impl DbExecutor<'_>,
+        mime: &str,
+        offset: u64,
+        page_size: u64,
+    ) -> DbResult<Vec<FileWithScope>> {
+        sqlx::query_as(
+            r#"
+            SELECT 
+            "file".*,
+            "folder"."document_box" AS "scope" 
+            FROM "docbox_files" "file"
+            INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id" 
+            WHERE "file"."mime" = $1
+            ORDER BY "created_at" ASC
+            OFFSET $2
+            LIMIT $3
+        "#,
+        )
+        .bind(mime)
+        .bind(offset as i64)
+        .bind(page_size as i64)
+        .fetch_all(db)
+        .await
+    }
+
     pub async fn move_to_folder(
         mut self,
         db: impl DbExecutor<'_>,
@@ -227,6 +253,19 @@ impl File {
             .await?;
 
         self.encrypted = encrypted;
+
+        Ok(self)
+    }
+
+    /// Updates the mime type of a file
+    pub async fn set_mime(mut self, db: impl DbExecutor<'_>, mime: String) -> DbResult<File> {
+        sqlx::query(r#"UPDATE "docbox_files" SET "mime" = $1 WHERE "id" = $2"#)
+            .bind(&mime)
+            .bind(self.id)
+            .execute(db)
+            .await?;
+
+        self.mime = mime;
 
         Ok(self)
     }

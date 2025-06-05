@@ -3,7 +3,7 @@ use docbox_core::{secrets::SecretsManagerConfig, storage::StorageLayerFactoryCon
 use docbox_search::SearchIndexFactoryConfig;
 use eyre::Context;
 use serde::Deserialize;
-use sqlx::{postgres::PgConnectOptions, PgPool};
+use sqlx::{PgPool, postgres::PgConnectOptions};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -14,6 +14,7 @@ mod get_tenant;
 mod migrate;
 mod migrate_search;
 mod rebuild_tenant_index;
+mod reprocess_octet_stream_files;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -65,6 +66,15 @@ pub enum Commands {
         #[arg(short, long)]
         env: String,
 
+        /// ID of the tenant to rebuild
+        #[arg(short, long)]
+        tenant_id: Uuid,
+    },
+
+    ReprocessOctetStreamFiles {
+        /// Environment of the tenant
+        #[arg(short, long)]
+        env: String,
         /// ID of the tenant to rebuild
         #[arg(short, long)]
         tenant_id: Uuid,
@@ -193,6 +203,11 @@ async fn main() -> eyre::Result<()> {
         }
         Commands::RebuildTenantIndex { env, tenant_id } => {
             rebuild_tenant_index::rebuild_tenant_index(&config, env, tenant_id).await?;
+            Ok(())
+        }
+        Commands::ReprocessOctetStreamFiles { env, tenant_id } => {
+            reprocess_octet_stream_files::reprocess_octet_stream_files(&config, env, tenant_id)
+                .await?;
             Ok(())
         }
     }
