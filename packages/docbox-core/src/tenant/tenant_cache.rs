@@ -1,13 +1,20 @@
-use std::time::Duration;
+//! # Tenant Cache
+//!
+//! Provides caching for tenants to ensure we don't have to fetch the tenant
+//! from the database for every request
 
 use docbox_database::{
-    models::tenant::{Tenant, TenantId},
     DbPool, DbResult,
+    models::tenant::{Tenant, TenantId},
 };
 use moka::{future::Cache, policy::EvictionPolicy};
+use std::time::Duration;
 
 /// Duration to maintain tenant caches (15 minutes)
 const TENANT_CACHE_DURATION: Duration = Duration::from_secs(60 * 15);
+
+/// Maximum tenants to keep in cache
+const TENANT_CACHE_CAPACITY: u64 = 50;
 
 /// Cache for recently used tenants
 #[derive(Clone)]
@@ -15,6 +22,7 @@ pub struct TenantCache {
     cache: Cache<TenantCacheKey, Tenant>,
 }
 
+/// Cache key to identify a tenant
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct TenantCacheKey {
     env: String,
@@ -28,10 +36,11 @@ impl Default for TenantCache {
 }
 
 impl TenantCache {
+    /// Create a new tenant cache
     pub fn new() -> Self {
         let cache = Cache::builder()
             .time_to_idle(TENANT_CACHE_DURATION)
-            .max_capacity(50)
+            .max_capacity(TENANT_CACHE_CAPACITY)
             .eviction_policy(EvictionPolicy::tiny_lfu())
             .build();
 

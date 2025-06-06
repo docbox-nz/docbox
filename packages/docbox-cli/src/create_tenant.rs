@@ -152,8 +152,8 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
             event_queue_url: tenant_config.event_queue_url,
             origins: tenant_config.origins,
             s3_queue_arn: tenant_config.s3_queue_arn,
+            env: tenant_config.env,
         },
-        tenant_config.env,
     )
     .await?;
 

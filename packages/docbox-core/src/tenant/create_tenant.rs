@@ -1,5 +1,3 @@
-//! Business logic for interacting with a tenant
-
 use crate::storage::{StorageLayerFactory, TenantStorageLayer};
 use docbox_database::migrations::apply_tenant_migrations;
 use docbox_database::models::tenant::TenantId;
@@ -11,6 +9,9 @@ use thiserror::Error;
 
 /// Request to create a tenant
 pub struct CreateTenant {
+    /// Environment to create the tenant within
+    pub env: String,
+
     /// Unique ID for the tenant
     pub id: TenantId,
 
@@ -84,7 +85,6 @@ pub async fn safe_create_tenant(
     search: &SearchIndexFactory,
     storage: &StorageLayerFactory,
     create: CreateTenant,
-    env: String,
 ) -> Result<Tenant, InitTenantError> {
     let mut create_state = CreateTenantState::default();
 
@@ -94,7 +94,6 @@ pub async fn safe_create_tenant(
         search,
         storage,
         create,
-        env,
         &mut create_state,
     )
     .await
@@ -112,7 +111,6 @@ async fn create_tenant(
     search: &SearchIndexFactory,
     storage: &StorageLayerFactory,
     create: CreateTenant,
-    env: String,
     create_state: &mut CreateTenantState,
 ) -> Result<Tenant, InitTenantError> {
     // Enter a database transaction
@@ -131,7 +129,7 @@ async fn create_tenant(
             s3_name: create.s3_name,
             os_index_name: create.os_index_name,
             event_queue_url: create.event_queue_url,
-            env,
+            env: create.env,
         },
     )
     .await
@@ -163,56 +161,30 @@ async fn create_tenant(
     .await
     .inspect_err(|error| tracing::error!(?error, "failed to create tenant tables"))?;
 
-    tracing::debug!("creating tenant s3 bucket");
-
-    // Setup the tenant S3 bucket
-    let storage = storage.create_storage_layer(&tenant);
-    storage
-        .create_bucket()
-        .await
-        .map_err(InitTenantError::CreateS3Bucket)?;
-    create_state.storage = Some(storage.clone());
-
-    // Connect the S3 bucket for file upload notifications
-    if let Some(s3_queue_arn) = create.s3_queue_arn {
-        if let Err(cause) = storage.add_bucket_notifications(&s3_queue_arn).await {
-            tracing::error!(?cause, "failed to add bucket notification configuration");
-            return Err(InitTenantError::SetupS3Notifications(cause));
-        };
-    }
-
-    // Setup bucket allowed origins for presigned uploads
-    if !create.origins.is_empty() {
-        if let Err(cause) = storage.add_bucket_cors(create.origins).await {
-            tracing::error!(?cause, "failed to add bucket cors rules");
-            return Err(InitTenantError::SetupS3Cors(cause));
-        }
-    }
-
-    tracing::debug!("creating tenant search index");
+    // Setup the tenant storage bucket
+    tracing::debug!("creating tenant storage");
+    create_tenant_storage(
+        &tenant,
+        storage,
+        create.s3_queue_arn,
+        create.origins,
+        create_state,
+    )
+    .await?;
 
     // Setup the tenant search index
-    let search = search.create_search_index(&tenant);
-    search
-        .create_index()
-        .await
-        .map_err(InitTenantError::CreateSearchIndex)
-        .inspect_err(|error| tracing::error!(?error, "failed to create search index"))?;
-
-    create_state.search = Some(search);
-
-    // Commit database changes
-    root_transaction
-        .commit()
-        .await
-        .inspect_err(|error| tracing::error!(?error, "failed to commit root transaction"))?;
+    tracing::debug!("creating tenant search index");
+    create_tenant_search(&tenant, search, create_state).await?;
 
     // Commit database changes
     tenant_transaction
         .commit()
         .await
         .inspect_err(|error| tracing::error!(?error, "failed to commit tenant transaction"))?;
-
+    root_transaction
+        .commit()
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to commit root transaction"))?;
     Ok(tenant)
 }
 
@@ -232,4 +204,62 @@ async fn rollback_tenant_error(create_state: CreateTenantState) {
             tracing::error!(?error, "failed to rollback created tenant search index");
         }
     }
+}
+
+/// Create and setup the tenant storage
+async fn create_tenant_storage(
+    tenant: &Tenant,
+    storage: &StorageLayerFactory,
+    s3_queue_arn: Option<String>,
+    origins: Vec<String>,
+    create_state: &mut CreateTenantState,
+) -> Result<(), InitTenantError> {
+    let storage = storage.create_storage_layer(tenant);
+    storage
+        .create_bucket()
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to create tenant bucket"))
+        .map_err(InitTenantError::CreateS3Bucket)?;
+
+    create_state.storage = Some(storage.clone());
+
+    // Connect the S3 bucket for file upload notifications
+    if let Some(s3_queue_arn) = s3_queue_arn {
+        storage
+            .add_bucket_notifications(&s3_queue_arn)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(?error, "failed to add bucket notification configuration")
+            })
+            .map_err(InitTenantError::SetupS3Notifications)?;
+    }
+
+    // Setup bucket allowed origins for presigned uploads
+    if !origins.is_empty() {
+        storage
+            .add_bucket_cors(origins)
+            .await
+            .inspect_err(|error| tracing::error!(?error, "failed to add bucket cors rules"))
+            .map_err(InitTenantError::SetupS3Cors)?;
+    }
+
+    Ok(())
+}
+
+/// Create and setup the tenant search
+async fn create_tenant_search(
+    tenant: &Tenant,
+    search: &SearchIndexFactory,
+    create_state: &mut CreateTenantState,
+) -> Result<(), InitTenantError> {
+    // Setup the tenant search index
+    let search = search.create_search_index(tenant);
+    search
+        .create_index()
+        .await
+        .map_err(InitTenantError::CreateSearchIndex)
+        .inspect_err(|error| tracing::error!(?error, "failed to create search index"))?;
+
+    create_state.search = Some(search);
+    Ok(())
 }
