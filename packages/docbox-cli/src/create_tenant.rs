@@ -5,16 +5,16 @@ use docbox_core::{
     tenant::create_tenant::safe_create_tenant,
 };
 use docbox_database::{
-    create::{create_database, create_tenant_user},
+    DatabasePoolCache,
+    create::{create_database, create_restricted_role},
     models::tenant::TenantId,
-    DatabasePoolCache, ROOT_DATABASE_NAME,
 };
 use docbox_search::SearchIndexFactory;
 use eyre::Context;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::{connect_db, CliConfiguration};
+use crate::{CliConfiguration, connect_db};
 
 /// Request to create a tenant
 #[derive(Debug, Deserialize)]
@@ -32,10 +32,7 @@ pub struct CreateTenant {
     pub db_secret_name: String,
 
     pub db_role_name: String,
-    pub db_password: String,
-
-    #[serde(default)]
-    pub skip_role_creation: bool,
+    pub db_role_password: String,
 
     /// Name of the tenant s3 bucket
     pub s3_name: String,
@@ -65,19 +62,19 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
     // Load AWS configuration
     let aws_config = aws_config().await;
 
-    // Connect to the docbox database
-    let db_docbox = connect_db(
+    // Connect to the "postgres" database to use while creating the tenant database
+    let db_postgres = connect_db(
         &config.database.host,
         config.database.port,
         &config.database.username,
         &config.database.password,
-        ROOT_DATABASE_NAME,
+        "postgres",
     )
     .await
     .context("failed to connect to docbox database")?;
 
     // Create the tenant database
-    if let Err(err) = create_database(&db_docbox, &tenant_config.db_name).await {
+    if let Err(err) = create_database(&db_postgres, &tenant_config.db_name).await {
         if !err
             .as_database_error()
             .is_some_and(|err| err.code().is_some_and(|code| code.to_string().eq("42P04")))
@@ -86,6 +83,7 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
         }
     }
 
+    drop(db_postgres);
     tracing::info!("created tenant database");
 
     // Connect to the tenant database
@@ -99,25 +97,22 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
     .await
     .context("failed to connect to tenant database")?;
 
-    if !tenant_config.skip_role_creation {
-        // Setup the tenant user
-        create_tenant_user(
-            &db_tenant,
-            &tenant_config.db_name,
-            &tenant_config.db_role_name,
-            &tenant_config.db_password,
-        )
-        .await
-        .context("failed to setup tenant user")?;
-        tracing::info!("created tenant user");
-    }
+    // Setup the tenant user
+    create_restricted_role(
+        &db_tenant,
+        &tenant_config.db_name,
+        &tenant_config.db_role_name,
+        &tenant_config.db_role_password,
+    )
+    .await
+    .context("failed to setup tenant user")?;
+    tracing::info!("created tenant user");
 
     // Create and store the new database secret
-    let secret_value = json!({
+    let secret_value = serde_json::to_string(&json!({
         "username": tenant_config.db_role_name,
-        "password": tenant_config.db_password
-    });
-    let secret_value = serde_json::to_string(&secret_value)?;
+        "password": tenant_config.db_role_password
+    }))?;
 
     let secrets = AppSecretManager::from_config(&aws_config, config.secrets.clone());
     secrets
@@ -133,7 +128,7 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
         config.database.port,
         // In the CLI the db credentials have high enough access to be used as the
         // "root secret"
-        tenant_config.db_secret_name.clone(),
+        config.database.root_secret_name.clone(),
         secrets,
     );
     let search_factory = SearchIndexFactory::from_config(&aws_config, config.search.clone())

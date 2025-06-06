@@ -32,8 +32,7 @@ pub async fn create_tenants_table(db: &DbPool) -> DbResult<()> {
     Ok(())
 }
 
-/// Sets up and locks down the tenant user account. This should be
-/// run on the tenant database not the root database
+/// Sets up and locks down a database role.
 ///
 /// Running this requires using an account with a higher level of access
 /// than the standard db user
@@ -42,7 +41,7 @@ pub async fn create_tenants_table(db: &DbPool) -> DbResult<()> {
 /// `db_name` - Name of the tenant database
 /// `role_name` - Name of the user role to create and setup
 /// `password` - Password to assign the user role
-pub async fn create_tenant_user(
+pub async fn create_restricted_role(
     db: &DbPool,
     db_name: &str,
     role_name: &str,

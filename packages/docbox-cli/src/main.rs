@@ -46,6 +46,8 @@ pub struct CliDatabaseConfiguration {
     pub username: String,
     pub password: String,
     pub root_secret_name: String,
+    pub root_role_name: String,
+    pub root_secret_password: String,
 }
 
 #[derive(Subcommand)]
