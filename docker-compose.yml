@@ -35,6 +35,7 @@ services:
       - 9600:9600 # required for Performance Analyzer
     networks:
       - opensearch-net
+    profiles: ["opensearch"]
 
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:3.0.0
@@ -47,6 +48,7 @@ services:
       OPENSEARCH_HOSTS: '["https://opensearch-node1:9200"]'
     networks:
       - opensearch-net
+    profiles: ["opensearch"]
 
 
   # Database
