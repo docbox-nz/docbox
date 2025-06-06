@@ -12,12 +12,11 @@ use docbox_database::models::{
     user::UserId,
 };
 use garde::Validate;
+use mime::Mime;
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
+use serde_with::{serde_as, skip_serializing_none};
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-use crate::serialize::WrappedMime;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum SearchIndexType {
@@ -157,6 +156,12 @@ pub struct FileSearchRequest {
     pub limit: Option<u16>,
 }
 
+/// Wrapper around [Mime] to implement [Serialize] and [Deserialize]
+#[serde_as]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct StringMime(#[serde_as(as = "serde_with::DisplayFromStr")] pub Mime);
+
 /// Request to search within a document box
 #[derive(Default, Debug, Validate, Deserialize, Serialize, ToSchema)]
 #[serde(default)]
@@ -172,7 +177,7 @@ pub struct SearchRequest {
     /// Search only include a specific mime type
     #[garde(skip)]
     #[schema(value_type = Option<String>)]
-    pub mime: Option<WrappedMime>,
+    pub mime: Option<StringMime>,
 
     /// Whether to include document names
     #[garde(skip)]

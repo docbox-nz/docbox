@@ -10,7 +10,6 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 pub mod models;
-mod serialize;
 
 #[cfg(feature = "opensearch")]
 pub use opensearch::OpenSearchConfig;

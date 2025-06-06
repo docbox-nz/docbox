@@ -2,11 +2,11 @@ use crate::models::FileSearchRequest;
 
 use super::models::{FlattenedItemResult, PageResult, SearchScore};
 use super::{
+    SearchIndex,
     models::{
         DocumentPage, FileSearchResults, SearchIndexData, SearchIndexType, SearchRequest,
         SearchResults, UpdateSearchIndexData,
     },
-    SearchIndex,
 };
 use anyhow::Context;
 use aws_config::SdkConfig;
@@ -15,13 +15,13 @@ use docbox_database::models::{
     document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant, user::UserId,
 };
 use opensearch::{
+    DeleteByQueryParts, IndexParts, OpenSearch, SearchParts,
     http::{
+        Url,
         request::JsonBody,
         transport::{SingleNodeConnectionPool, TransportBuilder},
-        Url,
     },
     indices::{IndicesCreateParts, IndicesDeleteParts},
-    DeleteByQueryParts, IndexParts, OpenSearch, SearchParts,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
