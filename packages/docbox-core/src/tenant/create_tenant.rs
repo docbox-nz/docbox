@@ -1,9 +1,10 @@
-use crate::storage::{StorageLayerFactory, TenantStorageLayer};
+use crate::storage::StorageLayerFactory;
+use crate::utils::rollback::RollbackGuard;
 use docbox_database::migrations::apply_tenant_migrations;
 use docbox_database::models::tenant::TenantId;
 use docbox_database::{DbConnectErr, DbPool};
 use docbox_database::{DbErr, models::tenant::Tenant};
-use docbox_search::{SearchIndexFactory, TenantSearchIndex};
+use docbox_search::SearchIndexFactory;
 use std::ops::DerefMut;
 use thiserror::Error;
 
@@ -128,12 +129,12 @@ pub async fn create_tenant(
 
     // Setup the tenant storage bucket
     tracing::debug!("creating tenant storage");
-    let mut storage =
+    let storage =
         create_tenant_storage(&tenant, storage, create.s3_queue_arn, create.origins).await?;
 
     // Setup the tenant search index
     tracing::debug!("creating tenant search index");
-    let mut search = create_tenant_search(&tenant, search).await?;
+    let search = create_tenant_search(&tenant, search).await?;
 
     // Commit database changes
     tenant_transaction
@@ -152,37 +153,13 @@ pub async fn create_tenant(
     Ok(tenant)
 }
 
-struct TenantStorageTransaction {
-    storage: Option<TenantStorageLayer>,
-}
-
-impl TenantStorageTransaction {
-    /// "Commit" the storage so that it won't be reverted on drop
-    fn commit(&mut self) {
-        _ = self.storage.take();
-    }
-}
-
-impl Drop for TenantStorageTransaction {
-    fn drop(&mut self) {
-        if let Some(storage) = self.storage.take() {
-            // Storage was not committed, roll back
-            tokio::spawn(async move {
-                if let Err(error) = storage.delete_bucket().await {
-                    tracing::error!(?error, "failed to rollback created tenant storage bucket");
-                }
-            });
-        }
-    }
-}
-
 /// Create and setup the tenant storage
 async fn create_tenant_storage(
     tenant: &Tenant,
     storage: &StorageLayerFactory,
     s3_queue_arn: Option<String>,
     origins: Vec<String>,
-) -> Result<TenantStorageTransaction, InitTenantError> {
+) -> Result<RollbackGuard<impl FnOnce()>, InitTenantError> {
     let storage = storage.create_storage_layer(tenant);
     storage
         .create_bucket()
@@ -190,9 +167,16 @@ async fn create_tenant_storage(
         .inspect_err(|error| tracing::error!(?error, "failed to create tenant bucket"))
         .map_err(InitTenantError::CreateS3Bucket)?;
 
-    let transaction = TenantStorageTransaction {
-        storage: Some(storage.clone()),
-    };
+    let rollback = RollbackGuard::new({
+        let storage = storage.clone();
+        move || {
+            tokio::spawn(async move {
+                if let Err(error) = storage.delete_bucket().await {
+                    tracing::error!(?error, "failed to rollback created tenant storage bucket");
+                }
+            });
+        }
+    });
 
     // Connect the S3 bucket for file upload notifications
     if let Some(s3_queue_arn) = s3_queue_arn {
@@ -214,38 +198,14 @@ async fn create_tenant_storage(
             .map_err(InitTenantError::SetupS3Cors)?;
     }
 
-    Ok(transaction)
-}
-
-struct TenantSearchTransaction {
-    index: Option<TenantSearchIndex>,
-}
-
-impl TenantSearchTransaction {
-    /// "Commit" the index so that it won't be reverted on drop
-    fn commit(&mut self) {
-        _ = self.index.take();
-    }
-}
-
-impl Drop for TenantSearchTransaction {
-    fn drop(&mut self) {
-        if let Some(index) = self.index.take() {
-            // Storage was not committed, roll back
-            tokio::spawn(async move {
-                if let Err(error) = index.delete_index().await {
-                    tracing::error!(?error, "failed to rollback created tenant search index");
-                }
-            });
-        }
-    }
+    Ok(rollback)
 }
 
 /// Create and setup the tenant search
 async fn create_tenant_search(
     tenant: &Tenant,
     search: &SearchIndexFactory,
-) -> Result<TenantSearchTransaction, InitTenantError> {
+) -> Result<RollbackGuard<impl FnOnce()>, InitTenantError> {
     // Setup the tenant search index
     let search = search.create_search_index(tenant);
     search
@@ -254,9 +214,14 @@ async fn create_tenant_search(
         .map_err(InitTenantError::CreateSearchIndex)
         .inspect_err(|error| tracing::error!(?error, "failed to create search index"))?;
 
-    let transaction = TenantSearchTransaction {
-        index: Some(search),
-    };
+    let rollback = RollbackGuard::new(move || {
+        // Search was not committed, roll back
+        tokio::spawn(async move {
+            if let Err(error) = search.delete_index().await {
+                tracing::error!(?error, "failed to rollback created tenant search index");
+            }
+        });
+    });
 
-    Ok(transaction)
+    Ok(rollback)
 }
