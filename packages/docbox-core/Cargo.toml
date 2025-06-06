@@ -91,6 +91,7 @@ tl = "0.7.8"
 html-escape = "0.2"
 # Caching
 moka = { workspace = true }
+age = "0.11.1"
 
 [dev-dependencies]
 testcontainers-modules = { version = "0.12.1", features = ["postgres"] }

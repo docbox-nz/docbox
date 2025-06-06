@@ -1,29 +1,31 @@
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 use aws::AwsSecretManager;
 use aws_config::SdkConfig;
 use docbox_database::{DbConnectErr, DbSecretManager, DbSecrets};
 use memory::MemorySecretManager;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
-use crate::aws::SecretsManagerClient;
+use crate::{
+    aws::SecretsManagerClient,
+    secrets::{
+        aws::AwsSecretManagerConfig,
+        json::{JsonSecretManager, JsonSecretManagerConfig},
+    },
+};
 
 pub mod aws;
+pub mod json;
 pub mod memory;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SecretsManagerConfig {
     /// In-memory secret manager
-    Memory {
-        /// Collection of secrets to include
-        #[serde(default)]
-        secrets: HashMap<String, String>,
-        /// Optional default secret
-        #[serde(default)]
-        default: Option<String>,
-    },
+    Memory(AwsSecretManagerConfig),
+
+    /// Encrypted JSON file secret manager
+    Json(JsonSecretManagerConfig),
+
     /// AWS secret manager
     Aws,
 }
@@ -32,13 +34,8 @@ impl SecretsManagerConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         let variant = std::env::var("DOCBOX_SECRET_MANAGER").unwrap_or_else(|_| "aws".to_string());
         match variant.as_str() {
-            "memory" => {
-                let default = std::env::var("DOCBOX_SECRET_MANAGER_DEFAULT").ok();
-                Ok(Self::Memory {
-                    secrets: Default::default(),
-                    default,
-                })
-            }
+            "memory" => AwsSecretManagerConfig::from_env().map(Self::Memory),
+            "json" => JsonSecretManagerConfig::from_env().map(Self::Json),
             _ => Ok(Self::Aws),
         }
     }
@@ -47,21 +44,28 @@ impl SecretsManagerConfig {
 pub enum AppSecretManager {
     Aws(AwsSecretManager),
     Memory(MemorySecretManager),
+    Json(JsonSecretManager),
 }
 
 impl AppSecretManager {
     /// Create the secret manager from the provided config
     pub fn from_config(aws_config: &SdkConfig, config: SecretsManagerConfig) -> Self {
         match config {
-            SecretsManagerConfig::Memory { secrets, default } => {
+            SecretsManagerConfig::Memory(config) => {
                 tracing::debug!("using in memory secret manager");
                 AppSecretManager::Memory(MemorySecretManager::new(
-                    secrets
+                    config
+                        .secrets
                         .into_iter()
                         .map(|(key, value)| (key, Secret::String(value)))
                         .collect(),
-                    default.map(Secret::String),
+                    config.default.map(Secret::String),
                 ))
+            }
+
+            SecretsManagerConfig::Json(config) => {
+                tracing::debug!("using json secret manager");
+                AppSecretManager::Json(JsonSecretManager::from_config(config))
             }
             SecretsManagerConfig::Aws => {
                 tracing::debug!("using aws secret manager");
@@ -72,16 +76,20 @@ impl AppSecretManager {
     }
 
     pub async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>> {
+        tracing::debug!(?name, "reading secret");
         match self {
             AppSecretManager::Aws(inner) => inner.get_secret(name).await,
             AppSecretManager::Memory(inner) => inner.get_secret(name).await,
+            AppSecretManager::Json(inner) => inner.get_secret(name).await,
         }
     }
 
     pub async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
+        tracing::debug!(?name, "writing secret");
         match self {
             AppSecretManager::Aws(inner) => inner.create_secret(name, value).await,
             AppSecretManager::Memory(inner) => inner.create_secret(name, value).await,
+            AppSecretManager::Json(inner) => inner.create_secret(name, value).await,
         }
     }
 
