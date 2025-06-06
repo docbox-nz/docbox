@@ -1,16 +1,14 @@
 //! Business logic for working with generated files
 
+use crate::{files::create_generated_file_key, storage::TenantStorageLayer};
 use anyhow::Context;
 use bytes::Bytes;
+use futures::{
+    StreamExt,
+    stream::{FuturesOrdered, FuturesUnordered},
+};
 use mime::Mime;
 use tracing::{debug, error};
-use uuid::Uuid;
-
-use crate::{storage::TenantStorageLayer, utils::file::get_mime_ext};
-use futures::{
-    stream::{FuturesOrdered, FuturesUnordered},
-    StreamExt,
-};
 
 use docbox_database::models::{
     file::FileId,
@@ -96,14 +94,7 @@ pub async fn upload_generated_files(
 
             async move {
                 let file_mime = queued_upload.mime.to_string();
-
-                // Mapped file extensions for
-                let file_ext = get_mime_ext(&queued_upload.mime).unwrap_or("bin");
-
-                // Generate a unique file key
-                let file_key = Uuid::new_v4().to_string();
-                // Prefix the file key with the document box scope and a "generated" suffix
-                let file_key = format!("{}_{}.generated.{}", base_file_key, file_key, file_ext);
+                let file_key = create_generated_file_key(base_file_key, &queued_upload.mime);
 
                 debug!(%file_id, %file_hash, %file_key, %file_mime, "uploading file to s3");
 

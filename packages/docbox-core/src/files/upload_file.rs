@@ -1,22 +1,22 @@
 use crate::files::{create_file_key, index_file::store_file_index};
-use crate::processing::{process_file, ProcessingError, ProcessingIndexMetadata, ProcessingLayer};
+use crate::processing::{ProcessingError, ProcessingIndexMetadata, ProcessingLayer, process_file};
 use crate::storage::TenantStorageLayer;
 use crate::utils::error::CompositeError;
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
-    files::generated::{upload_generated_files, QueuedUpload},
+    files::generated::{QueuedUpload, upload_generated_files},
 };
 use bytes::Bytes;
 use docbox_database::models::document_box::DocumentBoxScopeRaw;
 use docbox_database::models::folder::FolderId;
 use docbox_database::{
+    DbErr, DbPool, DbTransaction,
     models::{
         document_box::WithScope,
         file::{CreateFile, File, FileId},
         generated_file::GeneratedFile,
         user::UserId,
     },
-    DbErr, DbPool, DbTransaction,
 };
 use docbox_search::TenantSearchIndex;
 use mime::Mime;
@@ -197,15 +197,21 @@ pub async fn upload_file(
     upload: UploadFile,
     upload_state: &mut UploadFileState,
 ) -> Result<UploadedFileData, UploadFileError> {
-    let s3_upload = upload.file_key.is_none();
-    let file_key = upload.file_key.unwrap_or_else(|| {
-        create_file_key(
-            &upload.document_box,
-            &upload.name,
-            &upload.mime,
-            Uuid::new_v4(),
-        )
-    });
+    let (s3_upload, file_key) = match upload.file_key {
+        // Already have a file key, don't want to upload
+        Some(file_key) => (false, file_key),
+
+        // No existing file key, we are creating one and uploading the file
+        None => (
+            true,
+            create_file_key(
+                &upload.document_box,
+                &upload.name,
+                &upload.mime,
+                Uuid::new_v4(),
+            ),
+        ),
+    };
 
     let mime = upload.mime;
     let file_bytes = upload.file_bytes;

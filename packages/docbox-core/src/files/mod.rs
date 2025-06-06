@@ -31,6 +31,17 @@ pub fn create_file_key(document_box: &str, name: &str, mime: &Mime, file_key: Uu
     format!("{}/{}", document_box, file_key)
 }
 
+pub fn create_generated_file_key(base_file_key: &str, mime: &Mime) -> String {
+    // Mapped file extensions for the generated type
+    let file_ext = get_mime_ext(mime).unwrap_or("bin");
+
+    // Generate a unique file key
+    let file_key = Uuid::new_v4().to_string();
+
+    // Prefix the file key with the document box scope and a "generated" suffix
+    format!("{}_{}.generated.{}", base_file_key, file_key, file_ext)
+}
+
 #[cfg(test)]
 mod test {
     use crate::files::create_file_key;
