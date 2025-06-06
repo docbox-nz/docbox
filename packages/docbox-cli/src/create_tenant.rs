@@ -1,9 +1,6 @@
 use std::path::PathBuf;
 
-use docbox_core::{
-    aws::aws_config, secrets::AppSecretManager, storage::StorageLayerFactory,
-    tenant::create_tenant::safe_create_tenant,
-};
+use docbox_core::{aws::aws_config, secrets::AppSecretManager, storage::StorageLayerFactory};
 use docbox_database::{
     ROOT_DATABASE_NAME,
     create::{create_database, create_restricted_role},
@@ -138,7 +135,7 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
     let storage_factory = StorageLayerFactory::from_config(&aws_config, config.storage.clone());
 
     // Attempt to initialize the tenant
-    let tenant = safe_create_tenant(
+    let tenant = docbox_core::tenant::create_tenant::create_tenant(
         &root_db,
         &tenant_db,
         &search_factory,
