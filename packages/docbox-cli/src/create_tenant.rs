@@ -5,7 +5,7 @@ use docbox_core::{
     tenant::create_tenant::safe_create_tenant,
 };
 use docbox_database::{
-    DatabasePoolCache,
+    ROOT_DATABASE_NAME,
     create::{create_database, create_restricted_role},
     models::tenant::TenantId,
 };
@@ -14,7 +14,7 @@ use eyre::Context;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::{CliConfiguration, connect_db};
+use crate::{AnyhowError, CliConfiguration, connect_db};
 
 /// Request to create a tenant
 #[derive(Debug, Deserialize)]
@@ -66,8 +66,8 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
     let db_postgres = connect_db(
         &config.database.host,
         config.database.port,
-        &config.database.username,
-        &config.database.password,
+        &config.database.setup_user.username,
+        &config.database.setup_user.password,
         "postgres",
     )
     .await
@@ -86,12 +86,23 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
     drop(db_postgres);
     tracing::info!("created tenant database");
 
-    // Connect to the tenant database
-    let db_tenant = connect_db(
+    // Connect to the root database
+    let root_db = connect_db(
         &config.database.host,
         config.database.port,
-        &config.database.username,
-        &config.database.password,
+        &config.database.setup_user.username,
+        &config.database.setup_user.password,
+        ROOT_DATABASE_NAME,
+    )
+    .await
+    .context("failed to connect to root database")?;
+
+    // Connect to the tenant database
+    let tenant_db = connect_db(
+        &config.database.host,
+        config.database.port,
+        &config.database.setup_user.username,
+        &config.database.setup_user.password,
         &tenant_config.db_name,
     )
     .await
@@ -99,7 +110,7 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
 
     // Setup the tenant user
     create_restricted_role(
-        &db_tenant,
+        &tenant_db,
         &tenant_config.db_name,
         &tenant_config.db_role_name,
         &tenant_config.db_role_password,
@@ -118,27 +129,18 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
     secrets
         .create_secret(&tenant_config.db_secret_name, &secret_value)
         .await
-        .map_err(|err| eyre::Error::msg(err.to_string()))?;
+        .map_err(AnyhowError)?;
 
     tracing::info!("created database secret");
 
-    // Setup database cache / connector
-    let db_cache = DatabasePoolCache::new(
-        config.database.host.clone(),
-        config.database.port,
-        // In the CLI the db credentials have high enough access to be used as the
-        // "root secret"
-        config.database.root_secret_name.clone(),
-        secrets,
-    );
-    let search_factory = SearchIndexFactory::from_config(&aws_config, config.search.clone())
-        .map_err(|err| eyre::Error::msg(err.to_string()))?;
-
+    let search_factory =
+        SearchIndexFactory::from_config(&aws_config, config.search.clone()).map_err(AnyhowError)?;
     let storage_factory = StorageLayerFactory::from_config(&aws_config, config.storage.clone());
 
     // Attempt to initialize the tenant
     let tenant = safe_create_tenant(
-        &db_cache,
+        &root_db,
+        &tenant_db,
         &search_factory,
         &storage_factory,
         docbox_core::tenant::create_tenant::CreateTenant {

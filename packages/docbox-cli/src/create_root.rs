@@ -18,8 +18,8 @@ pub async fn create_root(config: &CliConfiguration) -> eyre::Result<()> {
     let db_root = connect_db(
         &config.database.host,
         config.database.port,
-        &config.database.username,
-        &config.database.password,
+        &config.database.setup_user.username,
+        &config.database.setup_user.password,
         "postgres",
     )
     .await
@@ -39,8 +39,8 @@ pub async fn create_root(config: &CliConfiguration) -> eyre::Result<()> {
     let db_docbox = connect_db(
         &config.database.host,
         config.database.port,
-        &config.database.username,
-        &config.database.password,
+        &config.database.setup_user.username,
+        &config.database.setup_user.password,
         ROOT_DATABASE_NAME,
     )
     .await

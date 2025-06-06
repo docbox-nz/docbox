@@ -62,9 +62,6 @@ GRANT ALL ON ALL TABLES IN SCHEMA public TO {role_name};
 GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO {role_name};
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO {role_name};
 
-GRANT CREATE ON SCHEMA public TO {role_name};
-
-
 -- ensure our api user can access any new objects created in future
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {role_name};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO {role_name};

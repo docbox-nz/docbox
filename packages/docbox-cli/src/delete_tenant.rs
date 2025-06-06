@@ -1,7 +1,10 @@
-use docbox_database::models::tenant::{Tenant, TenantId};
+use docbox_database::{
+    ROOT_DATABASE_NAME,
+    models::tenant::{Tenant, TenantId},
+};
 use eyre::{Context, ContextCompat};
 
-use crate::{connect_db, CliConfiguration};
+use crate::{CliConfiguration, connect_db};
 
 pub async fn delete_tenant(
     config: &CliConfiguration,
@@ -12,9 +15,9 @@ pub async fn delete_tenant(
     let db_docbox = connect_db(
         &config.database.host,
         config.database.port,
-        &config.database.username,
-        &config.database.password,
-        "docbox",
+        &config.database.setup_user.username,
+        &config.database.setup_user.password,
+        ROOT_DATABASE_NAME,
     )
     .await
     .context("failed to connect to docbox database")?;

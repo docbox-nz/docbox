@@ -1,11 +1,10 @@
-use docbox_core::{aws::aws_config, secrets::AppSecretManager};
 use docbox_database::{
-    migrations::apply_tenant_migrations, models::tenant::Tenant, DatabasePoolCache, DbPool,
+    DbPool, ROOT_DATABASE_NAME, migrations::apply_tenant_migrations, models::tenant::Tenant,
 };
 use eyre::Context;
 use uuid::Uuid;
 
-use crate::CliConfiguration;
+use crate::{CliConfiguration, connect_db};
 
 pub async fn migrate(
     config: &CliConfiguration,
@@ -13,20 +12,16 @@ pub async fn migrate(
     tenant_id: Option<Uuid>,
     skip_failed: bool,
 ) -> eyre::Result<()> {
-    // Load AWS configuration
-    let aws_config = aws_config().await;
-
-    // Connect to secrets manager
-    let secrets = AppSecretManager::from_config(&aws_config, config.secrets.clone());
-
-    // Setup database cache / connector
-    let db_cache = DatabasePoolCache::new(
-        config.database.host.clone(),
+    // Connect to the root database
+    let root_db = connect_db(
+        &config.database.host,
         config.database.port,
-        config.database.root_secret_name.clone(),
-        secrets,
-    );
-    let root_db = db_cache.get_root_pool().await?;
+        &config.database.setup_user.username,
+        &config.database.setup_user.password,
+        ROOT_DATABASE_NAME,
+    )
+    .await
+    .context("failed to connect to root database")?;
 
     // Load tenants from the database
     let tenants = Tenant::all(&root_db)
@@ -55,7 +50,7 @@ pub async fn migrate(
     let mut applied_tenants = Vec::new();
 
     for tenant in tenants {
-        let result = migrate_tenant(&db_cache, &root_db, &tenant).await;
+        let result = migrate_tenant(config, &root_db, &tenant).await;
         match result {
             Ok(_) => {
                 applied_tenants.push((tenant.env, tenant.id));
@@ -76,7 +71,7 @@ pub async fn migrate(
 }
 
 pub async fn migrate_tenant(
-    db_cache: &DatabasePoolCache<AppSecretManager>,
+    config: &CliConfiguration,
     root_db: &DbPool,
     tenant: &Tenant,
 ) -> eyre::Result<()> {
@@ -86,13 +81,19 @@ pub async fn migrate_tenant(
         "applying migration against",
     );
 
-    let db = db_cache
-        .get_tenant_pool(tenant)
-        .await
-        .context("failed to connect to tenant database")?;
+    // Connect to the tenant database
+    let tenant_db = connect_db(
+        &config.database.host,
+        config.database.port,
+        &config.database.setup_user.username,
+        &config.database.setup_user.password,
+        &tenant.db_name,
+    )
+    .await
+    .context("failed to connect to tenant database")?;
 
     let mut root_t = root_db.begin().await?;
-    let mut t = db.begin().await?;
+    let mut t = tenant_db.begin().await?;
     apply_tenant_migrations(&mut root_t, &mut t, tenant, None).await?;
     t.commit().await?;
     root_t.commit().await?;

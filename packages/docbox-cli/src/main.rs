@@ -43,11 +43,16 @@ pub struct CliConfiguration {
 pub struct CliDatabaseConfiguration {
     pub host: String,
     pub port: u16,
-    pub username: String,
-    pub password: String,
+    pub setup_user: CliDatabaseSetupUserConfig,
     pub root_secret_name: String,
     pub root_role_name: String,
     pub root_secret_password: String,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct CliDatabaseSetupUserConfig {
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Subcommand)]

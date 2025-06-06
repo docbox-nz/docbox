@@ -1,11 +1,10 @@
 //! Business logic for interacting with a tenant
 
-use crate::secrets::AppSecretManager;
 use crate::storage::{StorageLayerFactory, TenantStorageLayer};
 use docbox_database::migrations::apply_tenant_migrations;
 use docbox_database::models::tenant::TenantId;
-use docbox_database::DbConnectErr;
-use docbox_database::{models::tenant::Tenant, DatabasePoolCache, DbErr};
+use docbox_database::{DbConnectErr, DbPool};
+use docbox_database::{DbErr, models::tenant::Tenant};
 use docbox_search::{SearchIndexFactory, TenantSearchIndex};
 use std::ops::DerefMut;
 use thiserror::Error;
@@ -80,7 +79,8 @@ struct CreateTenantState {
 
 /// Attempts to initialize a new tenant
 pub async fn safe_create_tenant(
-    db_cache: &DatabasePoolCache<AppSecretManager>,
+    root_db: &DbPool,
+    tenant_db: &DbPool,
     search: &SearchIndexFactory,
     storage: &StorageLayerFactory,
     create: CreateTenant,
@@ -88,28 +88,33 @@ pub async fn safe_create_tenant(
 ) -> Result<Tenant, InitTenantError> {
     let mut create_state = CreateTenantState::default();
 
-    create_tenant(db_cache, search, storage, create, env, &mut create_state)
-        .await
-        .inspect_err(|_| {
-            // Attempt to rollback any allocated resources in the background
-            tokio::spawn(rollback_tenant_error(create_state));
-        })
+    create_tenant(
+        root_db,
+        tenant_db,
+        search,
+        storage,
+        create,
+        env,
+        &mut create_state,
+    )
+    .await
+    .inspect_err(|_| {
+        // Attempt to rollback any allocated resources in the background
+        tokio::spawn(rollback_tenant_error(create_state));
+    })
 }
 
 /// Attempts to initialize a new tenant
 async fn create_tenant(
-    db_cache: &DatabasePoolCache<AppSecretManager>,
+    root_db: &DbPool,
+    tenant_db: &DbPool,
+
     search: &SearchIndexFactory,
     storage: &StorageLayerFactory,
     create: CreateTenant,
     env: String,
     create_state: &mut CreateTenantState,
 ) -> Result<Tenant, InitTenantError> {
-    let root_db = db_cache
-        .get_root_pool()
-        .await
-        .inspect_err(|error| tracing::error!(?error, "failed to connect to root database"))?;
-
     // Enter a database transaction
     let mut root_transaction = root_db
         .begin()
@@ -141,11 +146,6 @@ async fn create_tenant(
         InitTenantError::Database(err)
     })
     .inspect_err(|error| tracing::error!(?error, "failed to create tenant"))?;
-
-    let tenant_db = db_cache
-        .get_tenant_pool(&tenant)
-        .await
-        .inspect_err(|error| tracing::error!(?error, "failed to connect to tenant database"))?;
 
     // Enter a database transaction
     let mut tenant_transaction = tenant_db
