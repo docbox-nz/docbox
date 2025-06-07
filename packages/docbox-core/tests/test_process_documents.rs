@@ -156,7 +156,7 @@ async fn test_process_pdf_encrypted() {
     );
 }
 
-/// Test processing a Word (.docx) file
+/// Test processing a Word Document (.docx) file
 #[tokio::test]
 async fn test_process_docx() {
     // Create the processing layer
@@ -419,5 +419,361 @@ async fn test_process_odt() {
     assert!(
         output.additional_files.is_empty(),
         "odt should not produce additional files"
+    );
+}
+
+/// Test processing a Word Template (.dotx) file
+#[tokio::test]
+async fn test_process_dotx() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample.dotx");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("dotx file should produce output");
+
+    assert!(
+        !output.encrypted,
+        "File was marked as encrypted but should not be"
+    );
+
+    assert_eq!(
+        output.upload_queue.len(),
+        5,
+        "dotx file should produce 1 pdf, 3 images and 1 text file"
+    );
+
+    // Ensure the files match the expectations
+    let first = output.upload_queue.first().unwrap();
+    assert_eq!(first.mime, mime::IMAGE_JPEG);
+    assert!(matches!(first.ty, GeneratedFileType::CoverPage));
+
+    let second = output.upload_queue.get(1).unwrap();
+    assert_eq!(second.mime, mime::IMAGE_JPEG);
+    assert!(matches!(second.ty, GeneratedFileType::LargeThumbnail));
+
+    let third = output.upload_queue.get(2).unwrap();
+    assert_eq!(third.mime, mime::IMAGE_JPEG);
+    assert!(matches!(third.ty, GeneratedFileType::SmallThumbnail));
+
+    let forth = output.upload_queue.get(3).unwrap();
+    assert_eq!(forth.mime, mime::TEXT_PLAIN);
+    assert!(matches!(forth.ty, GeneratedFileType::TextContent));
+
+    let fifth = output.upload_queue.get(4).unwrap();
+    assert_eq!(fifth.mime, mime::APPLICATION_PDF);
+    assert!(matches!(fifth.ty, GeneratedFileType::Pdf));
+
+    // Ensure the text content matches expectation
+    let text_content = String::from_utf8_lossy(forth.bytes.as_ref());
+    assert_eq!(
+        text_content.as_ref(),
+        "Sample document\r\nThis is a second line\r\n\r\n\u{c}This is the second page\r\n\r\n\u{c}"
+    );
+
+    let index_metadata = output
+        .index_metadata
+        .expect("dotx file should produce index metadata");
+
+    // Ensure page content matches expectation
+    let pages = index_metadata
+        .pages
+        .expect("dotx file should produce pages");
+    assert_eq!(pages.len(), 3);
+
+    let first_page = pages.first().unwrap();
+    assert_eq!(first_page.page, 0);
+    assert_eq!(
+        first_page.content,
+        "Sample document\r\nThis is a second line\r\n\r\n"
+    );
+
+    let second_page = pages.get(1).unwrap();
+    assert_eq!(second_page.page, 1);
+    assert_eq!(second_page.content, "This is the second page\r\n\r\n");
+
+    let third_page = pages.get(2).unwrap();
+    assert_eq!(third_page.page, 2);
+    assert_eq!(third_page.content, "");
+
+    // Ensure no additional files are produced
+    assert!(
+        output.additional_files.is_empty(),
+        "dotx should not produce additional files"
+    );
+}
+
+/// Test processing a Word 97-2003 Template (.dot) file
+#[tokio::test]
+async fn test_process_dot() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample.dot");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("dot file should produce output");
+
+    assert!(
+        !output.encrypted,
+        "File was marked as encrypted but should not be"
+    );
+
+    assert_eq!(
+        output.upload_queue.len(),
+        5,
+        "dot file should produce 1 pdf, 3 images and 1 text file"
+    );
+
+    // Ensure the files match the expectations
+    let first = output.upload_queue.first().unwrap();
+    assert_eq!(first.mime, mime::IMAGE_JPEG);
+    assert!(matches!(first.ty, GeneratedFileType::CoverPage));
+
+    let second = output.upload_queue.get(1).unwrap();
+    assert_eq!(second.mime, mime::IMAGE_JPEG);
+    assert!(matches!(second.ty, GeneratedFileType::LargeThumbnail));
+
+    let third = output.upload_queue.get(2).unwrap();
+    assert_eq!(third.mime, mime::IMAGE_JPEG);
+    assert!(matches!(third.ty, GeneratedFileType::SmallThumbnail));
+
+    let forth = output.upload_queue.get(3).unwrap();
+    assert_eq!(forth.mime, mime::TEXT_PLAIN);
+    assert!(matches!(forth.ty, GeneratedFileType::TextContent));
+
+    let fifth = output.upload_queue.get(4).unwrap();
+    assert_eq!(fifth.mime, mime::APPLICATION_PDF);
+    assert!(matches!(fifth.ty, GeneratedFileType::Pdf));
+
+    // Ensure the text content matches expectation
+    let text_content = String::from_utf8_lossy(forth.bytes.as_ref());
+    assert_eq!(
+        text_content.as_ref(),
+        "Sample document\r\nThis is a second line\r\n\r\n\u{c}This is the second page\r\n\r\n\u{c}"
+    );
+
+    let index_metadata = output
+        .index_metadata
+        .expect("dot file should produce index metadata");
+
+    // Ensure page content matches expectation
+    let pages = index_metadata.pages.expect("dot file should produce pages");
+    assert_eq!(pages.len(), 3);
+
+    let first_page = pages.first().unwrap();
+    assert_eq!(first_page.page, 0);
+    assert_eq!(
+        first_page.content,
+        "Sample document\r\nThis is a second line\r\n\r\n"
+    );
+
+    let second_page = pages.get(1).unwrap();
+    assert_eq!(second_page.page, 1);
+    assert_eq!(second_page.content, "This is the second page\r\n\r\n");
+
+    let third_page = pages.get(2).unwrap();
+    assert_eq!(third_page.page, 2);
+    assert_eq!(third_page.content, "");
+
+    // Ensure no additional files are produced
+    assert!(
+        output.additional_files.is_empty(),
+        "dot should not produce additional files"
+    );
+}
+
+/// Test processing a Word 97-2003 Document (.doc) file
+#[tokio::test]
+async fn test_process_doc() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample.doc");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("doc file should produce output");
+
+    assert!(
+        !output.encrypted,
+        "File was marked as encrypted but should not be"
+    );
+
+    assert_eq!(
+        output.upload_queue.len(),
+        5,
+        "doc file should produce 1 pdf, 3 images and 1 text file"
+    );
+
+    // Ensure the files match the expectations
+    let first = output.upload_queue.first().unwrap();
+    assert_eq!(first.mime, mime::IMAGE_JPEG);
+    assert!(matches!(first.ty, GeneratedFileType::CoverPage));
+
+    let second = output.upload_queue.get(1).unwrap();
+    assert_eq!(second.mime, mime::IMAGE_JPEG);
+    assert!(matches!(second.ty, GeneratedFileType::LargeThumbnail));
+
+    let third = output.upload_queue.get(2).unwrap();
+    assert_eq!(third.mime, mime::IMAGE_JPEG);
+    assert!(matches!(third.ty, GeneratedFileType::SmallThumbnail));
+
+    let forth = output.upload_queue.get(3).unwrap();
+    assert_eq!(forth.mime, mime::TEXT_PLAIN);
+    assert!(matches!(forth.ty, GeneratedFileType::TextContent));
+
+    let fifth = output.upload_queue.get(4).unwrap();
+    assert_eq!(fifth.mime, mime::APPLICATION_PDF);
+    assert!(matches!(fifth.ty, GeneratedFileType::Pdf));
+
+    // Ensure the text content matches expectation
+    let text_content = String::from_utf8_lossy(forth.bytes.as_ref());
+    assert_eq!(
+        text_content.as_ref(),
+        "Sample document\r\nThis is a second line\r\n\r\n\u{c}This is the second page\r\n\r\n\u{c}"
+    );
+
+    let index_metadata = output
+        .index_metadata
+        .expect("doc file should produce index metadata");
+
+    // Ensure page content matches expectation
+    let pages = index_metadata.pages.expect("doc file should produce pages");
+    assert_eq!(pages.len(), 3);
+
+    let first_page = pages.first().unwrap();
+    assert_eq!(first_page.page, 0);
+    assert_eq!(
+        first_page.content,
+        "Sample document\r\nThis is a second line\r\n\r\n"
+    );
+
+    let second_page = pages.get(1).unwrap();
+    assert_eq!(second_page.page, 1);
+    assert_eq!(second_page.content, "This is the second page\r\n\r\n");
+
+    let third_page = pages.get(2).unwrap();
+    assert_eq!(third_page.page, 2);
+    assert_eq!(third_page.content, "");
+
+    // Ensure no additional files are produced
+    assert!(
+        output.additional_files.is_empty(),
+        "doc should not produce additional files"
+    );
+}
+
+/// Test processing a Word Macro-Enabled Template (.dotm) file
+#[tokio::test]
+async fn test_process_dotm() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample.dotm");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("dotm file should produce output");
+
+    assert!(
+        !output.encrypted,
+        "File was marked as encrypted but should not be"
+    );
+
+    assert_eq!(
+        output.upload_queue.len(),
+        5,
+        "dotm file should produce 1 pdf, 3 images and 1 text file"
+    );
+
+    // Ensure the files match the expectations
+    let first = output.upload_queue.first().unwrap();
+    assert_eq!(first.mime, mime::IMAGE_JPEG);
+    assert!(matches!(first.ty, GeneratedFileType::CoverPage));
+
+    let second = output.upload_queue.get(1).unwrap();
+    assert_eq!(second.mime, mime::IMAGE_JPEG);
+    assert!(matches!(second.ty, GeneratedFileType::LargeThumbnail));
+
+    let third = output.upload_queue.get(2).unwrap();
+    assert_eq!(third.mime, mime::IMAGE_JPEG);
+    assert!(matches!(third.ty, GeneratedFileType::SmallThumbnail));
+
+    let forth = output.upload_queue.get(3).unwrap();
+    assert_eq!(forth.mime, mime::TEXT_PLAIN);
+    assert!(matches!(forth.ty, GeneratedFileType::TextContent));
+
+    let fifth = output.upload_queue.get(4).unwrap();
+    assert_eq!(fifth.mime, mime::APPLICATION_PDF);
+    assert!(matches!(fifth.ty, GeneratedFileType::Pdf));
+
+    // Ensure the text content matches expectation
+    let text_content = String::from_utf8_lossy(forth.bytes.as_ref());
+    assert_eq!(
+        text_content.as_ref(),
+        "Sample document\r\nThis is a second line\r\n\r\n\u{c}This is the second page\r\n\r\n\u{c}"
+    );
+
+    let index_metadata = output
+        .index_metadata
+        .expect("dotm file should produce index metadata");
+
+    // Ensure page content matches expectation
+    let pages = index_metadata
+        .pages
+        .expect("dotm file should produce pages");
+    assert_eq!(pages.len(), 3);
+
+    let first_page = pages.first().unwrap();
+    assert_eq!(first_page.page, 0);
+    assert_eq!(
+        first_page.content,
+        "Sample document\r\nThis is a second line\r\n\r\n"
+    );
+
+    let second_page = pages.get(1).unwrap();
+    assert_eq!(second_page.page, 1);
+    assert_eq!(second_page.content, "This is the second page\r\n\r\n");
+
+    let third_page = pages.get(2).unwrap();
+    assert_eq!(third_page.page, 2);
+    assert_eq!(third_page.content, "");
+
+    // Ensure no additional files are produced
+    assert!(
+        output.additional_files.is_empty(),
+        "dotm should not produce additional files"
     );
 }
