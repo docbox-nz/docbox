@@ -125,6 +125,80 @@ async fn test_process_pdf_encrypted() {
     );
 }
 
+/// Test processing a encrypted Word Document (.docx) file
+#[tokio::test]
+async fn test_process_docx_encrypted() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample_encrypted.docx");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("docx file should produce output");
+
+    assert!(
+        output.encrypted,
+        "File was not marked as encrypted but should be"
+    );
+    assert!(
+        output.upload_queue.is_empty(),
+        "Encrypted file should not produce uploads"
+    );
+    assert!(
+        output.index_metadata.is_none(),
+        "Encrypted file should not produce index metadata"
+    );
+    assert!(
+        output.additional_files.is_empty(),
+        "Encrypted file should not produce additional files"
+    );
+}
+
+/// Test processing a encrypted Word 97-2003 Document (.doc) file
+#[tokio::test]
+async fn test_process_doc_encrypted() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample_encrypted.doc");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("doc file should produce output");
+
+    assert!(
+        output.encrypted,
+        "File was not marked as encrypted but should be"
+    );
+    assert!(
+        output.upload_queue.is_empty(),
+        "Encrypted file should not produce uploads"
+    );
+    assert!(
+        output.index_metadata.is_none(),
+        "Encrypted file should not produce index metadata"
+    );
+    assert!(
+        output.additional_files.is_empty(),
+        "Encrypted file should not produce additional files"
+    );
+}
+
 /// Test processing a Word Document (.docx) file
 #[tokio::test]
 async fn test_process_docx() {
