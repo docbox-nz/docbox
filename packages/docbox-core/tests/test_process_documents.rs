@@ -92,155 +92,43 @@ async fn test_process_pdf() {
 /// Test processing a Word Document (.docx) file
 #[tokio::test]
 async fn test_process_docx() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.docx");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("docx file should produce output");
-
-    validate_document_output(&output);
+    test_process_document("sample.docx").await;
 }
 
 /// Test processing a Rich Text Format (.rtf) file
 #[tokio::test]
 async fn test_process_rtf() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.rtf");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("rtf file should produce output");
-
-    validate_document_output(&output);
+    test_process_document("sample.rtf").await;
 }
 
 /// Test processing a OpenDocument Text file (.odt) file
 #[tokio::test]
 async fn test_process_odt() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.odt");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("odt file should produce output");
-
-    validate_document_output(&output);
+    test_process_document("sample.odt").await;
 }
 
 /// Test processing a Word Template (.dotx) file
 #[tokio::test]
 async fn test_process_dotx() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.dotx");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("dotx file should produce output");
-
-    validate_document_output(&output);
+    test_process_document("sample.dotx").await;
 }
 
 /// Test processing a Word 97-2003 Template (.dot) file
 #[tokio::test]
 async fn test_process_dot() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.dot");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("dot file should produce output");
-
-    validate_document_output(&output);
+    test_process_document("sample.dot").await;
 }
 
 /// Test processing a Word 97-2003 Document (.doc) file
 #[tokio::test]
 async fn test_process_doc() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.doc");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("doc file should produce output");
-
-    validate_document_output(&output);
+    test_process_document("sample.doc").await;
 }
 
 /// Test processing a Word Macro-Enabled Template (.dotm) file
 #[tokio::test]
 async fn test_process_dotm() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.dotm");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("dotm file should produce output");
-
-    validate_document_output(&output);
+    test_process_document("sample.dotm").await;
 }
 
 /// Test processing a Text (.txt) file
@@ -330,111 +218,19 @@ async fn test_process_txt() {
 /// Test processing a encrypted PDF file
 #[tokio::test]
 async fn test_process_pdf_encrypted() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample_encrypted.pdf");
-    let bytes = tokio::fs::read(sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime::APPLICATION_PDF)
-        .await
-        .unwrap()
-        .expect("pdf file should produce output");
-
-    assert!(
-        output.encrypted,
-        "File was not marked as encrypted but should be"
-    );
-    assert!(
-        output.upload_queue.is_empty(),
-        "Encrypted file should not produce uploads"
-    );
-    assert!(
-        output.index_metadata.is_none(),
-        "Encrypted file should not produce index metadata"
-    );
-    assert!(
-        output.additional_files.is_empty(),
-        "Encrypted file should not produce additional files"
-    );
+    test_process_encrypted("sample_encrypted.pdf").await;
 }
 
 /// Test processing a encrypted Word Document (.docx) file
 #[tokio::test]
 async fn test_process_docx_encrypted() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample_encrypted.docx");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("docx file should produce output");
-
-    assert!(
-        output.encrypted,
-        "File was not marked as encrypted but should be"
-    );
-    assert!(
-        output.upload_queue.is_empty(),
-        "Encrypted file should not produce uploads"
-    );
-    assert!(
-        output.index_metadata.is_none(),
-        "Encrypted file should not produce index metadata"
-    );
-    assert!(
-        output.additional_files.is_empty(),
-        "Encrypted file should not produce additional files"
-    );
+    test_process_encrypted("sample_encrypted.docx").await;
 }
 
 /// Test processing a encrypted Word 97-2003 Document (.doc) file
 #[tokio::test]
 async fn test_process_doc_encrypted() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample_encrypted.doc");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("doc file should produce output");
-
-    assert!(
-        output.encrypted,
-        "File was not marked as encrypted but should be"
-    );
-    assert!(
-        output.upload_queue.is_empty(),
-        "Encrypted file should not produce uploads"
-    );
-    assert!(
-        output.index_metadata.is_none(),
-        "Encrypted file should not produce index metadata"
-    );
-    assert!(
-        output.additional_files.is_empty(),
-        "Encrypted file should not produce additional files"
-    );
+    test_process_encrypted("sample_encrypted.doc").await;
 }
 
 /// Test processing a corrupted Word Document (.docx) file
@@ -464,78 +260,52 @@ async fn test_process_docx_corrupted() {
 /// Test processing a Excel Workbook (.xlsx) file
 #[tokio::test]
 async fn test_process_xlsx() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.xlsx");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("xlsx file should produce output");
-
-    validate_workbook_output(&output);
+    test_process_workbook("sample.xlsx").await;
 }
 
 /// Test processing a Excel Binary Workbook (.xlsb) file
 #[tokio::test]
 async fn test_process_xlsb() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.xlsb");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("xlsb file should produce output");
-
-    validate_workbook_output(&output);
+    test_process_workbook("sample.xlsb").await;
 }
 
 /// Test processing a Excel 97-2003 Workbook (.xls) file
 #[tokio::test]
 async fn test_process_xls() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.xls");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("xls file should produce output");
-
-    validate_workbook_output(&output);
+    test_process_workbook("sample.xls").await;
 }
 
 /// Test processing a Excel Macro-Enabled Workbook (.xlsm) file
 #[tokio::test]
 async fn test_process_xlsm() {
+    test_process_workbook("sample.xlsm").await;
+}
+
+/// Test processing a Excel 97-2003 Template (.xlt) file
+#[tokio::test]
+async fn test_process_xlt() {
+    test_process_workbook("sample.xlt").await;
+}
+
+/// Test processing a Excel Macro-Enabled Template (.xltm) file
+#[tokio::test]
+async fn test_process_xltm() {
+    test_process_workbook("sample.xltm").await;
+}
+
+/// Test processing a Excel Template (.xltx) file
+#[tokio::test]
+async fn test_process_xltx() {
+    test_process_workbook("sample.xltx").await;
+}
+
+async fn test_process_encrypted(sample_file: &str) {
     // Create the processing layer
     let (processing_layer, _container) = create_processing_layer().await;
 
     // Get the sample file
     let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample.xlsm");
+    let sample_file = samples_path.join(sample_file);
     let bytes = tokio::fs::read(&sample_file).await.unwrap();
     let bytes = Bytes::from(bytes);
     let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
@@ -544,9 +314,64 @@ async fn test_process_xlsm() {
     let output = process_file(&None, &processing_layer, bytes, &mime)
         .await
         .unwrap()
-        .expect("xls file should produce output");
+        .expect("office file should produce output");
+
+    assert!(
+        output.encrypted,
+        "File was not marked as encrypted but should be"
+    );
+    assert!(
+        output.upload_queue.is_empty(),
+        "Encrypted file should not produce uploads"
+    );
+    assert!(
+        output.index_metadata.is_none(),
+        "Encrypted file should not produce index metadata"
+    );
+    assert!(
+        output.additional_files.is_empty(),
+        "Encrypted file should not produce additional files"
+    );
+}
+
+async fn test_process_workbook(sample_file: &str) {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join(sample_file);
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("office file should produce output");
 
     validate_workbook_output(&output);
+}
+
+async fn test_process_document(sample_file: &str) {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join(sample_file);
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("office file should produce output");
+
+    validate_document_output(&output);
 }
 
 /// Validates the expected output for all office document formats
