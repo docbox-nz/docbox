@@ -13,6 +13,8 @@ pub const CONVERTABLE_FORMATS: &[&str] = &[
     "application/vnd.ms-word.template.macroenabled.12",
     // .xlsb
     "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+    // .xlsm
+    "application/vnd.ms-excel.sheet.macroenabled.12",
 
     "text/html",
     "application/msword",
