@@ -1,5 +1,5 @@
 use docbox_database::{
-    migrations::force_apply_tenant_migrations, DbPool, PgConnectOptions, PgPoolOptions,
+    DbPool, PgConnectOptions, PgPoolOptions, migrations::force_apply_tenant_migrations,
 };
 use testcontainers_modules::{postgres::Postgres, testcontainers::ContainerAsync};
 
@@ -8,6 +8,10 @@ use testcontainers_modules::{postgres::Postgres, testcontainers::ContainerAsync}
 ///
 /// Requires that the test runner have docker available to launch the postgres
 /// container that will be used
+///
+/// Marked with #[allow(dead_code)] as it is used by tests but
+/// rustc doesn't believe us
+#[allow(dead_code)]
 pub async fn create_test_tenant_database() -> (ContainerAsync<Postgres>, DbPool) {
     use testcontainers_modules::testcontainers::runners::AsyncRunner;
 

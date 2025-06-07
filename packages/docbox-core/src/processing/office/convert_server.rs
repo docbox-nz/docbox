@@ -11,8 +11,6 @@ use super::{ConvertToPdf, PdfConvertError};
 pub const CONVERTABLE_FORMATS: &[&str] = &[
     // .dotm
     "application/vnd.ms-word.template.macroenabled.12",
-
-
     "text/html",
     "application/msword",
     "application/vnd.oasis.opendocument.text-flat-xml",
