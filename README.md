@@ -5,6 +5,8 @@
 Docbox 
 </h1>
 
+![Tests Status](https://img.shields.io/github/actions/workflow/status/docbox-nz/docbox/test.yml?style=for-the-badge&label=Tests)
+
 [**Website →**](https://docbox-nz.pages.dev/)
 
 **Docbox** is a modern, multi-tenant file management, processing, and search platform designed to seamlessly integrate into your application. It provides powerful capabilities for securely storing, processing, and retrieving documents.
