@@ -1,6 +1,6 @@
 use crate::common::processing::create_processing_layer;
 use bytes::Bytes;
-use docbox_core::processing::process_file;
+use docbox_core::processing::{ProcessingError, office::PdfConvertError, process_file};
 use docbox_database::models::generated_file::GeneratedFileType;
 use std::path::Path;
 
@@ -159,6 +159,30 @@ async fn test_process_docx_encrypted() {
     assert!(
         output.additional_files.is_empty(),
         "Encrypted file should not produce additional files"
+    );
+}
+
+/// Test processing a corrupted Word Document (.docx) file
+#[tokio::test]
+async fn test_process_docx_corrupted() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample_corrupted.docx");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(output, ProcessingError::MalformedFile(_),),
+        "corrupted file should produce a malformed document error got {output:?}"
     );
 }
 
