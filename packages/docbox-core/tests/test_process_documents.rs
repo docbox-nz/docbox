@@ -1,6 +1,6 @@
 use crate::common::processing::create_processing_layer;
 use bytes::Bytes;
-use docbox_core::processing::{ProcessingError, office::PdfConvertError, process_file};
+use docbox_core::processing::{ProcessingError, process_file};
 use docbox_database::models::generated_file::GeneratedFileType;
 use std::path::Path;
 
@@ -86,140 +86,6 @@ async fn test_process_pdf() {
     assert!(
         output.additional_files.is_empty(),
         "PDF file should not produce additional files"
-    );
-}
-
-/// Test processing a encrypted PDF file
-#[tokio::test]
-async fn test_process_pdf_encrypted() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample_encrypted.pdf");
-    let bytes = tokio::fs::read(sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime::APPLICATION_PDF)
-        .await
-        .unwrap()
-        .expect("pdf file should produce output");
-
-    assert!(
-        output.encrypted,
-        "File was not marked as encrypted but should be"
-    );
-    assert!(
-        output.upload_queue.is_empty(),
-        "Encrypted file should not produce uploads"
-    );
-    assert!(
-        output.index_metadata.is_none(),
-        "Encrypted file should not produce index metadata"
-    );
-    assert!(
-        output.additional_files.is_empty(),
-        "Encrypted file should not produce additional files"
-    );
-}
-
-/// Test processing a encrypted Word Document (.docx) file
-#[tokio::test]
-async fn test_process_docx_encrypted() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample_encrypted.docx");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("docx file should produce output");
-
-    assert!(
-        output.encrypted,
-        "File was not marked as encrypted but should be"
-    );
-    assert!(
-        output.upload_queue.is_empty(),
-        "Encrypted file should not produce uploads"
-    );
-    assert!(
-        output.index_metadata.is_none(),
-        "Encrypted file should not produce index metadata"
-    );
-    assert!(
-        output.additional_files.is_empty(),
-        "Encrypted file should not produce additional files"
-    );
-}
-
-/// Test processing a corrupted Word Document (.docx) file
-#[tokio::test]
-async fn test_process_docx_corrupted() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample_corrupted.docx");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap_err();
-
-    assert!(
-        matches!(output, ProcessingError::MalformedFile(_),),
-        "corrupted file should produce a malformed document error got {output:?}"
-    );
-}
-
-/// Test processing a encrypted Word 97-2003 Document (.doc) file
-#[tokio::test]
-async fn test_process_doc_encrypted() {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join("sample_encrypted.doc");
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
-        .await
-        .unwrap()
-        .expect("doc file should produce output");
-
-    assert!(
-        output.encrypted,
-        "File was not marked as encrypted but should be"
-    );
-    assert!(
-        output.upload_queue.is_empty(),
-        "Encrypted file should not produce uploads"
-    );
-    assert!(
-        output.index_metadata.is_none(),
-        "Encrypted file should not produce index metadata"
-    );
-    assert!(
-        output.additional_files.is_empty(),
-        "Encrypted file should not produce additional files"
     );
 }
 
@@ -926,5 +792,139 @@ async fn test_process_txt() {
     assert!(
         output.additional_files.is_empty(),
         "txt should not produce additional files"
+    );
+}
+
+/// Test processing a encrypted PDF file
+#[tokio::test]
+async fn test_process_pdf_encrypted() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample_encrypted.pdf");
+    let bytes = tokio::fs::read(sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime::APPLICATION_PDF)
+        .await
+        .unwrap()
+        .expect("pdf file should produce output");
+
+    assert!(
+        output.encrypted,
+        "File was not marked as encrypted but should be"
+    );
+    assert!(
+        output.upload_queue.is_empty(),
+        "Encrypted file should not produce uploads"
+    );
+    assert!(
+        output.index_metadata.is_none(),
+        "Encrypted file should not produce index metadata"
+    );
+    assert!(
+        output.additional_files.is_empty(),
+        "Encrypted file should not produce additional files"
+    );
+}
+
+/// Test processing a encrypted Word Document (.docx) file
+#[tokio::test]
+async fn test_process_docx_encrypted() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample_encrypted.docx");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("docx file should produce output");
+
+    assert!(
+        output.encrypted,
+        "File was not marked as encrypted but should be"
+    );
+    assert!(
+        output.upload_queue.is_empty(),
+        "Encrypted file should not produce uploads"
+    );
+    assert!(
+        output.index_metadata.is_none(),
+        "Encrypted file should not produce index metadata"
+    );
+    assert!(
+        output.additional_files.is_empty(),
+        "Encrypted file should not produce additional files"
+    );
+}
+
+/// Test processing a encrypted Word 97-2003 Document (.doc) file
+#[tokio::test]
+async fn test_process_doc_encrypted() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample_encrypted.doc");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap()
+        .expect("doc file should produce output");
+
+    assert!(
+        output.encrypted,
+        "File was not marked as encrypted but should be"
+    );
+    assert!(
+        output.upload_queue.is_empty(),
+        "Encrypted file should not produce uploads"
+    );
+    assert!(
+        output.index_metadata.is_none(),
+        "Encrypted file should not produce index metadata"
+    );
+    assert!(
+        output.additional_files.is_empty(),
+        "Encrypted file should not produce additional files"
+    );
+}
+
+/// Test processing a corrupted Word Document (.docx) file
+#[tokio::test]
+async fn test_process_docx_corrupted() {
+    // Create the processing layer
+    let (processing_layer, _container) = create_processing_layer().await;
+
+    // Get the sample file
+    let samples_path = Path::new("tests/samples/documents");
+    let sample_file = samples_path.join("sample_corrupted.docx");
+    let bytes = tokio::fs::read(&sample_file).await.unwrap();
+    let bytes = Bytes::from(bytes);
+    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
+
+    // Process the file
+    let output = process_file(&None, &processing_layer, bytes, &mime)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(output, ProcessingError::MalformedFile(_),),
+        "corrupted file should produce a malformed document error got {output:?}"
     );
 }
