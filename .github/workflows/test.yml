@@ -50,6 +50,20 @@ jobs:
           targets: x86_64-unknown-linux-musl
           override: true
 
+      # Cache Rust dependencies and build artifacts
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       # Install musl-gcc and poppler (docbox uses poppler in tests)
       - name: Install musl build tools
         run: sudo apt update && sudo apt install musl-tools poppler-utils -y
