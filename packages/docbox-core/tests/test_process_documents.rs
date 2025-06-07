@@ -299,6 +299,79 @@ async fn test_process_xltx() {
     test_process_workbook("sample.xltx").await;
 }
 
+/// Test processing a OpenDocument Spreadsheet (.ods) file
+#[tokio::test]
+async fn test_process_ods() {
+    let output = process_sample_file("sample.ods")
+        .await
+        .expect("office file should produce output");
+
+    assert!(
+        !output.encrypted,
+        "file was marked as encrypted but should not be"
+    );
+
+    assert_eq!(
+        output.upload_queue.len(),
+        5,
+        "office file should produce 1 pdf, 3 images and 1 text file"
+    );
+
+    // Ensure the files match the expectations
+    let first = output.upload_queue.first().unwrap();
+    assert_eq!(first.mime, mime::IMAGE_JPEG);
+    assert!(matches!(first.ty, GeneratedFileType::CoverPage));
+
+    let second = output.upload_queue.get(1).unwrap();
+    assert_eq!(second.mime, mime::IMAGE_JPEG);
+    assert!(matches!(second.ty, GeneratedFileType::LargeThumbnail));
+
+    let third = output.upload_queue.get(2).unwrap();
+    assert_eq!(third.mime, mime::IMAGE_JPEG);
+    assert!(matches!(third.ty, GeneratedFileType::SmallThumbnail));
+
+    let forth = output.upload_queue.get(3).unwrap();
+    assert_eq!(forth.mime, mime::TEXT_PLAIN);
+    assert!(matches!(forth.ty, GeneratedFileType::TextContent));
+
+    let fifth = output.upload_queue.get(4).unwrap();
+    assert_eq!(fifth.mime, mime::APPLICATION_PDF);
+    assert!(matches!(fifth.ty, GeneratedFileType::Pdf));
+
+    // Ensure the text content matches expectation
+    let text_content = String::from_utf8_lossy(forth.bytes.as_ref());
+    assert_eq!(
+        text_content.as_ref(),
+        "Sample Sample 1Sample 2\r\n\r\n\u{c}"
+    );
+
+    let index_metadata = output
+        .index_metadata
+        .as_ref()
+        .expect("office file should produce index metadata");
+
+    // Ensure page content matches expectation
+    let pages = index_metadata
+        .pages
+        .as_ref()
+        .expect("office file should produce pages");
+    assert_eq!(pages.len(), 2);
+
+    let first_page = pages.first().unwrap();
+    assert_eq!(first_page.page, 0);
+    assert_eq!(first_page.content, "Sample Sample 1Sample 2\r\n\r\n");
+
+    let second_page = pages.get(1).unwrap();
+    assert_eq!(second_page.page, 1);
+    assert_eq!(second_page.content, "");
+
+    // Ensure no additional files are produced
+    assert!(
+        output.additional_files.is_empty(),
+        "office file should not produce additional files"
+    );
+}
+
 /// Test processing a encrypted Excel Workbook (.xlsx) file
 #[tokio::test]
 async fn test_process_xlsx_encrypted() {
@@ -311,7 +384,7 @@ async fn test_process_xls_encrypted() {
     test_process_encrypted("sample_encrypted.xls").await;
 }
 
-async fn test_process_encrypted(sample_file: &str) {
+async fn process_sample_file(sample_file: &str) -> Option<ProcessingOutput> {
     // Create the processing layer
     let (processing_layer, _container) = create_processing_layer().await;
 
@@ -323,9 +396,14 @@ async fn test_process_encrypted(sample_file: &str) {
     let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
 
     // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
+    process_file(&None, &processing_layer, bytes, &mime)
         .await
         .unwrap()
+}
+
+async fn test_process_encrypted(sample_file: &str) {
+    let output = process_sample_file(sample_file)
+        .await
         .expect("office file should produce output");
 
     assert!(
@@ -347,40 +425,15 @@ async fn test_process_encrypted(sample_file: &str) {
 }
 
 async fn test_process_workbook(sample_file: &str) {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join(sample_file);
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
+    let output = process_sample_file(sample_file)
         .await
-        .unwrap()
         .expect("office file should produce output");
-
     validate_workbook_output(&output);
 }
 
 async fn test_process_document(sample_file: &str) {
-    // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
-
-    // Get the sample file
-    let samples_path = Path::new("tests/samples/documents");
-    let sample_file = samples_path.join(sample_file);
-    let bytes = tokio::fs::read(&sample_file).await.unwrap();
-    let bytes = Bytes::from(bytes);
-    let mime = mime_guess::from_path(&sample_file).iter().next().unwrap();
-
-    // Process the file
-    let output = process_file(&None, &processing_layer, bytes, &mime)
+    let output = process_sample_file(sample_file)
         .await
-        .unwrap()
         .expect("office file should produce output");
 
     validate_document_output(&output);

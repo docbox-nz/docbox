@@ -17,7 +17,8 @@ pub const CONVERTABLE_FORMATS: &[&str] = &[
     "application/vnd.ms-excel.sheet.macroenabled.12",
     // .xltm
     "application/vnd.ms-excel.template.macroenabled.12",
-
+    // .ods
+    "application/vnd.oasis.opendocument.spreadsheet",
     "text/html",
     "application/msword",
     "application/vnd.oasis.opendocument.text-flat-xml",
