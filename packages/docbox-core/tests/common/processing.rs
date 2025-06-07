@@ -14,7 +14,7 @@ use testcontainers::{
 /// rustc doesn't believe us
 #[allow(dead_code)]
 pub async fn create_processing_layer() -> (ProcessingLayer, ContainerAsync<GenericImage>) {
-    let container = GenericImage::new("jacobtread/office-convert-server", "0.2.0")
+    let container = GenericImage::new("jacobtread/office-convert-server", "0.2.2")
         .with_exposed_port(3000.tcp())
         .with_wait_for(WaitFor::http(
             HttpWaitStrategy::new("/status").with_expected_status_code(200u16),
