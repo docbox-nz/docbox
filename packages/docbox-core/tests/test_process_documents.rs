@@ -299,6 +299,18 @@ async fn test_process_xltx() {
     test_process_workbook("sample.xltx").await;
 }
 
+/// Test processing a encrypted Excel Workbook (.xlsx) file
+#[tokio::test]
+async fn test_process_xlsx_encrypted() {
+    test_process_encrypted("sample_encrypted.xlsx").await;
+}
+
+/// Test processing a encrypted Excel 97-2003 Workbook (.xls) file
+#[tokio::test]
+async fn test_process_xls_encrypted() {
+    test_process_encrypted("sample_encrypted.xls").await;
+}
+
 async fn test_process_encrypted(sample_file: &str) {
     // Create the processing layer
     let (processing_layer, _container) = create_processing_layer().await;
