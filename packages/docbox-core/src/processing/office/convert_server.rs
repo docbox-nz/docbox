@@ -32,7 +32,6 @@ pub const CONVERTABLE_FORMATS: &[&str] = &[
     "application/x-abiword",
     "application/x-t602",
     "application/vnd.lotus-wordpro",
-    "text/plain",
     "application/x-hwp",
     "application/vnd.sun.xml.writer.template",
     "application/pdf",
