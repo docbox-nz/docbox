@@ -55,7 +55,7 @@ setup_converter_server() {
 
     # Download office converter server binary
     echo "Downloading converter server"
-    curl -L -o $TMP_SERVER_PATH https://github.com/jacobtread/office-convert-server/releases/download/v0.1.0/office-convert-server
+    curl -L -o $TMP_SERVER_PATH https://github.com/jacobtread/office-convert-server/releases/download/v0.2.2/office-convert-server
 
     # Ensure docbox directory exists
     sudo mkdir /docbox
