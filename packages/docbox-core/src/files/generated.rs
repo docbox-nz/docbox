@@ -17,9 +17,9 @@ use docbox_database::models::{
 
 #[derive(Debug)]
 pub struct QueuedUpload {
-    mime: Mime,
-    ty: GeneratedFileType,
-    bytes: Bytes,
+    pub mime: Mime,
+    pub ty: GeneratedFileType,
+    pub bytes: Bytes,
 }
 
 impl QueuedUpload {
