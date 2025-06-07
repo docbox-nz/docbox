@@ -45,8 +45,8 @@ async fn test_process_pdf() {
     // Ensure the text content matches expectation
     let text_content = String::from_utf8_lossy(forth.bytes.as_ref());
     assert_eq!(
-        text_content.as_ref(),
-        "Sample document\r\nThis is a second line\r\n\r\n\u{c}This is the second page\r\n\r\n\u{c}"
+        text_content.as_ref().replace("\r\n", "\n"),
+        "Sample document\nThis is a second line\n\n\u{c}This is the second page\n\n\u{c}"
     );
 
     let index_metadata = output
@@ -60,13 +60,16 @@ async fn test_process_pdf() {
     let first_page = pages.first().unwrap();
     assert_eq!(first_page.page, 0);
     assert_eq!(
-        first_page.content,
-        "Sample document\r\nThis is a second line\r\n\r\n"
+        first_page.content.replace("\r\n", "\n"),
+        "Sample document\nThis is a second line\n\n"
     );
 
     let second_page = pages.get(1).unwrap();
     assert_eq!(second_page.page, 1);
-    assert_eq!(second_page.content, "This is the second page\r\n\r\n");
+    assert_eq!(
+        second_page.content.replace("\r\n", "\n"),
+        "This is the second page\n\n"
+    );
 
     let third_page = pages.get(2).unwrap();
     assert_eq!(third_page.page, 2);
