@@ -1,0 +1,61 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Test docbox
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repo for building
+      - uses: actions/checkout@v4
+
+      # Cache for Docker images
+      - name: Cache Docker images
+        id: cache-docker
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.docker-cache
+          key: docker-images-v1
+
+      # Load Docker images from cache (if present)
+      - name: Load cached Docker images
+        if: steps.cache-docker.outputs.cache-hit == 'true'
+        run: |
+          docker load -i /tmp/.docker-cache/postgres.tar
+          docker load -i /tmp/.docker-cache/office-convert-server.tar
+
+      # Pull and save Docker images if not in cache
+      - name: Pull and save Docker images
+        if: steps.cache-docker.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/.docker-cache
+
+          docker pull postgres:11-alpine
+          docker save postgres:11-alpine -o /tmp/.docker-cache/postgres.tar
+
+          docker pull jacobtread/office-convert-server:0.2.2
+          docker save jacobtread/office-convert-server:0.2.2 -o /tmp/.docker-cache/office-convert-server.tar
+
+      # Setup rust for building the service
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-musl
+          override: true
+
+      # Install musl-gcc and poppler (docbox uses poppler in tests)
+      - name: Install musl build tools
+        run: sudo apt update && sudo apt install musl-tools poppler-utils -y
+
+      # Test the binary
+      - name: Run tests
+        env:
+          RUST_LOG: debug
+        run: cargo test --verbose
