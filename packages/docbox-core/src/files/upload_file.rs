@@ -197,9 +197,10 @@ pub async fn upload_file(
     upload: UploadFile,
     upload_state: &mut UploadFileState,
 ) -> Result<UploadedFileData, UploadFileError> {
-    let (s3_upload, file_key) = match upload.file_key {
+    // Determine if we need to upload and what the file key is
+    let (s3_upload, file_key) = match upload.file_key.as_ref() {
         // Already have a file key, don't want to upload
-        Some(file_key) => (false, file_key),
+        Some(file_key) => (false, file_key.clone()),
 
         // No existing file key, we are creating one and uploading the file
         None => (
@@ -213,51 +214,29 @@ pub async fn upload_file(
         ),
     };
 
-    let mime = upload.mime;
-    let file_bytes = upload.file_bytes;
-    let hash = sha256::digest(file_bytes.as_ref() as &[u8]);
-
-    // Create file to commit against
-    let mut file = File::create(
-        db.deref_mut(),
-        CreateFile {
-            parent_id: upload.parent_id,
-            fixed_id: upload.fixed_id,
-            name: upload.name,
-            mime: mime.to_string(),
-            file_key: file_key.clone(),
-            folder_id: upload.folder_id,
-            hash: hash.clone(),
-            size: file_bytes.len().min(i32::MAX as usize) as i32,
-            created_by: upload.created_by.clone(),
-        },
-    )
-    .await
-    .map_err(UploadFileError::CreateFile)?;
-
     // Process the file
     let processing_output = process_file(
         &upload.processing_config,
         processing,
-        file_bytes.clone(),
-        &mime,
+        upload.file_bytes.clone(),
+        &upload.mime,
     )
     .await?;
+
+    // Get file encryption state
+    let encrypted = processing_output
+        .as_ref()
+        .map(|output| output.encrypted)
+        .unwrap_or_default();
+
+    // Create database record
+    let file = create_file_record(db, &upload, &file_key, &upload.file_bytes, encrypted).await?;
 
     let mut index_metadata: Option<ProcessingIndexMetadata> = None;
     let mut generated_files: Option<Vec<GeneratedFile>> = None;
     let mut additional_files: Vec<UploadedFileData> = Vec::new();
 
     if let Some(processing_output) = processing_output {
-        // Store the encryption state for encrypted files
-        if processing_output.encrypted {
-            tracing::debug!("marking file as encrypted");
-            file = file
-                .set_encrypted(db.deref_mut(), true)
-                .await
-                .map_err(UploadFileError::SetEncryption)?;
-        }
-
         index_metadata = processing_output.index_metadata;
 
         tracing::debug!("uploading generated files");
@@ -311,7 +290,7 @@ pub async fn upload_file(
         // Upload the file itself to S3
         tracing::debug!("uploading main file");
         storage
-            .upload_file(&file_key, mime.to_string(), file_bytes)
+            .upload_file(&file_key, file.mime.clone(), upload.file_bytes)
             .await
             .map_err(UploadFileError::UploadFile)?;
         upload_state.s3_upload_keys.push(file_key.clone());
@@ -328,6 +307,37 @@ pub async fn upload_file(
         generated: generated_files.unwrap_or_default(),
         additional_files,
     })
+}
+
+/// Create a file database record
+async fn create_file_record(
+    db: &mut DbTransaction<'_>,
+    upload: &UploadFile,
+    file_key: &str,
+    file_bytes: &Bytes,
+    encrypted: bool,
+) -> Result<File, UploadFileError> {
+    let hash = sha256::digest(file_bytes.as_ref() as &[u8]);
+    let size = file_bytes.len().min(i32::MAX as usize) as i32;
+
+    // Create file to commit against
+    File::create(
+        db.deref_mut(),
+        CreateFile {
+            parent_id: upload.parent_id,
+            fixed_id: upload.fixed_id,
+            name: upload.name.clone(),
+            mime: upload.mime.to_string(),
+            file_key: file_key.to_owned(),
+            folder_id: upload.folder_id,
+            hash,
+            size,
+            created_by: upload.created_by.clone(),
+            encrypted,
+        },
+    )
+    .await
+    .map_err(UploadFileError::CreateFile)
 }
 
 /// Stores the provided queued file uploads as generated files in

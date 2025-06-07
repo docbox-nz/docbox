@@ -160,6 +160,7 @@ pub struct CreateFile {
     pub size: i32,
     pub file_key: String,
     pub created_by: Option<UserId>,
+    pub encrypted: bool,
 }
 
 impl File {
@@ -282,6 +283,7 @@ impl File {
             size,
             file_key,
             created_by,
+            encrypted,
         }: CreateFile,
     ) -> DbResult<File> {
         let id = fixed_id.unwrap_or_else(Uuid::new_v4);
@@ -302,7 +304,7 @@ impl File {
         .bind(folder_id)
         .bind(hash.as_str())
         .bind(size)
-        .bind(false)
+        .bind(encrypted)
         .bind(file_key.as_str())
         .bind(created_by.as_ref())
         .bind(created_at)
@@ -317,7 +319,7 @@ impl File {
             folder_id,
             hash,
             size,
-            encrypted: false,
+            encrypted,
             file_key,
             created_by,
             created_at,
