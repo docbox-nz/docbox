@@ -1,16 +1,71 @@
 use crate::{
     files::generated::QueuedUpload,
-    office::{OfficeConverter, PdfConvertError},
-    processing::{pdf::process_pdf, ProcessingError, ProcessingOutput},
+    processing::{
+        ProcessingError, ProcessingOutput,
+        office::convert_server::is_known_pdf_convertable,
+        pdf::{is_pdf_file, process_pdf},
+    },
 };
 use bytes::Bytes;
+use convert_server::OfficeConverterServer;
 use docbox_database::models::generated_file::GeneratedFileType;
+use mime::Mime;
+use office_convert_client::RequestError;
+use thiserror::Error;
+
+pub mod convert_server;
 
 const DISALLOW_MALFORMED_OFFICE: bool = true;
+
+#[derive(Debug, Error)]
+pub enum PdfConvertError {
+    /// Failed to convert the file to a pdf
+    #[error(transparent)]
+    ConversionFailed(#[from] RequestError),
+
+    #[error("office document is malformed")]
+    MalformedDocument,
+
+    #[error("office document is password protected")]
+    EncryptedDocument,
+}
+
+#[derive(Clone)]
+pub enum OfficeConverter {
+    ConverterServer(OfficeConverterServer),
+}
 
 #[derive(Clone)]
 pub struct OfficeProcessingLayer {
     pub converter: OfficeConverter,
+}
+
+impl OfficeConverter {
+    pub async fn convert_to_pdf(&self, bytes: Bytes) -> Result<Bytes, PdfConvertError> {
+        match self {
+            OfficeConverter::ConverterServer(inner) => inner.convert_to_pdf(bytes).await,
+        }
+    }
+
+    pub fn is_convertable(&self, mime: &Mime) -> bool {
+        match self {
+            OfficeConverter::ConverterServer(inner) => inner.is_convertable(mime),
+        }
+    }
+}
+
+/// Trait for converting some file input bytes into some output bytes
+/// for a converted PDF file
+pub(crate) trait ConvertToPdf {
+    async fn convert_to_pdf(&self, bytes: Bytes) -> Result<Bytes, PdfConvertError>;
+
+    fn is_convertable(&self, mime: &Mime) -> bool;
+}
+
+/// Checks if the provided mime type either is a PDF
+/// or can be converted to a PDF
+pub fn is_pdf_compatible(mime: &Mime) -> bool {
+    is_pdf_file(mime) || is_known_pdf_convertable(mime)
 }
 
 /// Processes a PDF compatible office/other supported file format. Converts to

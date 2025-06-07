@@ -1,10 +1,9 @@
 use crate::{
     files::{generated::QueuedUpload, upload_file::ProcessingConfig},
-    office::{is_pdf_compatible, PdfConvertError},
     processing::{
         email::{is_mail_mime, process_email},
         image::process_image_async,
-        office::process_office,
+        office::{PdfConvertError, process_office},
         pdf::process_pdf,
     },
 };
@@ -122,7 +121,7 @@ pub async fn process_file(
         Ok(Some(output))
     }
     // File can be converted to a PDF then processed
-    else if is_pdf_compatible(mime) {
+    else if layer.office.converter.is_convertable(mime) {
         tracing::debug!("processing office compatible file");
 
         let output = process_office(&layer.office, bytes).await?;

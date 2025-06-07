@@ -8,8 +8,10 @@ use docbox_core::{
         AppNotificationQueue, NotificationConfig,
         process::{NotificationQueueData, process_notification_queue},
     },
-    office::{OfficeConverter, convert_server::OfficeConverterServer},
-    processing::{ProcessingLayer, office::OfficeProcessingLayer},
+    processing::{
+        ProcessingLayer,
+        office::{OfficeConverter, OfficeProcessingLayer, convert_server::OfficeConverterServer},
+    },
     secrets::{AppSecretManager, SecretsManagerConfig},
     storage::{StorageLayerFactory, StorageLayerFactoryConfig},
     tenant::tenant_cache::TenantCache,

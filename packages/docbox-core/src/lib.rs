@@ -7,7 +7,6 @@ pub mod folders;
 pub mod image;
 pub mod links;
 pub mod notifications;
-pub mod office;
 pub mod processing;
 pub mod secrets;
 pub mod storage;

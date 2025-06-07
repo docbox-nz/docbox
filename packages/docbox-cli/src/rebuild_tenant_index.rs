@@ -2,12 +2,12 @@ use std::str::FromStr;
 
 use docbox_core::{
     aws::aws_config,
-    office::is_pdf_compatible,
-    processing::pdf::PAGE_END_CHARACTER,
+    processing::{office::is_pdf_compatible, pdf::PAGE_END_CHARACTER},
     secrets::AppSecretManager,
     storage::{StorageLayerFactory, TenantStorageLayer},
 };
 use docbox_database::{
+    DatabasePoolCache, DbPool,
     models::{
         document_box::DocumentBoxScopeRaw,
         file::{File, FileWithScope},
@@ -16,14 +16,13 @@ use docbox_database::{
         link::{Link, LinkWithScope},
         tenant::Tenant,
     },
-    DatabasePoolCache, DbPool,
 };
 use docbox_search::{
-    models::{DocumentPage, SearchIndexData, SearchIndexType},
     SearchIndexFactory,
+    models::{DocumentPage, SearchIndexData, SearchIndexType},
 };
 use eyre::{Context, ContextCompat};
-use futures::{future::LocalBoxFuture, stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
 use itertools::Itertools;
 use uuid::Uuid;
 

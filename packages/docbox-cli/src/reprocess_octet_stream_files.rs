@@ -1,7 +1,7 @@
 use docbox_core::{
     aws::aws_config,
     files::{index_file::store_file_index, upload_file::store_generated_files},
-    office::{OfficeConverter, convert_server::OfficeConverterServer},
+    processing::office::{OfficeConverter, convert_server::OfficeConverterServer},
     processing::{
         ProcessingIndexMetadata, ProcessingLayer, office::OfficeProcessingLayer, process_file,
     },
