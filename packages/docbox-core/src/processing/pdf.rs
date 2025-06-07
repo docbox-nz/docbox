@@ -1,7 +1,8 @@
 use crate::{
     files::generated::QueuedUpload,
-    image::create_img_bytes,
-    processing::{ProcessingError, ProcessingIndexMetadata, ProcessingOutput},
+    processing::{
+        ProcessingError, ProcessingIndexMetadata, ProcessingOutput, image::create_img_bytes,
+    },
 };
 use anyhow::Context;
 use docbox_database::models::generated_file::GeneratedFileType;

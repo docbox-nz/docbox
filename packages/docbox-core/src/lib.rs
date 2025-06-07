@@ -4,7 +4,6 @@ pub mod document_box;
 pub mod events;
 pub mod files;
 pub mod folders;
-pub mod image;
 pub mod links;
 pub mod notifications;
 pub mod processing;

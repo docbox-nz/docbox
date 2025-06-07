@@ -1,10 +1,17 @@
-use std::io::Cursor;
-
 use super::{ProcessingError, ProcessingOutput};
-use crate::{files::generated::QueuedUpload, image::create_img_bytes};
+use crate::files::generated::QueuedUpload;
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, ImageResult};
+use std::io::Cursor;
+
+/// Encodes the provided [DynamicImage] into a byte array
+/// in the requested image `format`
+pub fn create_img_bytes(image: &DynamicImage, format: ImageFormat) -> ImageResult<Vec<u8>> {
+    let mut buffer = Cursor::new(Vec::new());
+    image.write_to(&mut buffer, format)?;
+    Ok(buffer.into_inner())
+}
 
 /// Image processing is CPU intensive, this async variant moves the image processing
 /// to a separate thread where blocking is acceptable to prevent blocking other
