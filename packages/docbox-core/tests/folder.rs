@@ -480,3 +480,94 @@ async fn test_update_folder_folder_unknown() {
         "unknown folder should result in a failure"
     );
 }
+
+/// Tests that a folder cannot be moved into itself
+#[tokio::test]
+async fn test_update_folder_folder_self() {
+    let (_container_db, db) = create_test_tenant_database().await;
+    let (_container_search, search) = create_test_tenant_typesense().await;
+    let events = TenantEventPublisher::Noop(NoopEventPublisher);
+    let (_document_box, root) = create_document_box(
+        &db,
+        &events,
+        CreateDocumentBox {
+            scope: "test".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let folder = safe_create_folder(
+        &db,
+        search.clone(),
+        &events,
+        CreateFolderData {
+            folder: root.clone(),
+            name: "Test Folder".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(folder.folder_id.unwrap(), root.id);
+
+    // Update the folder
+    let err = update_folder(
+        &db,
+        &search,
+        &"test".to_string(),
+        folder.clone(),
+        None,
+        UpdateFolder {
+            folder_id: Some(folder.id),
+            name: None,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        matches!(err, UpdateFolderError::CannotMoveIntoSelf),
+        "moving to self should result in a failure"
+    );
+}
+
+/// Tests that a root folder cannot be updated
+#[tokio::test]
+async fn test_update_folder_folder_root() {
+    let (_container_db, db) = create_test_tenant_database().await;
+    let (_container_search, search) = create_test_tenant_typesense().await;
+    let events = TenantEventPublisher::Noop(NoopEventPublisher);
+    let (_document_box, root) = create_document_box(
+        &db,
+        &events,
+        CreateDocumentBox {
+            scope: "test".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Update the folder
+    let err = update_folder(
+        &db,
+        &search,
+        &"test".to_string(),
+        root,
+        None,
+        UpdateFolder {
+            folder_id: None,
+            name: None,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        matches!(err, UpdateFolderError::CannotModifyRoot),
+        "modifying root should result in a failure"
+    );
+}
