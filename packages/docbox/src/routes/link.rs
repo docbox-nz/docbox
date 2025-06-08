@@ -17,15 +17,15 @@ use crate::{
 };
 use axum::http::header;
 use axum::{
+    Extension, Json,
     body::Body,
     extract::Path,
     http::{Response, StatusCode},
-    Extension, Json,
 };
 use axum_valid::Garde;
 use docbox_core::links::update_link::{UpdateLink, UpdateLinkError};
 use docbox_core::links::{
-    create_link::safe_create_link, create_link::CreateLinkData, delete_link::delete_link,
+    create_link::CreateLinkData, create_link::safe_create_link, delete_link::delete_link,
 };
 use docbox_database::models::{
     edit_history::EditHistory,

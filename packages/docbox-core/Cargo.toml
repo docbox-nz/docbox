@@ -99,3 +99,8 @@ testcontainers = { version = "0.24.0", features = ["http_wait"] }
 testcontainers-modules = { version = "0.12.1", features = ["postgres"] }
 tokio = { version = "1", features = ["full"] }
 mime_guess = "2.0.5"
+
+# Enable typesense search backend for testing
+docbox-search = { version = "0.1.0", default-features = false, path = "../docbox-search", features = [
+    "typesense",
+] }

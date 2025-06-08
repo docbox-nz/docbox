@@ -65,13 +65,14 @@ impl OpenSearchIndexFactory {
     }
 }
 
+#[derive(Clone)]
 pub struct OpenSearchIndex {
     client: OpenSearch,
     search_index: TenantSearchIndexName,
 }
 
 /// Represents a search index name for a specific tenant
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TenantSearchIndexName(String);
 
 impl TenantSearchIndexName {

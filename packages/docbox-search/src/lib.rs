@@ -107,6 +107,7 @@ impl SearchIndexFactory {
     }
 }
 
+#[derive(Clone)]
 pub enum TenantSearchIndex {
     #[cfg(feature = "typesense")]
     Typesense(typesense::TypesenseIndex),

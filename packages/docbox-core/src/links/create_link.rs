@@ -3,13 +3,13 @@ use crate::{
     links::index_link::store_link_index,
 };
 use docbox_database::{
+    DbErr, DbPool,
     models::{
         document_box::WithScope,
         folder::Folder,
         link::{CreateLink as DbCreateLink, Link},
         user::UserId,
     },
-    DbErr, DbPool,
 };
 use docbox_search::TenantSearchIndex;
 use std::ops::DerefMut;

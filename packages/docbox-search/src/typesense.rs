@@ -65,6 +65,7 @@ impl TypesenseIndexFactory {
     }
 }
 
+#[derive(Clone)]
 pub struct TypesenseIndex {
     client: reqwest::Client,
     base_url: String,
