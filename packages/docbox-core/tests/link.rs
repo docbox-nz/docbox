@@ -8,7 +8,7 @@ use docbox_core::{
     links::{
         create_link::{CreateLinkData, safe_create_link},
         delete_link::delete_link,
-        update_link::{UpdateLink, update_link},
+        update_link::{UpdateLink, UpdateLinkError, update_link},
     },
 };
 use docbox_database::models::link::Link;
@@ -272,7 +272,7 @@ async fn test_delete_unknown_link() {
     assert!(events_rx.try_recv().is_err());
 }
 
-/// Tests that a link can be created successfully
+/// Tests that a link name can be updated successfully
 #[tokio::test]
 async fn test_update_link_name_success() {
     let (_container_db, db) = create_test_tenant_database().await;
@@ -368,7 +368,7 @@ async fn test_update_link_name_success() {
     }
 }
 
-/// Tests that a link can be created successfully
+/// Tests that a link value can be updated successfully
 #[tokio::test]
 async fn test_update_link_value_success() {
     let (_container_db, db) = create_test_tenant_database().await;
@@ -462,7 +462,7 @@ async fn test_update_link_value_success() {
     }
 }
 
-/// Tests that a link can be created successfully
+/// Tests that a link can be moved to another folder
 #[tokio::test]
 async fn test_update_link_folder_success() {
     let (_container_db, db) = create_test_tenant_database().await;
@@ -578,4 +578,59 @@ async fn test_update_link_folder_success() {
         assert!(first.page_matches.is_empty());
         assert_eq!(first.total_hits, 1);
     }
+}
+
+/// Tests that a link cannot be moved to an unknown folder
+#[tokio::test]
+async fn test_update_link_folder_unknown() {
+    let (_container_db, db) = create_test_tenant_database().await;
+    let (_container_search, search) = create_test_tenant_typesense().await;
+    let events = TenantEventPublisher::Noop(NoopEventPublisher);
+    let (_document_box, root) = create_document_box(
+        &db,
+        &events,
+        CreateDocumentBox {
+            scope: "test".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let link = safe_create_link(
+        &db,
+        search.clone(),
+        &events,
+        CreateLinkData {
+            folder: root.clone(),
+            name: "Test Link".to_string(),
+            value: "http://example.com".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(link.folder_id, root.id);
+
+    // Update the link
+    let err = update_link(
+        &db,
+        &search,
+        &"test".to_string(),
+        link.clone(),
+        None,
+        UpdateLink {
+            folder_id: Some(Uuid::nil()),
+            name: None,
+            value: None,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        matches!(err, UpdateLinkError::UnknownTargetFolder),
+        "unknown link should result in a failure"
+    );
 }
