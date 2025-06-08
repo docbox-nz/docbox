@@ -2994,12 +2994,8 @@
               "folder_id": null,
               "include_content": false,
               "include_name": false,
-              "item_id": null,
-              "max_fragment_size": null,
-              "max_fragments": null,
               "max_pages": null,
               "mime": null,
-              "modified": null,
               "neural": false,
               "offset": null,
               "pages_offset": null,
@@ -3072,6 +3068,7 @@
           "name": {
             "type": "string",
             "description": "Name for the folder",
+            "maxLength": 255,
             "minLength": 1
           }
         }
@@ -3093,6 +3090,7 @@
           "name": {
             "type": "string",
             "description": "Name for the link",
+            "maxLength": 255,
             "minLength": 1
           },
           "value": {
@@ -3112,6 +3110,13 @@
           "mime"
         ],
         "properties": {
+          "disable_mime_sniffing": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to disable mime sniffing for the file. When false/not specified\nif a application/octet-stream mime type is provided the file name\nwill be used to attempt to determine the real mime type"
+          },
           "folder_id": {
             "type": "string",
             "format": "uuid",
@@ -3124,6 +3129,7 @@
           "name": {
             "type": "string",
             "description": "Name of the file being uploaded",
+            "maxLength": 255,
             "minLength": 1
           },
           "parent_id": {
@@ -3175,17 +3181,9 @@
         "type": "object",
         "description": "Response to an options request",
         "required": [
-          "allowed_mime_types",
           "max_file_size"
         ],
         "properties": {
-          "allowed_mime_types": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of allowed mime types for uploading"
-          },
           "max_file_size": {
             "type": "integer",
             "description": "Max allowed upload file size in bytes",
@@ -3785,7 +3783,7 @@
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "description": "When the file was created"
+            "description": "When the link was created"
           },
           "created_by": {
             "oneOf": [
@@ -3794,7 +3792,7 @@
               },
               {
                 "$ref": "#/components/schemas/User",
-                "description": "User who created the file"
+                "description": "User who created the link"
               }
             ]
           },
@@ -3806,7 +3804,7 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "Unique identifier for the file"
+            "description": "Unique identifier for the link"
           },
           "last_modified_at": {
             "type": [
@@ -3814,7 +3812,7 @@
               "null"
             ],
             "format": "date-time",
-            "description": "Last time the file was modified"
+            "description": "Last time the link was modified"
           },
           "last_modified_by": {
             "oneOf": [
@@ -3823,7 +3821,7 @@
               },
               {
                 "$ref": "#/components/schemas/User",
-                "description": "User who last modified the file"
+                "description": "User who last modified the link"
               }
             ]
           },
@@ -4071,47 +4069,14 @@
             "description": "Whether to include document names",
             "default": false
           },
-          "item_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "Enforce search to a specific file,link,folder\n\nDeprecated: use the /search endpoint on the file itself instead",
-            "default": null,
-            "deprecated": true
-          },
-          "max_fragment_size": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Maximum size of text fragments to extract when highlighting\ncontent (only works when \"include_content\" is true)",
-            "default": null,
-            "maximum": 150,
-            "minimum": 0
-          },
-          "max_fragments": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Max number of highlighted fragments to extract per page",
-            "default": null,
-            "maximum": 100,
-            "minimum": 0
-          },
           "max_pages": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int32",
-            "description": "Maximum number of pages too return\n\nDeprecated: use the /search endpoint on the file itself with an offset instead",
+            "description": "Maximum number of pages too return per file",
             "default": null,
-            "deprecated": true,
             "maximum": 100,
             "minimum": 0
           },
@@ -4121,18 +4086,6 @@
               "null"
             ],
             "description": "Search only include a specific mime type",
-            "default": null
-          },
-          "modified": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SearchRange",
-                "description": "Modified date range search"
-              }
-            ],
             "default": null
           },
           "neural": {
@@ -4400,6 +4353,7 @@
               "null"
             ],
             "description": "Name for the folder",
+            "maxLength": 255,
             "minLength": 1
           }
         }
@@ -4422,6 +4376,7 @@
               "null"
             ],
             "description": "Name for the folder",
+            "maxLength": 255,
             "minLength": 1
           }
         }
@@ -4444,6 +4399,7 @@
               "null"
             ],
             "description": "Name for the link",
+            "maxLength": 255,
             "minLength": 1
           },
           "value": {
@@ -4470,6 +4426,13 @@
               "null"
             ],
             "description": "Whether to process the file asynchronously returning a task\nresponse instead of waiting for the upload"
+          },
+          "disable_mime_sniffing": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to disable mime sniffing for the file. When false/not specified\nif a application/octet-stream mime type is provided the file name\nwill be used to attempt to determine the real mime type"
           },
           "file": {
             "type": "array",
@@ -4502,6 +4465,7 @@
           },
           "name": {
             "type": "string",
+            "maxLength": 255,
             "minLength": 1
           },
           "parent_id": {
