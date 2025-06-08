@@ -1,6 +1,5 @@
-use std::path::Path;
-
 use mime::Mime;
+use std::path::Path;
 
 // Set of characters to allow in S3 file names a-zA-Z0-9
 static ALLOWED_S3_CHARS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -34,92 +33,51 @@ pub fn get_file_name_ext(name: &str) -> Option<String> {
 
 /// Finds the file extension to use for a file based on its mime type
 pub fn get_mime_ext(mime: &Mime) -> Option<&'static str> {
-    MIME_EXT_MAP.iter().find_map(|value| {
-        if value.0.eq(mime.essence_str()) {
-            Some(value.1)
+    if let Some(known_match) = mime2ext::mime2ext(mime) {
+        return Some(known_match);
+    }
+
+    // Search the fallback extension types
+    OTHER_EXT_MAP.iter().find_map(|(other_mime, ext)| {
+        if *other_mime == *mime {
+            Some(*ext)
         } else {
             None
         }
     })
 }
 
-/// Mapping between mime types and their file extensions
+/// Fallback mapping for some more obscure mime types
+/// 
+/// Most of these are legacy types but supported by LibreOffice so
+/// we support them here as well
 #[rustfmt::skip]
-pub static MIME_EXT_MAP: &[(&str, &str)] =&[
-    ("application/vnd.ms-word.template.macroenabled.12", "dotm"),
-    ("application/vnd.ms-excel.sheet.binary.macroenabled.12", "xlsb"),
-    ("application/vnd.ms-excel.sheet.macroenabled.12", "xlsm"),
-    ("application/vnd.ms-excel.template.macroenabled.12", "xltm"),
-    ("application/vnd.ms-excel.template.macroenabled.12", "xltm"),
-    ("application/vnd.oasis.opendocument.spreadsheet", "ods"),
-    // JSON and binary format
-    ("application/json", "json"),
-    ("application/octet-stream", "bin"),
-    // HTML and plain text formats
-    ("text/html", "html"),
-    ("text/plain", "txt"),
-    ("text/spreadsheet", "txt"),  // Rare, usually treated as CSV or TSV
-    // Word Processing Documents
-    ("application/msword", "doc"),
-    ("application/vnd.oasis.opendocument.text-flat-xml", "fodt"),
-    ("application/rtf", "rtf"),
-    ("application/vnd.sun.xml.writer", "sxw"),
-    ("application/vnd.wordperfect", "wpd"),
-    ("application/vnd.ms-works", "wps"),
-    ("application/x-mswrite", "wri"),
-    ("application/clarisworks", "cwk"),
-    ("application/macwriteii", "mw"),
-    ("application/x-abiword", "abw"),
-    ("application/x-t602", "602"),
-    ("application/vnd.lotus-wordpro", "lwp"),
-    ("application/x-hwp", "hwp"),
-    ("application/vnd.sun.xml.writer.template", "stw"),
-    ("application/pdf", "pdf"),
-    ("application/vnd.oasis.opendocument.text", "odt"),
-    ("application/vnd.oasis.opendocument.text-template", "ott"),
-    ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
-    ("application/vnd.openxmlformats-officedocument.wordprocessingml.template", "dotx"),
-    ("application/vnd.openxmlformats-officedocument.wordprocessingml.slideshow", "pptx"),  // Slideshow format
-    ("application/x-fictionbook+xml", "fb2"),
-    ("application/x-aportisdoc", "pdb"),
-    ("application/prs.plucker", "pdb"),
-    ("application/x-iwork-pages-sffpages", "pages"),
-    ("application/vnd.palm", "pdb"),
-    ("application/epub+zip", "epub"),
-    ("application/x-pocket-word", "psw"),
-    // Spreadsheets
-    ("application/vnd.oasis.opendocument.spreadsheet-flat-xml", "fods"),
-    ("application/vnd.lotus-1-2-3", "123"),
-    ("application/vnd.ms-excel", "xls"),
-    ("application/vnd.sun.xml.calc", "sxc"),
-    ("application/vnd.sun.xml.calc.template", "stc"),
-    ("application/x-gnumeric", "gnumeric"),
-    ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+pub static OTHER_EXT_MAP: &[(&str, &str)] = &[
+    // Microsoft Excel Macro-Enabled Workbook
     ("application/vnd.ms-excel.sheet.macroEnabled.12", "xlsm"),
-    ("application/vnd.openxmlformats-officedocument.spreadsheetml.template", "xltx"),
-    ("application/x-iwork-numbers-sffnumbers", "numbers"),
-    // Mathematical and Structured Documents
-    ("application/mathml+xml", "mml"),
-    ("application/vnd.sun.xml.math", "smf"),
-    ("application/vnd.oasis.opendocument.formula", "odf"),
+    // Flat OpenDocument Text file
+    ("application/vnd.oasis.opendocument.text-flat-xml", "fodt"),
+    // ClarisWorks document format (Legacy)
+    ("application/clarisworks", "cwk"),
+    // MacWrite II document format (Legacy)
+    ("application/macwriteii", "mw"),
+    // T602 word processor file (Legacy)
+    ("application/x-t602", "602"),
+    // Hangul Word Processor
+    ("application/x-hwp", "hwp"),
+    // FictionBook (FB2) e-book format
+    ("application/x-fictionbook+xml", "fb2"),
+    // AportisDoc eBook format (Legacy)
+    ("application/x-aportisdoc", "pdb"),
+    // Plucker eBook/Web content format (Legacy)
+    ("application/prs.plucker", "pdb"),
+    // Microsoft Pocket Word document (Legacy)
+    ("application/x-pocket-word", "psw"),
+    // Flat OpenDocument Spreadsheet
+    ("application/vnd.oasis.opendocument.spreadsheet-flat-xml", "fods"),
+    // OpenOffice Base files
     ("application/vnd.sun.xml.base", "odb"),
-    ("application/docbook+xml", "xml"),
-    ("application/xhtml+xml", "xhtml"),
-    // Presentations
-    ("application/vnd.ms-powerpoint", "ppt"),
-    ("application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx"),
-    ("application/vnd.oasis.opendocument.presentation", "odp"),
-    // Images
-    ("image/jpeg", "jpg"),
-    ("image/gif", "gif"),
-    ("image/bmp", "bmp"),
-    ("image/png", "png"),
-    ("image/svg+xml", "svg"),
-    ("image/webp", "webp"),
-    // Zip files
-    ("application/zip", "zip"),
-    // Videos
-    ("video/mp4", "mp4"),
+
 ];
 
 #[cfg(test)]

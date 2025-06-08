@@ -71,6 +71,7 @@ bytes = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 mime = { workspace = true }
+mime2ext = "0.1"
 
 # SHA256 Hashing
 sha256 = { version = "1.5.0", default-features = false }
