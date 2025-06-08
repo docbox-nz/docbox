@@ -28,6 +28,7 @@ jobs:
         if: steps.cache-docker.outputs.cache-hit == 'true'
         run: |
           docker load -i /tmp/.docker-cache/postgres.tar
+          docker load -i /tmp/.docker-cache/typesense.tar
           docker load -i /tmp/.docker-cache/office-convert-server.tar
 
       # Pull and save Docker images if not in cache
@@ -38,6 +39,9 @@ jobs:
 
           docker pull postgres:11-alpine
           docker save postgres:11-alpine -o /tmp/.docker-cache/postgres.tar
+
+          docker pull typesense/typesense:28.0
+          docker save typesense/typesense:28.0 -o /tmp/.docker-cache/typesense.tar
 
           docker pull jacobtread/office-convert-server:0.2.2
           docker save jacobtread/office-convert-server:0.2.2 -o /tmp/.docker-cache/office-convert-server.tar
