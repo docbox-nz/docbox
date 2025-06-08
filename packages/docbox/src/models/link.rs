@@ -11,8 +11,8 @@ use utoipa::ToSchema;
 #[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct CreateLink {
     /// Name for the link
-    #[garde(length(min = 1))]
-    #[schema(min_length = 1)]
+    #[garde(length(min = 1, max = 255))]
+    #[schema(min_length = 1, max_length = 255)]
     pub name: String,
 
     /// Link URL
@@ -30,8 +30,8 @@ pub struct CreateLink {
 #[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct UpdateLinkRequest {
     /// Name for the link
-    #[garde(inner(length(min = 1)))]
-    #[schema(min_length = 1)]
+    #[garde(inner(length(min = 1, max = 255)))]
+    #[schema(min_length = 1, max_length = 255)]
     pub name: Option<String>,
 
     /// Value for the link

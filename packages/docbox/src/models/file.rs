@@ -24,8 +24,8 @@ use utoipa::ToSchema;
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreatePresignedRequest {
     /// Name of the file being uploaded
-    #[garde(length(min = 1))]
-    #[schema(min_length = 1)]
+    #[garde(length(min = 1, max = 255))]
+    #[schema(min_length = 1, max_length = 255)]
     pub name: String,
 
     /// Folder to store the file in
@@ -85,8 +85,8 @@ pub enum PresignedStatusResponse {
 
 #[derive(TryFromMultipart, Validate, ToSchema)]
 pub struct UploadFileRequest {
-    #[garde(length(min = 1))]
-    #[schema(min_length = 1)]
+    #[garde(length(min = 1, max = 255))]
+    #[schema(min_length = 1, max_length = 255)]
     pub name: String,
 
     /// Folder to store the file in
@@ -157,8 +157,8 @@ pub struct UploadedFile {
 #[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct UpdateFileRequest {
     /// Name for the folder
-    #[garde(inner(length(min = 1)))]
-    #[schema(min_length = 1)]
+    #[garde(inner(length(min = 1, max = 255)))]
+    #[schema(min_length = 1, max_length = 255)]
     pub name: Option<String>,
 
     /// New parent folder for the folder

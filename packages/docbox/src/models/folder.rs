@@ -11,8 +11,8 @@ use utoipa::ToSchema;
 #[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct CreateFolderRequest {
     /// Name for the folder
-    #[garde(length(min = 1))]
-    #[schema(min_length = 1)]
+    #[garde(length(min = 1, max = 255))]
+    #[schema(min_length = 1, max_length = 255)]
     pub name: String,
 
     /// Folder to store folder in
@@ -35,8 +35,8 @@ pub struct FolderResponse {
 #[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct UpdateFolderRequest {
     /// Name for the folder
-    #[garde(inner(length(min = 1)))]
-    #[schema(min_length = 1)]
+    #[garde(inner(length(min = 1, max = 255)))]
+    #[schema(min_length = 1, max_length = 255)]
     pub name: Option<String>,
 
     /// New parent folder for the folder
