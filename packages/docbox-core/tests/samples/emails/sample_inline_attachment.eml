@@ -1,0 +1,26 @@
+MIME-Version: 1.0
+Date: Sun, 8 Jun 2025 14:11:19 +1200
+Message-ID: <test-message-id>
+Subject: Test email
+From: Example <example@example.com>
+To: "Example (ExampleUser)" <example@example.com>
+Content-Type: multipart/mixed; boundary="000000000000979241063705fa11"
+
+--000000000000979241063705fa11
+Content-Type: multipart/alternative; boundary="00000000000097923f063705fa0f"
+
+--00000000000097923f063705fa0f
+Content-Type: text/html; charset="UTF-8"
+
+<img src="cid:f_test_inline_attachment">
+
+--00000000000097923f063705fa0f--
+--000000000000979241063705fa11
+Content-Type: image/png; name="sample.png"
+Content-Disposition: inline; filename="sample.png"
+Content-Transfer-Encoding: base64
+X-Attachment-Id: f_test_inline_attachment
+Content-ID: <f_test_inline_attachment>
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=
+--000000000000979241063705fa11--

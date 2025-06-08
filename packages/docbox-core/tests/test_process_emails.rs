@@ -289,6 +289,93 @@ async fn test_process_email_html_only() {
     );
 }
 
+/// Test processing a email file with an inline image attachment
+/// (The attachment should be inlined using its content ID)
+#[tokio::test]
+async fn test_process_email_inline_attachment() {
+    // Process the file
+    let output = process_sample_file(None, "sample_inline_attachment.eml")
+        .await
+        .expect("eml should produce processing output");
+
+    assert!(
+        !output.encrypted,
+        "file was marked as encrypted but should not be"
+    );
+
+    assert_eq!(
+        output.upload_queue.len(),
+        3,
+        "eml file should produce 1 metadata, 1 html content, and 1 text content"
+    );
+
+    // Ensure the files match the expectations
+    let first = output.upload_queue.first().unwrap();
+    assert_eq!(first.mime, mime::APPLICATION_JSON);
+    assert!(matches!(first.ty, GeneratedFileType::Metadata));
+
+    let second = output.upload_queue.get(1).unwrap();
+    assert_eq!(second.mime, mime::TEXT_HTML);
+    assert!(matches!(second.ty, GeneratedFileType::HtmlContent));
+
+    let third = output.upload_queue.get(2).unwrap();
+    assert_eq!(third.mime, mime::TEXT_PLAIN);
+    assert!(matches!(third.ty, GeneratedFileType::TextContent));
+
+    let metadata: EmailMetadataDocument =
+        serde_json::from_slice(first.bytes.as_ref()).expect("metadata should be valid json");
+    assert_eq!(metadata.date, Some("2025-06-08T14:11:19Z".to_string()));
+    assert_eq!(metadata.subject, Some("Test email".to_string()));
+    assert_eq!(metadata.message_id, Some("test-message-id".to_string()));
+    assert_eq!(
+        metadata.from,
+        EmailEntity {
+            name: Some("Example".to_string()),
+            address: Some("example@example.com".to_string())
+        }
+    );
+    assert_eq!(
+        metadata.to,
+        vec![EmailEntity {
+            name: Some("Example (ExampleUser)".to_string()),
+            address: Some("example@example.com".to_string())
+        }]
+    );
+
+    assert!(metadata.cc.is_empty());
+    assert!(metadata.bcc.is_empty());
+    assert!(metadata.attachments.is_empty());
+
+    // Ensure the html content matches expectation
+    let html_content = String::from_utf8_lossy(second.bytes.as_ref());
+    assert_eq!(
+        html_content.as_ref().replace("\r\n", "\n"),
+        "<img src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=\">\n"
+    );
+
+    // Ensure the text content matches expectation
+    let text_content = String::from_utf8_lossy(third.bytes.as_ref());
+    assert_eq!(text_content.as_ref().replace("\r\n", "\n"), "\n");
+
+    let index_metadata = output
+        .index_metadata
+        .expect("eml file should produce index metadata");
+
+    // Ensure page content matches expectation
+    let pages = index_metadata.pages.expect("eml file should produce pages");
+    assert_eq!(pages.len(), 1);
+
+    let first_page = pages.first().unwrap();
+    assert_eq!(first_page.page, 0);
+    assert_eq!(first_page.content.replace("\r\n", "\n"), "\n");
+
+    // Ensure no additional files are produced
+    assert!(
+        output.additional_files.is_empty(),
+        "eml file without attachments should not produce additional files"
+    );
+}
+
 /// Test processing a email file with an attachment
 #[tokio::test]
 async fn test_process_email_with_attachment() {
