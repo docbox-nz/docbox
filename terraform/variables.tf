@@ -30,26 +30,9 @@ variable "ssh_private_key_path" {
   type        = string
 }
 
-variable "ec2_image_ami" {
-  description = "AMI ID for the docbox server (Pre-configured debian)"
+variable "api_instance_type" {
+  description = "AWS instance class for the API EC2 server"
   type        = string
-}
-
-variable "ec2_instance_class" {
-  description = "AWS instance class for the EC2 server"
-  type        = string
-}
-
-variable "ec2_storage_size" {
-  description = "Total storage for EC2 instance in GiB"
-  type        = number
-  default     = 8
-}
-
-variable "ec2_storage_type" {
-  description = "EC2 instance storage volume type"
-  type        = string
-  default     = "gp3"
 }
 
 variable "vpc_id" {

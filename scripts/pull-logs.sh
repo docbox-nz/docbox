@@ -1,5 +1,5 @@
 # Extract EC2 instance IP from the terraform output
-EC2_HOST=admin@$(terraform -chdir=./terraform output -raw ec2_instance_ip)
+EC2_HOST=admin@$(terraform -chdir=./terraform output -raw api_private_ip)
 
 REMOTE_LOG_PATH=/docbox.log
 LOCAL_LOG_PATH=./private/docbox.log

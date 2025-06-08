@@ -1,16 +1,17 @@
+
 # Get private IP of API EC2 instance for SSH
-output "ec2_instance_ip" {
+output "api_private_ip" {
   value = aws_instance.api.private_ip
+}
+
+# Generated instance ID for the API EC2 instance 
+output "api_instance_id" {
+  value = aws_instance.api.id
 }
 
 # Get the private IP for the HTTP proxy
 output "http_proxy_ip" {
   value = aws_instance.http_proxy.private_ip
-}
-
-# Generated instance ID for the EC2 instance 
-output "ec2_instance_id" {
-  value = aws_instance.api.id
 }
 
 # Role provided to the docbox instance

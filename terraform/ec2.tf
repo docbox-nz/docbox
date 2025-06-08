@@ -9,10 +9,17 @@ resource "aws_key_pair" "ssh_key" {
 }
 
 # Docbox API server EC2 
+#
+# This instance will run:
+# - The docbox API HTTP server
+# - Converter HTTP server (Lightweight wrapper for safely interacting with LibreOffice)
+# - LibreOffice (Headless for conversion)
+# 
 # (https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/instance)
 resource "aws_instance" "api" {
-  ami           = var.ec2_image_ami
-  instance_type = var.ec2_instance_class
+  # Debian 12 (20250316-2053) 64-bit (Arm)
+  ami           = "ami-01fd140abb2587221"
+  instance_type = var.api_instance_type
 
   subnet_id = aws_subnet.private_subnet.id
 
@@ -25,8 +32,8 @@ resource "aws_instance" "api" {
   iam_instance_profile = aws_iam_instance_profile.docbox_instance_profile.name
 
   root_block_device {
-    volume_type = var.ec2_storage_type
-    volume_size = var.ec2_storage_size
+    volume_type = "gp3"
+    volume_size = 8
   }
 
   # Disable running prolonged higher CPU speeds at a higher cost
@@ -34,8 +41,20 @@ resource "aws_instance" "api" {
     cpu_credits = "standard"
   }
 
+  # Pass proxy details into setup script
+  user_data = templatefile("../scripts/ec2-initial-setup.sh", {
+    proxy_host = aws_instance.http_proxy.private_ip
+    proxy_port = "3128"
+  })
+
+
+  # API must wait for the HTTP proxy to be fully initialized before
+  # it can run so that it can use the HTTP proxy to install dependencies
+  # (As it does not have regular network access since its in a private subnet)
+  depends_on = [aws_instance.http_proxy]
+
   tags = {
-    Name = "docbox-api"
+    Name = "docbox-api-server"
   }
 }
 
