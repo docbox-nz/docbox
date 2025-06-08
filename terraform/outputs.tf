@@ -38,3 +38,20 @@ output "sqs_upload_notifications_arn" {
 output "sqs_upload_queue_url" {
   value = aws_sqs_queue.docbox_queue.url
 }
+
+# Output the API key (be careful with this in production)
+output "typesense_api_key" {
+  value     = random_password.typesense_api_key.result
+  sensitive = true
+}
+
+
+# Get private IP of API EC2 instance for SSH
+output "typesense_private_ip" {
+  value = aws_instance.docbox_typesense.private_ip
+}
+
+# Generated instance ID for the API EC2 instance 
+output "typesense_instance_id" {
+  value = aws_instance.docbox_typesense.id
+}

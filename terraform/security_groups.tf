@@ -82,3 +82,42 @@ resource "aws_security_group" "http_proxy_sg" {
   }
 }
 
+
+# Security group for the typesense server
+resource "aws_security_group" "docbox_typesense_sg" {
+  name        = "docbox-typesense"
+  description = "Security group for typesense"
+  vpc_id      = var.vpc_id
+
+  # Allow members of the private subnet access
+  ingress {
+    from_port = 8108
+    to_port   = 8108
+    protocol  = "tcp"
+    cidr_blocks = [
+      aws_subnet.private_subnet.cidr_block,
+    ]
+    description = "Access from private subnet services"
+  }
+
+  # Allow access through VPN
+  ingress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = [var.vpn_security_group_id]
+    description     = "VPN all access"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "docbox-typesense-sg"
+  }
+}
+

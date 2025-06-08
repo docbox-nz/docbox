@@ -53,10 +53,65 @@ resource "aws_instance" "api" {
   # (As it does not have regular network access since its in a private subnet)
   depends_on = [aws_instance.http_proxy]
 
+  # Prevent replacement due to user_data changes
+  lifecycle {
+    ignore_changes = [user_data]
+  }
+
   tags = {
     Name = "docbox-api-server"
   }
 }
+
+# Generate a random API key for Typesense
+resource "random_password" "typesense_api_key" {
+  length  = 48
+  special = false
+}
+
+# Typesense 
+#
+# Search index server instance
+resource "aws_instance" "docbox_typesense" {
+  // Canonical, Ubuntu, 24.04, arm64 noble image
+  ami           = "ami-099eeb58169040255"
+  instance_type = "t4g.small"
+  subnet_id     = aws_subnet.private_subnet.id
+
+  # Network security group
+  vpc_security_group_ids = [aws_security_group.docbox_typesense_sg.id]
+
+  # SSH key access
+  key_name = aws_key_pair.ssh_key.key_name
+
+  # Pass proxy details into setup script
+  user_data = templatefile("../scripts/ec2-typesense-setup.sh", {
+    proxy_host        = aws_instance.http_proxy.private_ip
+    proxy_port        = "3128",
+    typesense_api_key = random_password.typesense_api_key.result
+  })
+
+  # Disable running prolonged higher CPU speeds at a higher cost
+  credit_specification {
+    cpu_credits = "standard"
+  }
+
+  # Typesense must wait for the HTTP proxy to be fully initialized before
+  # it can run so that it can use the HTTP proxy to install dependencies
+  # (As it does not have regular network access since its in a private subnet)
+  depends_on = [aws_instance.http_proxy]
+
+  # Prevent replacement due to user_data changes
+  lifecycle {
+    ignore_changes = [user_data]
+  }
+
+  tags = {
+    Name = "docbox-typesense"
+  }
+}
+
+
 
 # HTTP Squid Proxy
 # 
