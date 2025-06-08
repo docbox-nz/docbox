@@ -128,14 +128,12 @@ services:
 
   # Office file converter server
   office-convert-server:
-    build:
-      context: .
-      dockerfile: ./containers/OfficeConvertServer.Dockerfile
+    image: jacobtread/office-convert-server:0.2.2
     ports:
       - 3000:3000
     networks:
       - docbox
-    restart: always
+    restart: unless-stopped
 
 volumes:
   opensearch-data1:
