@@ -1,4 +1,5 @@
 use docbox_database::{
+    DbErr, DbPool, DbResult, DbTransaction,
     models::{
         document_box::DocumentBoxScopeRaw,
         edit_history::{
@@ -8,9 +9,8 @@ use docbox_database::{
         link::Link,
         user::UserId,
     },
-    DbErr, DbPool, DbResult, DbTransaction,
 };
-use docbox_search::{models::UpdateSearchIndexData, TenantSearchIndex};
+use docbox_search::{TenantSearchIndex, models::UpdateSearchIndexData};
 use std::ops::DerefMut;
 use thiserror::Error;
 
@@ -92,14 +92,12 @@ pub async fn update_link(
             },
         )
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to update search index");
-            UpdateLinkError::SearchIndex(cause)
-        })?;
+        .inspect_err(|error| tracing::error!(?error, "failed to update search index"))
+        .map_err(UpdateLinkError::SearchIndex)?;
 
-    db.commit().await.inspect_err(|cause| {
-        tracing::error!(?cause, "failed to commit transaction");
-    })?;
+    db.commit()
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to commit transaction"))?;
 
     Ok(())
 }

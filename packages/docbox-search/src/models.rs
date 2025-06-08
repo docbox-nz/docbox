@@ -83,12 +83,14 @@ pub struct FileSearchResults {
     pub results: Vec<PageResult>,
 }
 
+#[derive(Debug)]
 pub struct SearchResults {
     pub results: Vec<FlattenedItemResult>,
     pub total_hits: u64,
 }
 
 /// Condensed version of a file result
+#[derive(Debug)]
 pub struct FlattenedItemResult {
     /// Type of item being included in the search index
     pub item_ty: SearchIndexType,
