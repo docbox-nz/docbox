@@ -1,4 +1,4 @@
-# SSH public key for SSH access (EC2, VPN, PROXY)
+# SSH public key for SSH access (EC2, PROXY)
 resource "aws_key_pair" "ssh_key" {
   key_name   = "docbox_ssh_key"
   public_key = file(var.ssh_public_key_path)
@@ -63,8 +63,9 @@ resource "aws_instance" "api" {
 # Allows internal services from the private subnet to request HTTP
 # resources from the public internet
 resource "aws_instance" "http_proxy" {
-  ami           = "ami-0809dd5035d9217b8" # Latest Amazon linux (08/08/2024)
-  instance_type = "t3.nano"
+  # Amazon Linux 2023 AMI 2023.7.20250527.1 arm64 HVM kernel-6.1
+  ami           = "ami-0a06008c37dfe916b"
+  instance_type = "t4g.nano"
   subnet_id     = aws_subnet.public_subnet.id
 
   # Network security group

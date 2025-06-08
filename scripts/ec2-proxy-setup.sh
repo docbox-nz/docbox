@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Update packages
-
 # Install Squid
 sudo yum install -y squid
 

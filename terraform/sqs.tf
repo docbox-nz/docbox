@@ -3,6 +3,6 @@ resource "aws_sqs_queue" "docbox_queue" {
   name = "docbox-s3-upload-queue"
 
   tags = {
-    Name = "docbox-http-proxy"
+    Name = "docbox-sqs-queue"
   }
 }
