@@ -1,11 +1,11 @@
 use crate::{files::generated::QueuedUpload, files::upload_file::ProcessingConfig};
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 use docbox_search::models::DocumentPage;
-use mail_parser::{decoders::html::html_to_text, Address, MessageParser, MimeHeaders};
+use mail_parser::{Address, MessageParser, MimeHeaders, decoders::html::html_to_text};
 use mime::Mime;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{AdditionalProcessingFile, ProcessingError, ProcessingIndexMetadata, ProcessingOutput};
 
@@ -15,48 +15,48 @@ pub fn is_mail_mime(mime: &Mime) -> bool {
 }
 
 /// JSON document version of the email metadata, extracts
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EmailMetadataDocument {
     /// Source of the email
-    from: EmailEntity,
+    pub from: EmailEntity,
     /// Destination of the email
-    to: Vec<EmailEntity>,
+    pub to: Vec<EmailEntity>,
     /// cc'ed emails
-    cc: Vec<EmailEntity>,
+    pub cc: Vec<EmailEntity>,
     /// bcc'ed emails
-    bcc: Vec<EmailEntity>,
+    pub bcc: Vec<EmailEntity>,
     /// Email subject line
-    subject: Option<String>,
-    /// Send date of the email
-    date: Option<String>,
+    pub subject: Option<String>,
+    /// Send date of the email (rfc3339)
+    pub date: Option<String>,
     /// Optional message ID
-    message_id: Option<String>,
+    pub message_id: Option<String>,
     /// Collection of headers
-    headers: Vec<EmailHeader>,
+    pub headers: Vec<EmailHeader>,
     /// List of attachments
-    attachments: Vec<EmailAttachment>,
+    pub attachments: Vec<EmailAttachment>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EmailAttachment {
     /// Name of the attachment
-    name: String,
-    length: usize,
-    mime: String,
+    pub name: String,
+    pub length: usize,
+    pub mime: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmailHeader {
-    name: String,
-    value: String,
+    pub name: String,
+    pub value: String,
 }
 
 /// Optional address and name combination, usually at least one part
 /// of this exists, this is used for headers like To, From, ..etc
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EmailEntity {
-    name: Option<String>,
-    address: Option<String>,
+    pub name: Option<String>,
+    pub address: Option<String>,
 }
 
 /// Turns a [Address] into a collection of email entities
