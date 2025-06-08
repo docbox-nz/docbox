@@ -179,6 +179,109 @@ async fn test_delete_folder_success() {
     }
 }
 
+/// Tests that a folder can be deleted successfully and that
+/// its children will also be deleted
+#[tokio::test]
+async fn test_delete_folder_children_success() {
+    let (_container_db, db) = create_test_tenant_database().await;
+    let (_container_search, search) = create_test_tenant_typesense().await;
+    let (_container_storage, storage) = create_test_tenant_storage().await;
+    let (events, mut events_rx) = MpscEventPublisher::new();
+    let events = TenantEventPublisher::Mpsc(events);
+    let (document_box, root) = create_document_box(
+        &db,
+        &events,
+        CreateDocumentBox {
+            scope: "test".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Consume creation event
+    _ = events_rx.recv().await.unwrap();
+
+    let folder = safe_create_folder(
+        &db,
+        search.clone(),
+        &events,
+        CreateFolderData {
+            folder: root,
+            name: "Test Folder".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Consume creation event
+    _ = events_rx.recv().await.unwrap();
+
+    let sub_folder = safe_create_folder(
+        &db,
+        search.clone(),
+        &events,
+        CreateFolderData {
+            folder: folder.clone(),
+            name: "Sub Folder".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Consume creation event
+    _ = events_rx.recv().await.unwrap();
+
+    let folder_id = folder.id;
+
+    // Delete the folder
+    delete_folder(&db, &storage, &search, &events, folder)
+        .await
+        .unwrap();
+
+    // Expect sub folder deletion event
+    let event = events_rx.recv().await.unwrap();
+    assert!(matches!(
+        event,
+        TenantEventMessage::FolderDeleted(deleted) if deleted.data.id == sub_folder.id
+    ));
+
+    // Expect deletion event for main folder
+    let event = events_rx.recv().await.unwrap();
+    assert!(matches!(
+        event,
+        TenantEventMessage::FolderDeleted(deleted) if deleted.data.id == folder_id
+    ));
+
+    // Ensure the folder cannot be found
+    {
+        let has_sub_folder = Folder::find_by_id(&db, &document_box.scope, sub_folder.id)
+            .await
+            .unwrap()
+            .is_some();
+        assert!(!has_sub_folder);
+    }
+
+    // Ensure the name is correctly removed from the index and is not searchable
+    {
+        let request = SearchRequest {
+            query: Some("Sub Folder".to_string()),
+            include_name: true,
+            ..Default::default()
+        };
+
+        let result = search
+            .search_index(&["test".to_string()], request, None)
+            .await
+            .unwrap();
+
+        assert_eq!(result.total_hits, 0);
+        assert!(result.results.is_empty());
+    }
+}
+
 /// Tests that attempt to delete a non-existent folder should not
 /// produce any events
 #[tokio::test]
