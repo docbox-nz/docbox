@@ -8,6 +8,7 @@ use docbox_core::{
 };
 use docbox_database::models::link::Link;
 use docbox_search::models::{SearchIndexType, SearchRequest};
+use uuid::Uuid;
 
 use crate::common::{database::create_test_tenant_database, search::create_test_tenant_typesense};
 
@@ -218,4 +219,50 @@ async fn test_delete_link_success() {
         assert_eq!(result.total_hits, 0);
         assert!(result.results.is_empty());
     }
+}
+
+/// Tests that attempt to delete a non-existent link should not
+/// produce any events
+#[tokio::test]
+async fn test_delete_unknown_link() {
+    let (_container_db, db) = create_test_tenant_database().await;
+    let (_container_search, search) = create_test_tenant_typesense().await;
+    let (events, mut events_rx) = MpscEventPublisher::new();
+    let events = TenantEventPublisher::Mpsc(events);
+    let (document_box, root) = create_document_box(
+        &db,
+        &events,
+        CreateDocumentBox {
+            scope: "test".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Consume creation event
+    _ = events_rx.recv().await.unwrap();
+
+    let fake_link = Link {
+        id: Uuid::new_v4(),
+        name: Default::default(),
+        value: Default::default(),
+        folder_id: root.id,
+        created_at: Default::default(),
+        created_by: Default::default(),
+    };
+
+    // Delete the link
+    delete_link(
+        &db,
+        &search,
+        &events,
+        fake_link,
+        document_box.scope.to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Should have nothing to consume
+    assert!(events_rx.try_recv().is_err());
 }
