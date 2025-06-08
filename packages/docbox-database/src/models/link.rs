@@ -9,7 +9,10 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::{postgres::PgRow, prelude::FromRow};
+use sqlx::{
+    postgres::{PgQueryResult, PgRow},
+    prelude::FromRow,
+};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -290,13 +293,11 @@ impl Link {
     }
 
     /// Deletes the link
-    pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<()> {
+    pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<PgQueryResult> {
         sqlx::query(r#"DELETE FROM "docbox_links" WHERE "id" = $1"#)
             .bind(self.id)
             .execute(db)
-            .await?;
-
-        Ok(())
+            .await
     }
 
     /// Finds a collection of links that are within various document box scopes, resolves
