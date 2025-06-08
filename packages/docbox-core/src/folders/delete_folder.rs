@@ -5,13 +5,13 @@ use crate::{
     storage::TenantStorageLayer,
 };
 use docbox_database::{
+    DbPool,
     models::{
         document_box::WithScope,
         file::File,
         folder::{Folder, ResolvedFolder},
         link::Link,
     },
-    DbPool,
 };
 use docbox_search::TenantSearchIndex;
 use std::collections::VecDeque;
@@ -92,9 +92,17 @@ async fn internal_delete_folder(
     // Delete the indexed file contents
     search.delete_data(folder.id).await?;
 
-    folder.delete(db).await?;
+    let result = folder
+        .delete(db)
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to delete folder"))?;
 
     let document_box = folder.document_box.clone();
+
+    // Check we actually removed something before emitting an event
+    if result.rows_affected() < 1 {
+        return Ok(());
+    }
 
     // Publish an event
     events.publish_event(TenantEventMessage::FolderDeleted(WithScope::new(

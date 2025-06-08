@@ -10,8 +10,8 @@ use testcontainers::{
 use testcontainers_modules::testcontainers::ContainerAsync;
 use uuid::Uuid;
 
-/// Testing utility to create and setup a database for a tenant to use in tests that
-/// require database access
+/// Testing utility to create and setup a search index for a tenant to use in tests that
+/// require search access
 ///
 /// Requires that the test runner have docker available to launch the typesense
 /// container that will be used

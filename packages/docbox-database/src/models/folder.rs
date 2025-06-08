@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgRow, prelude::FromRow};
+use sqlx::{postgres::{PgQueryResult, PgRow}, prelude::FromRow};
 use tokio::try_join;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -458,12 +458,11 @@ impl Folder {
     }
 
     /// Deletes the folder
-    pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<()> {
+    pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<PgQueryResult> {
         sqlx::query(r#"DELETE FROM "docbox_folders" WHERE "id" = $1"#)
             .bind(self.id)
             .execute(db)
-            .await?;
-        Ok(())
+            .await
     }
 
     /// Finds a collection of folders that are in various document box scopes, resolves
