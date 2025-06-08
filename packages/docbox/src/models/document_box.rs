@@ -95,8 +95,6 @@ pub struct CreateDocumentBoxRequest {
 /// Response to an options request
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DocumentBoxOptions {
-    /// List of allowed mime types for uploading
-    pub allowed_mime_types: &'static [&'static str],
     /// Max allowed upload file size in bytes
     pub max_file_size: usize,
 }

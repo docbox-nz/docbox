@@ -1,13 +1,12 @@
-use axum::{http::StatusCode, Extension, Json};
-use docbox_core::{
-    notifications::{parse_bucket_message, MpscNotificationQueueSender, NotificationQueueMessage},
-    utils::validation::ALLOWED_MIME_TYPES,
+use axum::{Extension, Json, http::StatusCode};
+use docbox_core::notifications::{
+    MpscNotificationQueueSender, NotificationQueueMessage, parse_bucket_message,
 };
 
 use crate::{
+    MAX_FILE_SIZE,
     error::{DynHttpError, HttpCommonError},
     models::document_box::DocumentBoxOptions,
-    MAX_FILE_SIZE,
 };
 
 pub const UTILS_TAG: &str = "Utils";
@@ -26,7 +25,6 @@ pub const UTILS_TAG: &str = "Utils";
 )]
 pub async fn get_options() -> Json<DocumentBoxOptions> {
     Json(DocumentBoxOptions {
-        allowed_mime_types: ALLOWED_MIME_TYPES,
         max_file_size: MAX_FILE_SIZE,
     })
 }
