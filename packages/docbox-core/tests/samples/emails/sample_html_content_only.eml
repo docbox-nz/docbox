@@ -1,0 +1,17 @@
+MIME-Version: 1.0
+Date: Sun, 8 Jun 2025 14:10:47 +1200
+Message-ID: <test-message-id>
+Subject: Test email
+From: Example <example@example.com>
+To: "Example (ExampleUser)" <example@example.com>
+Content-Type: multipart/alternative; boundary="000000000000b9f384063705f80e"
+
+--000000000000b9f384063705f80e
+Content-Type: text/html; charset="UTF-8"
+
+<h1>Test title</h1>
+
+<div dir="ltr"><b>Bold</b> Test email body block 1</div>
+<div dir="ltr"><b>Bold</b> Test email body block 2</div>
+
+--000000000000b9f384063705f80e--
