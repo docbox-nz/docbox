@@ -1,7 +1,7 @@
 use crate::{DbExecutor, DbResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
+use sqlx::{postgres::PgQueryResult, prelude::FromRow};
 use utoipa::ToSchema;
 
 pub type DocumentBoxScopeRaw = String;
@@ -62,11 +62,10 @@ impl DocumentBox {
     }
 
     /// Deletes the document box
-    pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<()> {
+    pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<PgQueryResult> {
         sqlx::query(r#"DELETE FROM "docbox_boxes" WHERE "scope" = $1"#)
             .bind(&self.scope)
             .execute(db)
-            .await?;
-        Ok(())
+            .await
     }
 }
