@@ -1,9 +1,14 @@
-use crate::{files::generated::QueuedUpload, files::upload_file::ProcessingConfig};
+use crate::{
+    files::{generated::QueuedUpload, upload_file::ProcessingConfig},
+    processing::html_to_text::html_to_text,
+};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 use docbox_search::models::DocumentPage;
-use mail_parser::{Address, MessageParser, MimeHeaders, decoders::html::html_to_text};
+use mail_parser::{
+    Address, MessageParser, MimeHeaders, decoders::html::html_to_text as mail_html_to_text,
+};
 use mime::Mime;
 use serde::{Deserialize, Serialize};
 
@@ -156,9 +161,21 @@ pub fn process_email(
 
     let text_content = match (text_body.as_ref(), html_body.as_ref()) {
         // Clean the text content removing any HTML
-        (Some(value), _) => Some(html_to_text(value)),
+        (Some(value), _) => {
+            Some(
+                html_to_text(value)
+                    // Fallback to the email html_to_text on failure (it is infallible)
+                    .unwrap_or_else(|_| mail_html_to_text(value).to_string()),
+            )
+        }
         // Attempt extracting text content from the HTMl
-        (_, Some(value)) => Some(html_to_text(value)),
+        (_, Some(value)) => {
+            Some(
+                html_to_text(value)
+                    // Fallback to the email html_to_text on failure (it is infallible)
+                    .unwrap_or_else(|_| mail_html_to_text(value).to_string()),
+            )
+        }
         _ => None,
     };
 

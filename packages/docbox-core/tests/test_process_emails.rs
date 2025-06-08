@@ -80,7 +80,7 @@ async fn test_process_email() {
     let text_content = String::from_utf8_lossy(third.bytes.as_ref());
     assert_eq!(
         text_content.as_ref().replace("\r\n", "\n"),
-        "Test email body"
+        "Test email body\n"
     );
 
     let index_metadata = output
@@ -93,7 +93,10 @@ async fn test_process_email() {
 
     let first_page = pages.first().unwrap();
     assert_eq!(first_page.page, 0);
-    assert_eq!(first_page.content.replace("\r\n", "\n"), "Test email body");
+    assert_eq!(
+        first_page.content.replace("\r\n", "\n"),
+        "Test email body\n"
+    );
 
     // Ensure no additional files are produced
     assert!(
@@ -169,7 +172,7 @@ async fn test_process_email_with_html() {
     let text_content = String::from_utf8_lossy(third.bytes.as_ref());
     assert_eq!(
         text_content.as_ref().replace("\r\n", "\n"),
-        "Test title Bold Test email body block 1 Bold Test email body block 2"
+        "Test title\n\nBold Test email body block 1\nBold Test email body block 2\n"
     );
 
     let index_metadata = output
@@ -184,7 +187,7 @@ async fn test_process_email_with_html() {
     assert_eq!(first_page.page, 0);
     assert_eq!(
         first_page.content.replace("\r\n", "\n"),
-        "Test title Bold Test email body block 1 Bold Test email body block 2"
+        "Test title\n\nBold Test email body block 1\nBold Test email body block 2\n"
     );
 
     // Ensure no additional files are produced
@@ -261,7 +264,7 @@ async fn test_process_email_html_only() {
     let text_content = String::from_utf8_lossy(third.bytes.as_ref());
     assert_eq!(
         text_content.as_ref().replace("\r\n", "\n"),
-        "Test title Bold Test email body block 1 Bold Test email body block 2"
+        "Test title\n\n\nBold Test email body block 1\n\nBold Test email body block 2\n\n"
     );
 
     let index_metadata = output
@@ -276,7 +279,7 @@ async fn test_process_email_html_only() {
     assert_eq!(first_page.page, 0);
     assert_eq!(
         first_page.content.replace("\r\n", "\n"),
-        "Test title Bold Test email body block 1 Bold Test email body block 2"
+        "Test title\n\n\nBold Test email body block 1\n\nBold Test email body block 2\n\n"
     );
 
     // Ensure no additional files are produced
@@ -362,7 +365,7 @@ async fn test_process_email_with_attachment() {
     let text_content = String::from_utf8_lossy(third.bytes.as_ref());
     assert_eq!(
         text_content.as_ref().replace("\r\n", "\n"),
-        "Test email body"
+        "Test email body\n"
     );
 
     let index_metadata = output
@@ -375,7 +378,10 @@ async fn test_process_email_with_attachment() {
 
     let first_page = pages.first().unwrap();
     assert_eq!(first_page.page, 0);
-    assert_eq!(first_page.content.replace("\r\n", "\n"), "Test email body");
+    assert_eq!(
+        first_page.content.replace("\r\n", "\n"),
+        "Test email body\n"
+    );
 
     // Ensure no additional files are produced
     assert_eq!(
