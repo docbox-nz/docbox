@@ -53,31 +53,31 @@ pub async fn update_link(
     let mut db = db
         .begin()
         .await
-        .inspect_err(|cause| tracing::error!(?cause, "failed to begin transaction"))?;
+        .inspect_err(|error| tracing::error!(?error, "failed to begin transaction"))?;
 
     if let Some(target_id) = update.folder_id {
         // Ensure the target folder exists, also ensures the target folder is in the same scope
         // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
         let target_folder = Folder::find_by_id(db.deref_mut(), scope, target_id)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to query target folder"))?
+            .inspect_err(|error| tracing::error!(?error, "failed to query target folder"))?
             .ok_or(UpdateLinkError::UnknownTargetFolder)?;
 
         link = move_link(&mut db, user_id.clone(), link, target_folder)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to move link"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to move link"))?;
     };
 
     if let Some(new_name) = update.name {
         link = update_link_name(&mut db, user_id.clone(), link, new_name)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to update link name"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to update link name"))?;
     }
 
     if let Some(new_value) = update.value {
         link = update_link_value(&mut db, user_id, link, new_value)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to update link value"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to update link value"))?;
     }
 
     // Update search index data for the new name and value
@@ -111,8 +111,6 @@ async fn move_link(
     link: Link,
     target_folder: Folder,
 ) -> DbResult<Link> {
-    let link_id = link.id;
-
     // Track the edit history
     EditHistory::create(
         db.deref_mut(),
@@ -126,13 +124,11 @@ async fn move_link(
         },
     )
     .await
-    .inspect_err(|error| {
-        tracing::error!(?error, ?link_id, "failed to store link move edit history")
-    })?;
+    .inspect_err(|error| tracing::error!(?error, "failed to store link move edit history"))?;
 
     link.move_to_folder(db.deref_mut(), target_folder.id)
         .await
-        .inspect_err(|error| tracing::error!(?error, ?link_id, "failed to move link"))
+        .inspect_err(|error| tracing::error!(?error, "failed to move link"))
 }
 
 /// Updates a link value, creates a new edit history
@@ -144,8 +140,6 @@ async fn update_link_value(
     link: Link,
     new_value: String,
 ) -> DbResult<Link> {
-    let link_id = link.id;
-
     // Track the edit history
     EditHistory::create(
         db.deref_mut(),
@@ -159,13 +153,11 @@ async fn update_link_value(
         },
     )
     .await
-    .inspect_err(|cause| {
-        tracing::error!(?cause, ?link_id, "failed to store link value edit history")
-    })?;
+    .inspect_err(|error| tracing::error!(?error, "failed to store link value edit history"))?;
 
     link.update_value(db.deref_mut(), new_value)
         .await
-        .inspect_err(|cause| tracing::error!(?cause, ?link_id, "failed to update link value"))
+        .inspect_err(|error| tracing::error!(?error, "failed to update link value"))
 }
 
 /// Updates a link name, creates a new edit history
@@ -177,8 +169,6 @@ async fn update_link_name(
     link: Link,
     new_name: String,
 ) -> DbResult<Link> {
-    let link_id = link.id;
-
     // Track the edit history
     EditHistory::create(
         db.deref_mut(),
@@ -192,11 +182,9 @@ async fn update_link_name(
         },
     )
     .await
-    .inspect_err(|error| {
-        tracing::error!(?error, ?link_id, "failed to store link rename edit history")
-    })?;
+    .inspect_err(|error| tracing::error!(?error, "failed to store link rename edit history"))?;
 
     link.rename(db.deref_mut(), new_name)
         .await
-        .inspect_err(|error| tracing::error!(?error, ?link_id, "failed to rename link"))
+        .inspect_err(|error| tracing::error!(?error, "failed to rename link"))
 }
