@@ -92,10 +92,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: x86_64-pc-windows-gnu
-            os_name: windows-gnu
-            arch: x86_64
-            filename: docbox-x86_64-windows-gnu.exe
+          # - target: x86_64-pc-windows-gnu
+          #   os_name: windows-gnu
+          #   arch: x86_64
+          #   filename: docbox-x86_64-windows-gnu.exe
 
           - target: x86_64-pc-windows-msvc
             os_name: windows-msvc
