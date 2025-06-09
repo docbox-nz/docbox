@@ -54,6 +54,7 @@ jobs:
 
       # Cache Rust dependencies and build artifacts
       - name: Cache Rust dependencies
+        id: cache-rust
         uses: actions/cache@v4
         with:
           path: |
@@ -68,6 +69,7 @@ jobs:
 
       # Install cross for cross compiling
       - name: Install cross
+        if: steps.cache-rust.outputs.cache-hit != 'true'
         run: cargo install cross
 
       # Cross compile the binary
