@@ -128,7 +128,7 @@ jobs:
 
       # Cross compile the binary
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} -p docbox
 
       # Copy built binary to output directory
       - name: Rename and upload binary artifact
