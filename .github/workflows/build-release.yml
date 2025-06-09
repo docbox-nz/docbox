@@ -168,6 +168,11 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           draft: true
-          files: dist/*
+          files: |
+            docbox-x86_64-linux-musl
+            docbox-x86_64-linux-gnu
+            docbox-aarch64-linux-musl
+            docbox-aarch64-linux-gnu
+            docbox-x86_64-windows-msvc.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
