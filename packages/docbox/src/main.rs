@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<()> {
 async fn server() -> anyhow::Result<()> {
     // Create the converter
     let convert_server_addresses =
-        std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://localhost:8081".to_string());
+        std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://127.0.0.1:8081".to_string());
     let converter_server =
         OfficeConverterServer::from_addresses(convert_server_addresses.split(','))?;
     let converter = OfficeConverter::ConverterServer(converter_server);

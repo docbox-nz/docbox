@@ -86,7 +86,7 @@ setup_converter_server() {
     sudo mv $TMP_SERVER_PATH $SERVER_PATH
 
     # Ensure the binary has execute permissions
-    sudo chmod +x /docbox/office-convert-server
+    sudo chmod +x $SERVER_PATH
 
     # Create convert server service (Libreoffice conversion)
     echo "Creating convert server service"
@@ -157,9 +157,23 @@ setup_convert_server_garbage_job() {
     )
 }
 
-# Create the docbox directory and setup the docbox service
+# Create the docbox directory, download docbox binary and setup the docbox service
 setup_docbox_service() {
-    mkdir /docbox
+    local TMP_SERVER_PATH="/tmp/docbox"
+    local SERVER_PATH="/docbox/app"
+
+    # Download office converter server binary
+    echo "Downloading converter server"
+    curl -L -o $TMP_SERVER_PATH https://github.com/docbox-nz/docbox/releases/download/v0.1.0/docbox-aarch64-linux-gnu
+
+    # Ensure the docbox directory exists
+    sudo mkdir /docbox
+
+    # Move docbox server binary
+    sudo mv $TMP_SERVER_PATH $SERVER_PATH
+
+    # Ensure the binary has execute permissions
+    sudo chmod +x $SERVER_PATH
 
     # Create service for docbox
     echo "Creating docbox service"
