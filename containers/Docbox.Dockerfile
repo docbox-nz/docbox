@@ -1,5 +1,5 @@
 #  Builder part
-FROM rust:1.87 AS builder
+FROM rust:1.87.0-slim AS builder
 
 # Add rust target and install deps
 RUN rustup target add x86_64-unknown-linux-musl
