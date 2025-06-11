@@ -52,7 +52,7 @@ Files, folders, and links are organized into logical groups called **Document Bo
 
 - **Backend**: Rust
 - **Database**: PostgreSQL
-- **Search Engine**: Typesense
+- **Search Engine**: Typesense or Opensearch
 - **Storage**: S3-compatible object storage (e.g. AWS S3, MinIO)
 
 ![Docbox Diagram](assets/docbox.drawio.png)
