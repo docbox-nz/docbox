@@ -4,13 +4,13 @@
 //! maintaining an internal cache
 
 use bytes::Bytes;
-use document::{determine_best_favicon, get_website_metadata, Favicon};
-use download_image::{download_image_href, resolve_full_url, ResolvedUri};
+use document::{Favicon, determine_best_favicon, get_website_metadata};
+use download_image::{ResolvedUri, download_image_href, resolve_full_url};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::Serialize;
 use std::time::Duration;
-use url_validation::{is_allowed_url, TokioDomainResolver};
+use url_validation::{TokioDomainResolver, is_allowed_url};
 
 mod data_uri;
 mod document;
@@ -26,10 +26,10 @@ const METADATA_CACHE_DURATION: Duration = Duration::from_secs(60 * 60 * 48);
 /// Maximum number of site metadata to maintain in the cache
 const METADATA_CACHE_CAPACITY: u64 = 50;
 
-/// Duration to maintain resolved images for (1h)
-const IMAGE_CACHE_DURATION: Duration = Duration::from_secs(60 * 60);
+/// Duration to maintain resolved images for (15min)
+const IMAGE_CACHE_DURATION: Duration = Duration::from_secs(60 * 15);
 /// Maximum number of images to maintain in the cache
-const IMAGE_CACHE_CAPACITY: u64 = 50;
+const IMAGE_CACHE_CAPACITY: u64 = 5;
 
 /// Time to wait when attempting to fetch resource before timing out
 const METADATA_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
