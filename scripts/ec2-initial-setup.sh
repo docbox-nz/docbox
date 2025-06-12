@@ -206,6 +206,24 @@ EOF
     sudo systemctl start docbox.service
 }
 
+# Setup a 1GB
+setup_swap() {
+    # Allocate 1GB swap file
+    sudo fallocate -l 1G /swapfile
+
+    # Set swap file permissions
+    sudo chmod 600 /swapfile
+
+    # Set the swap area
+    sudo mkswap /swapfile
+
+    # Enable the swap file
+    sudo swapon /swapfile
+
+    # Persist the new swap file
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+}
+
 configure_proxy
 wait_for_network
 set_timezone
@@ -216,3 +234,4 @@ setup_cron
 setup_convert_server_restart_job
 setup_convert_server_garbage_job
 setup_docbox_service
+setup_swap
