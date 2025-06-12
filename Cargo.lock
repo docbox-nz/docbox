@@ -3896,9 +3896,9 @@ dependencies = [
 
 [[package]]
 name = "office-convert-client"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "889ef7cbd13557bc0d721abc2323bcf093e052061619b83e7c1b0cdf15ce3d35"
+checksum = "620797479dd6d504fe2a44587d7fdd61e658e05760936ef29bff1409ed9cc77c"
 dependencies = [
  "bytes",
  "reqwest",

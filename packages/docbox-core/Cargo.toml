@@ -21,7 +21,7 @@ docbox-search = { version = "0.1.0", default-features = false, path = "../docbox
 pdf_process = { version = "0.2.0" }
 
 # Office conversion client
-office-convert-client = { version = "0.4.0" }
+office-convert-client = { version = "0.5.0" }
 
 # Image conversion and manipulation
 image = "0.25.6"
