@@ -3,6 +3,7 @@ name = "docbox-search"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+description = "Docbox multi-backend search abstraction"
 
 [features]
 default = ["opensearch", "typesense"]
@@ -38,7 +39,7 @@ itertools.workspace = true
 
 # Opensearch client for Opensearch backend
 [dependencies.opensearch]
-version = "2.0.0"
+version = "=2.3.0"
 default-features = false
 optional = true
 features = ["rustls-tls", "aws-auth"]

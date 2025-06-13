@@ -1,15 +1,16 @@
 use docbox_database::{
-    DbPool, ROOT_DATABASE_NAME, migrations::apply_tenant_migrations, models::tenant::Tenant,
+    DbPool, ROOT_DATABASE_NAME,
+    migrations::apply_tenant_migrations,
+    models::tenant::{Tenant, TenantId},
 };
 use eyre::Context;
-use uuid::Uuid;
 
 use crate::{CliConfiguration, connect_db};
 
 pub async fn migrate(
     config: &CliConfiguration,
     env: String,
-    tenant_id: Option<Uuid>,
+    tenant_id: Option<TenantId>,
     skip_failed: bool,
 ) -> eyre::Result<()> {
     // Connect to the root database

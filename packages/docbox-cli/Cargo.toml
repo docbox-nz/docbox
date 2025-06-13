@@ -9,11 +9,11 @@ license = "MIT"
 dotenvy = "=0.15.7"
 
 # Command line parser
-clap = { version = "4.5.38", features = ["derive"] }
+clap = { version = "=4.5.40", features = ["derive"] }
 
 # Error reporting
-eyre = "0.6.12"
-color-eyre = "0.6"
+eyre = "=0.6.12"
+color-eyre = "=0.6.5"
 
 # Core business logic
 docbox-core = { version = "0.1.0", path = "../docbox-core" }
@@ -26,25 +26,20 @@ docbox-search = { version = "0.1.0", path = "../docbox-search" }
 
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }
+futures.workspace = true
 
 # Serialization and JSON
 serde.workspace = true
 serde_json.workspace = true
-serde_with.workspace = true
 
 # Logging
 tracing.workspace = true
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber.workspace = true
 
-bytes.workspace = true
-uuid.workspace = true
-chrono.workspace = true
 mime.workspace = true
+mime_guess.workspace = true
 
-# URLs
-url.workspace = true
-futures.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
+
 itertools.workspace = true
-mime_guess.workspace = true

@@ -1,8 +1,10 @@
 use docbox_core::{aws::aws_config, secrets::AppSecretManager};
-use docbox_database::{models::tenant::Tenant, DatabasePoolCache};
+use docbox_database::{
+    DatabasePoolCache,
+    models::tenant::{Tenant, TenantId},
+};
 use docbox_search::SearchIndexFactory;
 use eyre::Context;
-use uuid::Uuid;
 
 use crate::{AnyhowError, CliConfiguration};
 
@@ -10,7 +12,7 @@ pub async fn migrate_search(
     config: &CliConfiguration,
     env: String,
     name: String,
-    tenant_id: Option<Uuid>,
+    tenant_id: Option<TenantId>,
     skip_failed: bool,
 ) -> eyre::Result<()> {
     tracing::debug!(?env, ?tenant_id, "migrating tenant search");

@@ -39,21 +39,8 @@ tower-http = { version = "=0.6.6", features = ["limit", "cors", "trace"] }
 # Typed multipart extraction 
 axum_typed_multipart = "=0.15.1"
 
-# Error handling
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-
-# Serialization and JSON
-serde = { workspace = true }
-serde_json = { workspace = true }
-serde_with = { workspace = true }
-
-# Logging
-tracing = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
 # Validation & Axum validation integration
-garde = { workspace = true }
+garde.workspace = true
 axum-valid = { version = "=0.23.0", default-features = false, features = [
     "garde",
     "basic",
@@ -61,15 +48,31 @@ axum-valid = { version = "=0.23.0", default-features = false, features = [
     "full_garde",
 ] }
 
+# Error handling
+anyhow.workspace = true
+thiserror.workspace = true
 
-bytes = { workspace = true }
-uuid = { workspace = true }
-chrono = { workspace = true }
-mime = { workspace = true }
-utoipa = { workspace = true }
+# Serialization and JSON
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
 
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
-sentry = { version = "0.38.1", default-features = false, features = [
+bytes.workspace = true
+
+uuid.workspace = true
+
+chrono.workspace = true
+
+mime.workspace = true
+mime_guess.workspace = true
+
+utoipa.workspace = true
+
+sentry = { version = "=0.39.0", default-features = false, features = [
     "backtrace",
     "contexts",
     "debug-images",
@@ -79,11 +82,7 @@ sentry = { version = "0.38.1", default-features = false, features = [
     "reqwest",
     "rustls",
 ] }
-sentry-tracing = "0.38.1"
-
-# URLs
-url.workspace = true
-mime_guess.workspace = true
+sentry-tracing = "=0.39.0"
 
 [profile.release]
 lto = true

@@ -1,11 +1,13 @@
 use clap::{Parser, Subcommand};
 use docbox_core::{secrets::SecretsManagerConfig, storage::StorageLayerFactoryConfig};
-use docbox_database::sqlx::{PgPool, postgres::PgConnectOptions};
+use docbox_database::{
+    models::tenant::TenantId,
+    sqlx::{PgPool, postgres::PgConnectOptions},
+};
 use docbox_search::SearchIndexFactoryConfig;
 use eyre::Context;
 use serde::Deserialize;
 use std::path::PathBuf;
-use uuid::Uuid;
 
 mod create_root;
 mod create_tenant;
@@ -75,7 +77,7 @@ pub enum Commands {
 
         /// ID of the tenant to rebuild
         #[arg(short, long)]
-        tenant_id: Uuid,
+        tenant_id: TenantId,
     },
 
     ReprocessOctetStreamFiles {
@@ -84,7 +86,7 @@ pub enum Commands {
         env: String,
         /// ID of the tenant to rebuild
         #[arg(short, long)]
-        tenant_id: Uuid,
+        tenant_id: TenantId,
     },
 
     /// Delete a tenant
@@ -94,7 +96,7 @@ pub enum Commands {
         env: String,
         /// Specific tenant to delete
         #[arg(short, long)]
-        tenant_id: Uuid,
+        tenant_id: TenantId,
     },
 
     /// Get a tenant
@@ -104,7 +106,7 @@ pub enum Commands {
         env: String,
         /// Specific tenant to delete
         #[arg(short, long)]
-        tenant_id: Uuid,
+        tenant_id: TenantId,
     },
 
     /// Run a migration
@@ -114,7 +116,7 @@ pub enum Commands {
         env: String,
         /// Specific tenant to run against
         #[arg(short, long)]
-        tenant_id: Option<Uuid>,
+        tenant_id: Option<TenantId>,
         #[arg(short, long)]
         skip_failed: bool,
     },
@@ -129,7 +131,7 @@ pub enum Commands {
         name: String,
         /// Specific tenant to run against
         #[arg(short, long)]
-        tenant_id: Option<Uuid>,
+        tenant_id: Option<TenantId>,
         /// Skip failed migrations
         #[arg(short, long)]
         skip_failed: bool,

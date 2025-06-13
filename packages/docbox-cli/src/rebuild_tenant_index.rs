@@ -14,7 +14,7 @@ use docbox_database::{
         folder::Folder,
         generated_file::{GeneratedFile, GeneratedFileType},
         link::{Link, LinkWithScope},
-        tenant::Tenant,
+        tenant::{Tenant, TenantId},
     },
 };
 use docbox_search::{
@@ -24,14 +24,13 @@ use docbox_search::{
 use eyre::{Context, ContextCompat};
 use futures::{StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
 use itertools::Itertools;
-use uuid::Uuid;
 
 use crate::{AnyhowError, CliConfiguration};
 
 pub async fn rebuild_tenant_index(
     config: &CliConfiguration,
     env: String,
-    tenant_id: Uuid,
+    tenant_id: TenantId,
 ) -> eyre::Result<()> {
     tracing::debug!(?env, ?tenant_id, "rebuilding tenant index");
 

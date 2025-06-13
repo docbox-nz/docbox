@@ -1,5 +1,5 @@
 use tracing::Level;
-use tracing_subscriber::{fmt::Layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub fn init_logging_with_sentry(dsn: String) -> anyhow::Result<sentry::ClientInitGuard> {
     let options = sentry::ClientOptions {

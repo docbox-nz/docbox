@@ -10,7 +10,7 @@ description = "Web scraping logic for docbox, document parsing, favicon resoluti
 tl.workspace = true
 
 # DNS resolution
-tokio = { version = "1", features = ["net", "macros"] }
+tokio = { workspace = true, features = ["net", "macros"] }
 
 # Logging
 tracing.workspace = true

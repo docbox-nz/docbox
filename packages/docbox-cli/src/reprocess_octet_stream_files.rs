@@ -13,7 +13,7 @@ use docbox_database::{
     DatabasePoolCache, DbPool,
     models::{
         file::{File, FileWithScope},
-        tenant::Tenant,
+        tenant::{Tenant, TenantId},
     },
 };
 use docbox_search::{SearchIndexFactory, TenantSearchIndex};
@@ -21,14 +21,13 @@ use eyre::{Context, ContextCompat};
 use futures::{StreamExt, future::BoxFuture};
 use mime::Mime;
 use std::ops::DerefMut;
-use uuid::Uuid;
 
 use crate::{AnyhowError, CliConfiguration};
 
 pub async fn reprocess_octet_stream_files(
     config: &CliConfiguration,
     env: String,
-    tenant_id: Uuid,
+    tenant_id: TenantId,
 ) -> eyre::Result<()> {
     tracing::debug!(?env, ?tenant_id, "rebuilding tenant index");
 
