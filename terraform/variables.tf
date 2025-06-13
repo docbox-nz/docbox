@@ -35,11 +35,15 @@ variable "api_instance_type" {
   type        = string
 }
 
+variable "converter_instance_type" {
+  description = "AWS instance class for the office converter EC2 server"
+  type        = string
+}
+
 variable "vpc_id" {
   description = "ID of the VPC to allocate resources within"
   type        = string
 }
-
 
 variable "vpn_security_group_id" {
   description = "ID of the security group the VPN is within to allow VPN access"

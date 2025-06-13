@@ -12,8 +12,6 @@ resource "aws_key_pair" "ssh_key" {
 #
 # This instance will run:
 # - The docbox API HTTP server
-# - Converter HTTP server (Lightweight wrapper for safely interacting with LibreOffice)
-# - LibreOffice (Headless for conversion)
 # 
 # (https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/instance)
 resource "aws_instance" "api" {
@@ -42,7 +40,7 @@ resource "aws_instance" "api" {
   }
 
   # Pass proxy details into setup script
-  user_data = templatefile("../scripts/ec2-initial-setup.sh", {
+  user_data = templatefile("../scripts/ec2-docbox-setup.sh", {
     proxy_host = aws_instance.http_proxy.private_ip
     proxy_port = "3128"
   })
@@ -59,7 +57,58 @@ resource "aws_instance" "api" {
   }
 
   tags = {
-    Name = "docbox-api-server"
+    Name = "docbox-api"
+  }
+}
+# Docbox office conversion server EC2 
+#
+# This instance will run:
+# - Converter HTTP server (Lightweight wrapper for safely interacting with LibreOffice)
+# - LibreOffice (Headless for conversion)
+# 
+# (https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/instance)
+resource "aws_instance" "converter_api" {
+  # Debian 12 (20250316-2053) 64-bit (Arm)
+  ami           = "ami-01fd140abb2587221"
+  instance_type = var.converter_instance_type
+
+  subnet_id = aws_subnet.private_subnet.id
+
+  # SSH key access
+  key_name = aws_key_pair.ssh_key.key_name
+
+  # Network security group
+  vpc_security_group_ids = [aws_security_group.docbox_converter_sg.id]
+
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 8
+  }
+
+  # Disable running prolonged higher CPU speeds at a higher cost
+  credit_specification {
+    cpu_credits = "standard"
+  }
+
+  # Pass proxy details into setup script
+  user_data = templatefile("../scripts/ec2-converter-setup.sh", {
+    proxy_host = aws_instance.http_proxy.private_ip
+    proxy_port = "3128"
+  })
+
+
+  # API must wait for the HTTP proxy to be fully initialized before
+  # it can run so that it can use the HTTP proxy to install dependencies
+  # (As it does not have regular network access since its in a private subnet)
+  depends_on = [aws_instance.http_proxy]
+
+  # Prevent replacement due to user_data changes
+  lifecycle {
+    ignore_changes = [user_data]
+  }
+
+  tags = {
+    Name = "docbox-converter-api"
   }
 }
 

@@ -1,7 +1,12 @@
 
+
 # Get private IP of API EC2 instance for SSH
 output "api_private_ip" {
   value = aws_instance.api.private_ip
+}
+
+output "converter_private_ip" {
+  value = aws_instance.converter_api.private_ip
 }
 
 # Generated instance ID for the API EC2 instance 
