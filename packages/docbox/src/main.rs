@@ -18,7 +18,7 @@ use docbox_core::{
 };
 use docbox_database::DatabasePoolCache;
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
-use docbox_web_scraper::WebsiteMetaService;
+use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
 use logging::{init_logging, init_logging_with_sentry};
 use routes::router;
 use std::{
@@ -79,8 +79,12 @@ async fn server() -> anyhow::Result<()> {
     };
 
     // Create website scraping service
-    let website_meta_service =
-        Arc::new(WebsiteMetaService::new().context("failed to build web scraper http client")?);
+    let website_meta_service_config =
+        WebsiteMetaServiceConfig::from_env().context("failed to derive web scraper config")?;
+    let website_meta_service = Arc::new(
+        WebsiteMetaService::from_config(website_meta_service_config)
+            .context("failed to build web scraper http client")?,
+    );
 
     // Load AWS configuration
     let aws_config = aws_config().await;

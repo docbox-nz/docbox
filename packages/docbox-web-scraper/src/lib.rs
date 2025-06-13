@@ -3,12 +3,13 @@
 //! Web-scraping client for getting website metadata, favicon, ...etc and
 //! maintaining an internal cache
 
+use anyhow::Context;
 use bytes::Bytes;
 use document::{Favicon, determine_best_favicon, get_website_metadata};
 use download_image::{ResolvedUri, download_image_href, resolve_full_url};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use url_validation::{TokioDomainResolver, is_allowed_url};
 
@@ -21,20 +22,105 @@ pub use reqwest::Url;
 
 pub type OgpHttpClient = reqwest::Client;
 
-/// Duration to maintain site metadata for (48h)
-const METADATA_CACHE_DURATION: Duration = Duration::from_secs(60 * 60 * 48);
-/// Maximum number of site metadata to maintain in the cache
-const METADATA_CACHE_CAPACITY: u64 = 50;
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(default)]
+pub struct WebsiteMetaServiceConfig {
+    /// Duration to maintain site metadata for (48h)
+    pub metadata_cache_duration: Duration,
+    /// Maximum number of site metadata to maintain in the cache
+    pub metadata_cache_capacity: u64,
 
-/// Duration to maintain resolved images for (15min)
-const IMAGE_CACHE_DURATION: Duration = Duration::from_secs(60 * 15);
-/// Maximum number of images to maintain in the cache
-const IMAGE_CACHE_CAPACITY: u64 = 5;
+    /// Duration to maintain resolved images for (15min)
+    pub image_cache_duration: Duration,
+    /// Maximum number of images to maintain in the cache
+    pub image_cache_capacity: u64,
 
-/// Time to wait when attempting to fetch resource before timing out
-const METADATA_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
-/// Time to wait while downloading a resource before timing out (between each read of data)
-const METADATA_READ_TIMEOUT: Duration = Duration::from_secs(30);
+    /// Time to wait when attempting to fetch resource before timing out
+    ///
+    /// This option is ignored if you manually provide a [reqwest::Client]
+    pub metadata_connect_timeout: Duration,
+    /// Time to wait while downloading a resource before timing out (between each read of data)
+    ///
+    /// This option is ignored if you manually provide a [reqwest::Client]
+    pub metadata_read_timeout: Duration,
+}
+
+impl WebsiteMetaServiceConfig {
+    /// Load a website meta service config from its environment variables
+    pub fn from_env() -> anyhow::Result<WebsiteMetaServiceConfig> {
+        let mut config = WebsiteMetaServiceConfig::default();
+
+        if let Ok(metadata_cache_duration) =
+            std::env::var("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION")
+        {
+            let metadata_cache_duration = metadata_cache_duration
+                .parse::<u64>()
+                .context("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION must be a number in seconds")?;
+
+            config.metadata_cache_duration = Duration::from_secs(metadata_cache_duration);
+        }
+
+        if let Ok(metadata_cache_capacity) =
+            std::env::var("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY")
+        {
+            let metadata_cache_capacity = metadata_cache_capacity
+                .parse::<u64>()
+                .context("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY must be a number")?;
+
+            config.metadata_cache_capacity = metadata_cache_capacity;
+        }
+
+        if let Ok(metadata_connect_timeout) =
+            std::env::var("DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT")
+        {
+            let metadata_connect_timeout = metadata_connect_timeout.parse::<u64>().context(
+                "DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT must be a number in seconds",
+            )?;
+
+            config.metadata_connect_timeout = Duration::from_secs(metadata_connect_timeout);
+        }
+
+        if let Ok(metadata_read_timeout) = std::env::var("DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT")
+        {
+            let metadata_read_timeout = metadata_read_timeout
+                .parse::<u64>()
+                .context("DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT must be a number in seconds")?;
+
+            config.metadata_read_timeout = Duration::from_secs(metadata_read_timeout);
+        }
+
+        if let Ok(image_cache_duration) = std::env::var("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION") {
+            let image_cache_duration = image_cache_duration
+                .parse::<u64>()
+                .context("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION must be a number in seconds")?;
+
+            config.image_cache_duration = Duration::from_secs(image_cache_duration);
+        }
+
+        if let Ok(image_cache_capacity) = std::env::var("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY") {
+            let image_cache_capacity = image_cache_capacity
+                .parse::<u64>()
+                .context("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY must be a number")?;
+
+            config.image_cache_capacity = image_cache_capacity;
+        }
+
+        Ok(config)
+    }
+}
+
+impl Default for WebsiteMetaServiceConfig {
+    fn default() -> Self {
+        Self {
+            metadata_cache_duration: Duration::from_secs(60 * 60 * 48),
+            metadata_cache_capacity: 50,
+            image_cache_duration: Duration::from_secs(60 * 15),
+            image_cache_capacity: 5,
+            metadata_connect_timeout: Duration::from_secs(5),
+            metadata_read_timeout: Duration::from_secs(10),
+        }
+    }
+}
 
 /// Service for looking up website metadata and storing a cached value
 pub struct WebsiteMetaService {
@@ -79,28 +165,41 @@ impl WebsiteMetaService {
     /// Creates a new instance of the service, this initializes the HTTP
     /// client and creates the cache
     pub fn new() -> reqwest::Result<Self> {
-        let client = reqwest::Client::builder()
-            .user_agent("DocboxLinkBot")
-            .connect_timeout(METADATA_CONNECT_TIMEOUT)
-            .read_timeout(METADATA_READ_TIMEOUT)
-            .build()?;
-
-        Ok(Self::from_client(client))
+        Self::from_config(Default::default())
     }
 
     /// Create a web scraper from the provided client
     pub fn from_client(client: reqwest::Client) -> Self {
+        Self::from_client_with_config(client, Default::default())
+    }
+
+    /// Create a web scraper from the provided config
+    pub fn from_config(config: WebsiteMetaServiceConfig) -> reqwest::Result<Self> {
+        let client = reqwest::Client::builder()
+            .user_agent("DocboxLinkBot")
+            .connect_timeout(config.metadata_connect_timeout)
+            .read_timeout(config.metadata_read_timeout)
+            .build()?;
+
+        Ok(Self::from_client_with_config(client, config))
+    }
+
+    /// Create a web scraper from the provided client and config
+    pub fn from_client_with_config(
+        client: reqwest::Client,
+        config: WebsiteMetaServiceConfig,
+    ) -> Self {
         // Cache for metadata
         let cache = Cache::builder()
-            .time_to_idle(METADATA_CACHE_DURATION)
-            .max_capacity(METADATA_CACHE_CAPACITY)
+            .time_to_idle(config.metadata_cache_duration)
+            .max_capacity(config.metadata_cache_capacity)
             .eviction_policy(EvictionPolicy::tiny_lfu())
             .build();
 
         // Cache for loaded images
         let image_cache = Cache::builder()
-            .time_to_idle(IMAGE_CACHE_DURATION)
-            .max_capacity(IMAGE_CACHE_CAPACITY)
+            .time_to_idle(config.image_cache_duration)
+            .max_capacity(config.image_cache_capacity)
             .eviction_policy(EvictionPolicy::tiny_lfu())
             .build();
 

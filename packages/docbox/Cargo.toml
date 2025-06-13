@@ -25,7 +25,7 @@ docbox-search = { version = "0.1.0", default-features = false, path = "../docbox
 ] }
 
 # Web scraping
-docbox-web-scraper = { version = "0.1.0", path = "../docbox-web-scraper" }
+docbox-web-scraper = { version = "0.2.0", path = "../docbox-web-scraper" }
 
 # Asynchronous runtime & Helpers
 tokio = { version = "1", features = ["full"] }
