@@ -73,6 +73,38 @@ pub async fn get_website_metadata(
     parse_website_metadata(&text)
 }
 
+/// Attempts to read the robots.txt file for the website to determine if
+/// scraping is allowed
+pub async fn is_allowed_robots_txt(client: &reqwest::Client, url: &Url) -> anyhow::Result<bool> {
+    let mut url = url.clone();
+
+    let original_url = url.to_string();
+
+    // Change path to /robots.txt
+    url.set_path("/robots.txt");
+
+    // Request page at URL
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .context("failed to request resource")?
+        .error_for_status()
+        .context("resource responded with error")?;
+
+    // Read response text
+    let robots_txt = response
+        .text()
+        .await
+        .context("failed to read resource response")?;
+
+    let mut matcher = robotstxt::DefaultMatcher::default();
+    let is_allowed =
+        matcher.one_agent_allowed_by_robots(&robots_txt, "DocboxLinkBot", &original_url);
+
+    Ok(is_allowed)
+}
+
 pub fn parse_website_metadata(html: &str) -> anyhow::Result<WebsiteMetadata> {
     let dom = tl::parse(html, tl::ParserOptions::default())
         .context("failed to parse resource response")?;

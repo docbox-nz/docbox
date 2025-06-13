@@ -20,6 +20,8 @@ mod url_validation;
 
 pub use reqwest::Url;
 
+use crate::document::is_allowed_robots_txt;
+
 pub type OgpHttpClient = reqwest::Client;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -220,6 +222,15 @@ impl WebsiteMetaService {
                     return None;
                 }
 
+                // Check that the site allows scraping based on its robots.txt
+                let is_allowed_scraping = is_allowed_robots_txt(&self.client, url)
+                    .await
+                    .unwrap_or(false);
+
+                if !is_allowed_scraping {
+                    return None;
+                }
+
                 // Get the website metadata
                 let res = match get_website_metadata(&self.client, url).await {
                     Ok(value) => value,
@@ -244,7 +255,16 @@ impl WebsiteMetaService {
 
     pub async fn resolve_website_favicon(&self, url: &Url) -> Option<ResolvedImage> {
         let website = self.resolve_website(url).await?;
-        let favicon = website.best_favicon?.href;
+        let favicon = match website.best_favicon {
+            Some(best) => best.href,
+
+            // No favicon from document? Fallback and try to use the default path
+            None => {
+                let mut url = url.clone();
+                url.set_path("/favicon.ico");
+                url.to_string()
+            }
+        };
 
         self.resolve_image(url, ImageCacheKey::Favicon, favicon)
             .await

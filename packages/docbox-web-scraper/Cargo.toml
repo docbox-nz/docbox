@@ -41,3 +41,6 @@ base64 = "0.22.1"
 
 # HTTP primitives
 http = { workspace = true }
+
+# Robots.txt file handling
+robotstxt = "0.3.0"
