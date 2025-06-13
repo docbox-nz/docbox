@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use models::tenant::Tenant;
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
@@ -82,9 +81,11 @@ pub enum DbConnectErr {
     Db(#[from] DbErr),
 }
 
-#[async_trait]
 pub trait DbSecretManager: Send + Sync {
-    async fn get_secret(&self, name: &str) -> Result<Option<DbSecrets>, DbConnectErr>;
+    fn get_secret(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Option<DbSecrets>, DbConnectErr>> + Send;
 }
 
 impl<S> DatabasePoolCache<S>

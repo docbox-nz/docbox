@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use aws::AwsSecretManager;
 use aws_config::SdkConfig;
 use docbox_database::{DbConnectErr, DbSecretManager, DbSecrets};
@@ -122,7 +121,6 @@ pub(crate) trait SecretManager: Send + Sync {
     async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()>;
 }
 
-#[async_trait]
 impl DbSecretManager for AppSecretManager {
     async fn get_secret(&self, name: &str) -> Result<Option<DbSecrets>, DbConnectErr> {
         self.parsed_secret(name)

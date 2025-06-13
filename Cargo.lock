@@ -2016,7 +2016,6 @@ version = "0.1.0"
 dependencies = [
  "age",
  "anyhow",
- "async-trait",
  "aws-config",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -2059,7 +2058,6 @@ dependencies = [
 name = "docbox-database"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "chrono",
  "moka",
  "serde",

@@ -48,9 +48,6 @@ moka.workspace = true
 # Enum -> String helpers and macros
 strum = { version = "=0.27.1", features = ["derive"] }
 
-# Async trait support
-async-trait.workspace = true
-
 utoipa.workspace = true
 
 [dev-dependencies]

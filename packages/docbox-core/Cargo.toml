@@ -69,7 +69,6 @@ mime2ext.workspace = true
 # SHA256 Hashing
 sha256 = { version = "=1.6.0", default-features = false }
 
-async-trait.workspace = true
 mail-parser = "=0.11.0"
 
 # Base64 encoding / decoding 
