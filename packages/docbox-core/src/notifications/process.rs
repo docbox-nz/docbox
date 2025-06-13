@@ -16,6 +16,7 @@ use docbox_database::{
 };
 use docbox_search::SearchIndexFactory;
 use std::sync::Arc;
+use tracing::Instrument;
 
 #[derive(Clone)]
 pub struct NotificationQueueData {
@@ -79,6 +80,20 @@ pub async fn handle_file_uploaded(
         }
     };
 
+    // Provide a span that contains the tenant metadata
+    let span = tracing::info_span!("tenant", tenant_id = %tenant.id, tenant_env = %tenant.env);
+
+    handle_file_uploaded_tenant(tenant, data, bucket_name, object_key)
+        .instrument(span)
+        .await
+}
+
+pub async fn handle_file_uploaded_tenant(
+    tenant: Tenant,
+    data: NotificationQueueData,
+    bucket_name: String,
+    object_key: String,
+) -> anyhow::Result<()> {
     let object_key = match urlencoding::decode(&object_key) {
         Ok(value) => value.to_string(),
         Err(err) => {
