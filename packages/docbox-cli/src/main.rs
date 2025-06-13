@@ -1,9 +1,9 @@
 use clap::{Parser, Subcommand};
 use docbox_core::{secrets::SecretsManagerConfig, storage::StorageLayerFactoryConfig};
+use docbox_database::sqlx::{PgPool, postgres::PgConnectOptions};
 use docbox_search::SearchIndexFactoryConfig;
 use eyre::Context;
 use serde::Deserialize;
-use sqlx::{PgPool, postgres::PgConnectOptions};
 use std::path::PathBuf;
 use uuid::Uuid;
 

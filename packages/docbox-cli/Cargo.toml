@@ -6,7 +6,7 @@ license = "MIT"
 
 [dependencies]
 # Environment variables 
-dotenvy = "0.15.7"
+dotenvy = "=0.15.7"
 
 # Command line parser
 clap = { version = "4.5.38", features = ["derive"] }
@@ -25,44 +25,26 @@ docbox-database = { version = "0.1.0", path = "../docbox-database" }
 docbox-search = { version = "0.1.0", path = "../docbox-search" }
 
 # Asynchronous runtime & Helpers
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 # Serialization and JSON
-serde = { workspace = true }
-serde_json = { workspace = true }
-serde_with = { workspace = true }
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
 
 # Logging
-tracing = { workspace = true }
+tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-bytes = { workspace = true }
-uuid = { workspace = true }
-chrono = { workspace = true }
-mime = { workspace = true }
-
-# Database client
-sqlx = { version = "0.8", default-features = false, features = [
-    # Using tokio async runtime
-    "runtime-tokio",
-    # TLS support backed by rustls
-    "tls-rustls",
-    # Macros
-    "macros",
-    # PostgreSQL database driver
-    "postgres",
-    # UUID support
-    "uuid",
-    # Date time support
-    "chrono",
-    # JSON support
-    "json",
-] }
+bytes.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+mime.workspace = true
 
 # URLs
-url = { workspace = true }
-futures = "0.3.31"
+url.workspace = true
+futures.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
-itertools = "0.14.0"
-mime_guess = "2.0.5"
+itertools.workspace = true
+mime_guess.workspace = true

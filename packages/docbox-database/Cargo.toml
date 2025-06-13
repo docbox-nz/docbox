@@ -4,26 +4,22 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
-[features]
-# Mock header values, used for browser local testing
-mock-browser = []
-
 [dependencies]
 # Asynchronous runtime & Helpers
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 # Error handling
-thiserror = { workspace = true }
+thiserror.workspace = true
 
 # Serialization and JSON
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde.workspace = true
+serde_json.workspace = true
 
 # Logging
-tracing = { workspace = true }
+tracing.workspace = true
 
 # Database client
-sqlx = { version = "0.8", default-features = false, features = [
+sqlx = { version = "=0.8.6", default-features = false, features = [
     # Using tokio async runtime
     "runtime-tokio",
     # TLS support backed by rustls
@@ -41,21 +37,21 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 
 # UUID v4 support
-uuid = { workspace = true }
+uuid.workspace = true
 
 # Date & time
-chrono = { workspace = true }
+chrono.workspace = true
 
 # Caching
-moka = { workspace = true }
+moka.workspace = true
 
 # Enum -> String helpers and macros
-strum = { version = "0.26", features = ["derive"] }
+strum = { version = "=0.27.1", features = ["derive"] }
 
 # Async trait support
-async-trait = { workspace = true }
+async-trait.workspace = true
 
-utoipa = { workspace = true }
+utoipa.workspace = true
 
 [dev-dependencies]
 testcontainers-modules = { version = "0.12.1", features = ["postgres"] }

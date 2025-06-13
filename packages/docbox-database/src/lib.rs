@@ -12,6 +12,7 @@ use std::{error::Error, time::Duration};
 use thiserror::Error;
 use tracing::debug;
 
+pub use sqlx;
 pub use sqlx::PgExecutor as DbExecutor;
 
 pub mod create;

@@ -3,44 +3,42 @@ name = "docbox-web-scraper"
 version = "0.2.0"
 edition = "2024"
 license = "MIT"
+description = "Web scraping logic for docbox, document parsing, favicon resolution, ogp resolution"
 
 [dependencies]
 # HTML parser for OGP metadata
-tl = "0.7.8"
+tl.workspace = true
 
 # DNS resolution
 tokio = { version = "1", features = ["net", "macros"] }
 
 # Logging
-tracing = { workspace = true }
+tracing.workspace = true
 
 # HTTP
-reqwest = { workspace = true }
+reqwest.workspace = true
 
 # Serialization support
-serde = { workspace = true }
+serde.workspace = true
 
 # Error handling
-anyhow = { workspace = true }
-thiserror = { workspace = true }
+anyhow.workspace = true
+thiserror.workspace = true
 
 # Cheap bytes type
-bytes = { workspace = true }
+bytes.workspace = true
 
 # Mime types
-mime = { workspace = true }
+mime.workspace = true
 
 # URLs
-url = { workspace = true }
+url.workspace = true
 
 # Caching
-moka = { workspace = true }
+moka.workspace = true
 
 # Base64 encoding / decoding for data URL
-base64 = "0.22.1"
-
-# HTTP primitives
-http = { workspace = true }
+base64.workspace = true
 
 # Robots.txt file handling
-robotstxt = "0.3.0"
+robotstxt = "=0.3.0"

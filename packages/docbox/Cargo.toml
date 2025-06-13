@@ -10,7 +10,7 @@ mock-browser = []
 
 [dependencies]
 # Environment variables 
-dotenvy = "0.15.7"
+dotenvy = "=0.15.7"
 
 # Core business logic
 docbox-core = { version = "0.1.0", path = "../docbox-core" }
@@ -28,7 +28,7 @@ docbox-search = { version = "0.1.0", default-features = false, path = "../docbox
 docbox-web-scraper = { version = "0.2.0", path = "../docbox-web-scraper" }
 
 # Asynchronous runtime & Helpers
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 
 # HTTP server
 axum = { version = "0.7.5", features = ["multipart"] }
@@ -81,8 +81,8 @@ sentry = { version = "0.38.1", default-features = false, features = [
 sentry-tracing = "0.38.1"
 
 # URLs
-url = { workspace = true }
-mime_guess = "2.0.5"
+url.workspace = true
+mime_guess.workspace = true
 
 [profile.release]
 lto = true

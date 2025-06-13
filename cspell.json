@@ -44,6 +44,7 @@
     "provida",
     "Quickwit",
     "reqwest",
+    "robotstxt",
     "rustls",
     "serde",
     "sffnumbers",

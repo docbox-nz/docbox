@@ -10,36 +10,31 @@ opensearch = ["dep:opensearch"]
 typesense = []
 
 [dependencies]
-# Database access
 docbox-database = { version = "0.1.0", path = "../docbox-database" }
 
-# HTTP client
 reqwest.workspace = true
 
-# Error handling
 anyhow.workspace = true
 
-# Serialization and JSON
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
 
-# Logging
 tracing.workspace = true
 
-# Validation
 garde.workspace = true
 
-# AWS config
 aws-config.workspace = true
 
 uuid.workspace = true
+
 chrono.workspace = true
+
 mime.workspace = true
+
 utoipa.workspace = true
 
-itertools = "0.14.0"
-
+itertools.workspace = true
 
 # Opensearch client for Opensearch backend
 [dependencies.opensearch]
