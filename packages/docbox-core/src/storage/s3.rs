@@ -157,10 +157,12 @@ impl StorageLayer for S3StorageLayer {
             .bucket(&self.bucket_name)
             .notification_configuration(
                 NotificationConfiguration::builder()
-                    .set_queue_configurations(Some(vec![QueueConfiguration::builder()
-                        .queue_arn(sqs_arn)
-                        .events(aws_sdk_s3::types::Event::S3ObjectCreated)
-                        .build()?]))
+                    .set_queue_configurations(Some(vec![
+                        QueueConfiguration::builder()
+                            .queue_arn(sqs_arn)
+                            .events(aws_sdk_s3::types::Event::S3ObjectCreated)
+                            .build()?,
+                    ]))
                     .build(),
             )
             .send()
