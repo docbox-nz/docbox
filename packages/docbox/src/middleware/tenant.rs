@@ -4,12 +4,11 @@ use std::sync::Arc;
 
 use crate::error::{DynHttpError, HttpCommonError, HttpError};
 use axum::{
-    async_trait,
+    Extension,
     extract::{FromRequestParts, Request},
-    http::{request::Parts, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, request::Parts},
     middleware::Next,
     response::Response,
-    Extension,
 };
 use docbox_core::{
     events::{EventPublisherFactory, TenantEventPublisher},
@@ -17,7 +16,7 @@ use docbox_core::{
     storage::{StorageLayerFactory, TenantStorageLayer},
     tenant::tenant_cache::TenantCache,
 };
-use docbox_database::{models::tenant::Tenant, DatabasePoolCache, DbPool};
+use docbox_database::{DatabasePoolCache, DbPool, models::tenant::Tenant};
 use docbox_search::{SearchIndexFactory, TenantSearchIndex};
 use thiserror::Error;
 use tracing::Instrument;
@@ -151,10 +150,9 @@ pub async fn extract_tenant(
 /// Extractor to get database access for the current tenant
 pub struct TenantDb(pub DbPool);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for TenantDb
 where
-    S: Send + 'static,
+    S: Send + Sync,
 {
     type Rejection = DynHttpError;
 
@@ -185,10 +183,9 @@ where
 /// Tenant open search instance
 pub struct TenantSearch(pub TenantSearchIndex);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for TenantSearch
 where
-    S: Send + 'static,
+    S: Send + Sync,
 {
     type Rejection = DynHttpError;
 
@@ -215,10 +212,9 @@ where
 /// Tenant S3 access
 pub struct TenantStorage(pub TenantStorageLayer);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for TenantStorage
 where
-    S: Send + 'static,
+    S: Send + Sync,
 {
     type Rejection = DynHttpError;
 
@@ -245,10 +241,9 @@ where
 /// Tenant S3 access
 pub struct TenantEvents(pub TenantEventPublisher);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for TenantEvents
 where
-    S: Send + 'static,
+    S: Send + Sync,
 {
     type Rejection = DynHttpError;
 

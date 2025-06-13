@@ -62,7 +62,7 @@ http = "=1.3.1"
 async-trait = "0.1"
 
 # Validation
-garde = { version = "0.20.0", features = ["derive", "full"] }
+garde = { version = "=0.22.0", features = ["derive", "full"] }
 
 # OpenAPI spec generation
 utoipa = { version = "5.3.1", features = [

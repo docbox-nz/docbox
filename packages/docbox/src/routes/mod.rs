@@ -1,6 +1,6 @@
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 
 use super::middleware::tenant::tenant_auth_middleware;
@@ -39,7 +39,7 @@ pub fn document_box_router() -> Router {
     Router::new()
         .route("/", post(document_box::create))
         .nest(
-            "/:scope",
+            "/{scope}",
             Router::new()
                 .route("/", get(document_box::get).delete(document_box::delete))
                 .route("/stats", get(document_box::stats))
@@ -56,7 +56,7 @@ pub fn document_box_router() -> Router {
 /// Routes for /box/:scope/folder/
 pub fn folder_router() -> Router {
     Router::new().route("/", post(folder::create)).nest(
-        "/:folder_id",
+        "/{folder_id}",
         Router::new()
             .route(
                 "/",
@@ -74,16 +74,16 @@ pub fn file_router() -> Router {
             "/presigned",
             Router::new()
                 .route("/", post(file::create_presigned))
-                .route("/:task_id", get(file::get_presigned)),
+                .route("/{task_id}", get(file::get_presigned)),
         )
         .nest(
-            "/:file_id",
+            "/{file_id}",
             Router::new()
                 .route("/", get(file::get).put(file::update).delete(file::delete))
                 .route("/raw", get(file::get_raw))
                 // Named access endpoint, allows specifying some file name after the URL
                 // (Used to work around a Chromium bug which makes inline viewers not respect the filename)
-                .route("/raw/*name", get(file::get_raw))
+                .route("/raw/{*name}", get(file::get_raw))
                 .route("/children", get(file::get_children))
                 .route("/edit-history", get(file::get_edit_history))
                 .route("/search", post(file::search))
@@ -91,13 +91,13 @@ pub fn file_router() -> Router {
                 .nest(
                     "/generated",
                     Router::new().nest(
-                        "/:generated_type",
+                        "/{generated_type}",
                         Router::new()
                             .route("/", get(file::get_generated))
                             .route("/raw", get(file::get_generated_raw))
                             // Named access endpoint, allows specifying some file name after the URL
                             // (Used to work around a Chromium bug which makes inline viewers not respect the filename)
-                            .route("/raw/*name", get(file::get_generated_raw)),
+                            .route("/raw/{*name}", get(file::get_generated_raw)),
                     ),
                 ),
         )
@@ -105,13 +105,13 @@ pub fn file_router() -> Router {
 
 /// Routes for /box/:scope/task/
 pub fn task_router() -> Router {
-    Router::new().nest("/:task_id", Router::new().route("/", get(task::get)))
+    Router::new().nest("/{task_id}", Router::new().route("/", get(task::get)))
 }
 
 /// Routes for /box/:scope/link/
 pub fn link_router() -> Router {
     Router::new().route("/", post(link::create)).nest(
-        "/:link_id",
+        "/{link_id}",
         Router::new()
             .route("/", get(link::get).put(link::update).delete(link::delete))
             .route("/metadata", get(link::get_metadata))

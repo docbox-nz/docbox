@@ -2,11 +2,10 @@
 
 use crate::error::{DynHttpError, HttpCommonError, HttpError};
 use axum::{
-    async_trait,
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
 };
-use docbox_database::{models::user::User, DbExecutor};
+use docbox_database::{DbExecutor, models::user::User};
 use thiserror::Error;
 use utoipa::IntoParams;
 
@@ -68,10 +67,9 @@ impl HttpError for InvalidUserId {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ActionUser
 where
-    S: Send + 'static,
+    S: Send + Sync,
 {
     type Rejection = DynHttpError;
 
