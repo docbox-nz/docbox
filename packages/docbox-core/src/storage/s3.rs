@@ -3,7 +3,9 @@ use std::{error::Error, time::Duration};
 use super::{FileStream, StorageLayer};
 use crate::aws::S3Client;
 use anyhow::Context;
+use aws_config::SdkConfig;
 use aws_sdk_s3::{
+    config::Credentials,
     presigning::{PresignedRequest, PresigningConfig},
     primitives::ByteStream,
     types::{
@@ -15,6 +17,54 @@ use bytes::Bytes;
 use chrono::{DateTime, TimeDelta, Utc};
 use futures::Stream;
 use reqwest::StatusCode;
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct S3StorageLayerFactoryConfig {
+    pub endpoint: S3Endpoint,
+}
+
+impl S3StorageLayerFactoryConfig {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let endpoint = S3Endpoint::from_env()?;
+
+        Ok(Self { endpoint })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum S3Endpoint {
+    Aws,
+    Custom {
+        endpoint: String,
+        access_key_id: String,
+        access_key_secret: String,
+    },
+}
+
+impl S3Endpoint {
+    pub fn from_env() -> anyhow::Result<Self> {
+        match std::env::var("DOCBOX_S3_ENDPOINT") {
+            // Using a custom S3 endpoint
+            Ok(endpoint_url) => {
+                let access_key_id = std::env::var("DOCBOX_S3_ACCESS_KEY_ID").context(
+                    "cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_ID",
+                )?;
+                let access_key_secret = std::env::var("DOCBOX_S3_ACCESS_KEY_SECRET").context(
+                    "cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_SECRET",
+                )?;
+
+                Ok(S3Endpoint::Custom {
+                    endpoint: endpoint_url,
+                    access_key_id,
+                    access_key_secret,
+                })
+            }
+            Err(_) => Ok(S3Endpoint::Aws),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct S3StorageLayerFactory {
@@ -23,7 +73,36 @@ pub struct S3StorageLayerFactory {
 }
 
 impl S3StorageLayerFactory {
-    pub fn new(client: S3Client) -> Self {
+    pub fn from_config(aws_config: &SdkConfig, config: S3StorageLayerFactoryConfig) -> Self {
+        let client = match config.endpoint {
+            S3Endpoint::Aws => {
+                tracing::debug!("using aws s3 storage layer");
+                S3Client::new(aws_config)
+            }
+            S3Endpoint::Custom {
+                endpoint,
+                access_key_id,
+                access_key_secret,
+            } => {
+                tracing::debug!("using custom s3 storage layer");
+                let credentials = Credentials::new(
+                    access_key_id,
+                    access_key_secret,
+                    None,
+                    None,
+                    "docbox_key_provider",
+                );
+
+                // Enforces the "path" style for S3 bucket access
+                let config = aws_sdk_s3::config::Builder::from(aws_config)
+                    .force_path_style(true)
+                    .endpoint_url(endpoint)
+                    .credentials_provider(credentials)
+                    .build();
+                S3Client::from_conf(config)
+            }
+        };
+
         Self { client }
     }
 
