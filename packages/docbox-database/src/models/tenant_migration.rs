@@ -1,4 +1,4 @@
-use crate::{models::tenant::TenantId, DbExecutor, DbResult};
+use crate::{DbExecutor, DbResult, models::tenant::TenantId};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::prelude::FromRow;

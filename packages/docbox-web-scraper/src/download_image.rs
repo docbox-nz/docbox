@@ -2,10 +2,10 @@
 //!
 //! Logic around downloading and resolving remote images
 
-use crate::data_uri::{parse_data_uri, DataUriError};
+use crate::data_uri::{DataUriError, parse_data_uri};
 use bytes::Bytes;
 use mime::Mime;
-use reqwest::{header::CONTENT_TYPE, Url};
+use reqwest::{Url, header::CONTENT_TYPE};
 use thiserror::Error;
 use tracing::{debug, error};
 

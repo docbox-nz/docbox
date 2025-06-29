@@ -1,4 +1,4 @@
-use aws_config::{meta::region::RegionProviderChain, BehaviorVersion, SdkConfig};
+use aws_config::{BehaviorVersion, SdkConfig, meta::region::RegionProviderChain};
 
 pub type SqsClient = aws_sdk_sqs::Client;
 pub type S3Client = aws_sdk_s3::Client;

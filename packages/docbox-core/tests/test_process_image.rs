@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use docbox_core::{processing::image::process_image_async, utils::file::get_file_name_ext};
-use image::{metadata::Orientation, DynamicImage, ImageDecoder, ImageFormat, ImageReader};
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, metadata::Orientation};
 use std::{io::Cursor, path::Path};
 
 /// Tests that samples of supported image formats can be successfully processed

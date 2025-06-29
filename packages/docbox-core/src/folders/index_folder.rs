@@ -1,8 +1,8 @@
 use super::create_folder::CreateFolderError;
 use docbox_database::models::folder::{Folder, FolderId};
 use docbox_search::{
-    models::{SearchIndexData, SearchIndexType},
     TenantSearchIndex,
+    models::{SearchIndexData, SearchIndexType},
 };
 
 pub async fn store_folder_index(

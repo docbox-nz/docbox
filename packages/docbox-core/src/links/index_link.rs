@@ -1,7 +1,7 @@
 use docbox_database::models::{document_box::DocumentBoxScopeRaw, link::Link};
 use docbox_search::{
-    models::{SearchIndexData, SearchIndexType},
     TenantSearchIndex,
+    models::{SearchIndexData, SearchIndexType},
 };
 
 use super::create_link::CreateLinkError;

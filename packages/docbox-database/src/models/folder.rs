@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::{PgQueryResult, PgRow}, prelude::FromRow};
+use sqlx::{
+    postgres::{PgQueryResult, PgRow},
+    prelude::FromRow,
+};
 use tokio::try_join;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -153,7 +156,7 @@ pub struct WithFullPathScope<T> {
     #[sqlx(flatten)]
     pub data: T,
     #[sqlx(json)]
-    pub full_path: Vec<FolderPathSegment>, 
+    pub full_path: Vec<FolderPathSegment>,
     pub document_box: DocumentBoxScopeRaw,
 }
 
@@ -568,7 +571,6 @@ impl Folder {
         }
 
         sqlx::query_as(
-        
             r#"
         -- Recursively resolve the folder paths for each folder creating a JSON array for the path
         WITH RECURSIVE "folder_hierarchy" AS (

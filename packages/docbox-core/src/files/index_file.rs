@@ -1,8 +1,8 @@
 use crate::processing::ProcessingIndexMetadata;
 use docbox_database::models::{document_box::DocumentBoxScopeRaw, file::File};
 use docbox_search::{
-    models::{SearchIndexData, SearchIndexType},
     TenantSearchIndex,
+    models::{SearchIndexData, SearchIndexType},
 };
 
 use super::upload_file::UploadFileError;

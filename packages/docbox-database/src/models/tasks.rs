@@ -3,7 +3,7 @@ use std::future::Future;
 use crate::{DbExecutor, DbPool, DbResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{error::BoxDynError, prelude::FromRow, Database, Decode};
+use sqlx::{Database, Decode, error::BoxDynError, prelude::FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

@@ -149,7 +149,7 @@ impl ConvertToPdf for OfficeConverterServer {
 /// Checks if the provided mime is included in the known convertable mime types
 pub fn is_known_pdf_convertable(mime: &mime::Mime) -> bool {
     // We don't want to send images through the office converter
-    mime.type_() != mime::IMAGE && 
+    mime.type_() != mime::IMAGE &&
     // Must be in the convertable formats list
     CONVERTABLE_FORMATS.contains(&mime.essence_str())
 }

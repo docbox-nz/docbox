@@ -1,9 +1,9 @@
 use crate::{
+    DbResult, DbTransaction,
     models::{
         tenant::Tenant,
         tenant_migration::{CreateTenantMigration, TenantMigration},
     },
-    DbResult, DbTransaction,
 };
 use chrono::Utc;
 use std::ops::DerefMut;

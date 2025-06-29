@@ -3,12 +3,12 @@ use crate::{
     folders::index_folder::store_folder_index,
 };
 use docbox_database::{
+    DbErr, DbPool,
     models::{
         document_box::WithScope,
         folder::{CreateFolder, Folder},
         user::UserId,
     },
-    DbErr, DbPool,
 };
 use docbox_search::TenantSearchIndex;
 use std::ops::DerefMut;

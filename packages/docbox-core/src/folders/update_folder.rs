@@ -1,4 +1,5 @@
 use docbox_database::{
+    DbErr, DbPool, DbResult, DbTransaction,
     models::{
         document_box::DocumentBoxScopeRaw,
         edit_history::{
@@ -7,9 +8,8 @@ use docbox_database::{
         folder::{Folder, FolderId},
         user::UserId,
     },
-    DbErr, DbPool, DbResult, DbTransaction,
 };
-use docbox_search::{models::UpdateSearchIndexData, TenantSearchIndex};
+use docbox_search::{TenantSearchIndex, models::UpdateSearchIndexData};
 use std::ops::DerefMut;
 use thiserror::Error;
 

@@ -1,9 +1,9 @@
 use common::database::create_test_tenant_database;
 use docbox_core::{
-    document_box::create_document_box::{create_document_box, CreateDocumentBox},
+    document_box::create_document_box::{CreateDocumentBox, create_document_box},
     events::{
-        mpsc::MpscEventPublisher, noop::NoopEventPublisher, TenantEventMessage,
-        TenantEventPublisher,
+        TenantEventMessage, TenantEventPublisher, mpsc::MpscEventPublisher,
+        noop::NoopEventPublisher,
     },
 };
 

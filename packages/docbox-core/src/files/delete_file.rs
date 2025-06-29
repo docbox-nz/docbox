@@ -1,18 +1,18 @@
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
-    files::generated::{delete_generated_files, GeneratedFileDeleteResult},
+    files::generated::{GeneratedFileDeleteResult, delete_generated_files},
     storage::TenantStorageLayer,
 };
 use docbox_database::{
+    DbErr, DbPool,
     models::{
         document_box::{DocumentBoxScopeRaw, WithScope},
         file::File,
         generated_file::GeneratedFile,
     },
-    DbErr, DbPool,
 };
 use docbox_search::TenantSearchIndex;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
 use tracing::error;
 

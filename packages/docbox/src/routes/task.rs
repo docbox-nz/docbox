@@ -7,7 +7,7 @@ use crate::{
     middleware::tenant::{TenantDb, TenantParams},
     models::{document_box::DocumentBoxScope, task::HttpTaskError},
 };
-use axum::{extract::Path, Json};
+use axum::{Json, extract::Path};
 use docbox_database::models::tasks::{Task, TaskId};
 
 pub const TASK_TAG: &str = "Task";

@@ -4,15 +4,15 @@
 //! fixed intervals independent of when the task started
 
 use chrono::Local;
-use futures::{future::BoxFuture, Stream};
+use futures::{Stream, future::BoxFuture};
 use std::{
     collections::BinaryHeap,
     future::Future,
     pin::Pin,
-    task::{ready, Poll},
+    task::{Poll, ready},
     time::Duration,
 };
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{Instant, sleep_until};
 
 pub struct ScheduledEvent<E> {
     /// Data for the event to execute
@@ -169,7 +169,7 @@ mod test {
     use std::sync::{Arc, Mutex};
     use tokio::{spawn, time::sleep_until};
 
-    use crate::background::scheduler::{get_nth_interval_instant, SchedulerEventStream};
+    use crate::background::scheduler::{SchedulerEventStream, get_nth_interval_instant};
 
     use super::SchedulerQueueEvent;
 
