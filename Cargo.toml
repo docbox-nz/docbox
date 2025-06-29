@@ -9,6 +9,12 @@ members = [
     "packages/docbox-web-scraper",
 ]
 
+[workspace.package]
+authors = ["Jacobtread <jacobtread@gmail.com>"]
+repository = "https://github.com/docbox-nz/docbox"
+readme = "./README.md"
+license = "MIT"
+
 [workspace.dependencies]
 # Async runtime
 tokio = "=1.45.1"

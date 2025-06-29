@@ -2,8 +2,12 @@
 name = "docbox-core"
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
 description = "Docbox core business logic and functionality"
+
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [dependencies]
 # Database access

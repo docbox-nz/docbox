@@ -2,7 +2,11 @@
 name = "docbox-cli"
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [dependencies]
 # Environment variables 
