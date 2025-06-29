@@ -83,6 +83,3 @@ sentry = { version = "=0.39.0", default-features = false, features = [
     "rustls",
 ] }
 sentry-tracing = "=0.39.0"
-
-[profile.release]
-lto = true
