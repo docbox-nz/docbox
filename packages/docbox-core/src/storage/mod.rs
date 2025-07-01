@@ -6,14 +6,14 @@ use chrono::{DateTime, Utc};
 use docbox_database::models::tenant::Tenant;
 use futures::{Stream, StreamExt};
 use s3::{S3StorageLayer, S3StorageLayerFactory};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
 use crate::storage::s3::S3StorageLayerFactoryConfig;
 
 pub mod s3;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum StorageLayerFactoryConfig {
     S3(S3StorageLayerFactoryConfig),

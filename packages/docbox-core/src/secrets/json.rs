@@ -8,7 +8,7 @@ use crate::secrets::SecretManager;
 
 use super::Secret;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct JsonSecretManagerConfig {
     path: PathBuf,
     key: String,

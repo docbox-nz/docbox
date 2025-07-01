@@ -6,7 +6,7 @@ use models::{
     FileSearchRequest, FileSearchResults, SearchIndexData, SearchRequest, SearchResults,
     UpdateSearchIndexData,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub mod models;
@@ -21,7 +21,7 @@ mod opensearch;
 #[cfg(feature = "typesense")]
 mod typesense;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SearchIndexFactoryConfig {
     #[cfg(feature = "typesense")]

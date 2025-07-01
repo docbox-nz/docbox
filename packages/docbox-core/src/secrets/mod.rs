@@ -2,7 +2,7 @@ use aws::AwsSecretManager;
 use aws_config::SdkConfig;
 use docbox_database::{DbConnectErr, DbSecretManager, DbSecrets};
 use memory::MemorySecretManager;
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::{
     aws::SecretsManagerClient,
@@ -16,7 +16,7 @@ pub mod aws;
 pub mod json;
 pub mod memory;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SecretsManagerConfig {
     /// In-memory secret manager

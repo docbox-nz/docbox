@@ -17,9 +17,9 @@ use bytes::Bytes;
 use chrono::{DateTime, TimeDelta, Utc};
 use futures::Stream;
 use reqwest::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct S3StorageLayerFactoryConfig {
     pub endpoint: S3Endpoint,
 }
@@ -32,7 +32,7 @@ impl S3StorageLayerFactoryConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum S3Endpoint {
     Aws,

@@ -14,7 +14,7 @@ use serde_json::json;
 use serde_with::skip_serializing_none;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TypesenseSearchConfig {
     pub url: String,
     pub api_key: String,

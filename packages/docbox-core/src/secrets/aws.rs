@@ -4,14 +4,14 @@ use aws_sdk_secretsmanager::{
     error::SdkError,
     operation::{create_secret::CreateSecretError, get_secret_value::GetSecretValueError},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::aws::SecretsManagerClient;
 
 use super::{Secret, SecretManager};
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct AwsSecretManagerConfig {
     /// Collection of secrets to include
     #[serde(default)]
