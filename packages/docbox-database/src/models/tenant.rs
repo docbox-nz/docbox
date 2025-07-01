@@ -9,6 +9,8 @@ pub type TenantId = Uuid;
 pub struct Tenant {
     /// Unique ID for the tenant
     pub id: TenantId,
+    /// Name for the tenant
+    pub name: String,
     /// Name of the tenant database
     pub db_name: String,
     /// Name for the AWS secret used for the database user
@@ -25,6 +27,7 @@ pub struct Tenant {
 
 pub struct CreateTenant {
     pub id: TenantId,
+    pub name: String,
     pub db_name: String,
     pub db_secret_name: String,
     pub s3_name: String,
@@ -40,6 +43,7 @@ impl Tenant {
             r#"
             INSERT INTO "docbox_tenants" (
                 "id", 
+                "name",
                 "db_name", 
                 "db_secret_name", 
                 "s3_name", 
@@ -47,10 +51,11 @@ impl Tenant {
                 "env", 
                 "event_queue_url"
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         "#,
         )
         .bind(create.id)
+        .bind(create.name.as_str())
         .bind(create.db_name.as_str())
         .bind(create.db_secret_name.as_str())
         .bind(create.s3_name.as_str())
@@ -62,6 +67,7 @@ impl Tenant {
 
         Ok(Tenant {
             id: create.id,
+            name: create.name,
             db_name: create.db_name,
             db_secret_name: create.db_secret_name,
             s3_name: create.s3_name,

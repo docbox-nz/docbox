@@ -49,6 +49,7 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
     let index = SearchIndexFactory::from_config(&aws_config, config).unwrap();
     let index = index.create_search_index(&Tenant {
         id: Uuid::new_v4(),
+        name: "test".to_string(),
         db_name: "test".to_string(),
         db_secret_name: "test".to_string(),
         s3_name: "test".to_string(),

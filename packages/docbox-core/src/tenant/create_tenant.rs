@@ -13,6 +13,9 @@ pub struct CreateTenant {
     /// Environment to create the tenant within
     pub env: String,
 
+    /// Name to give the created tenant
+    pub name: String,
+
     /// Unique ID for the tenant
     pub id: TenantId,
 
@@ -90,6 +93,7 @@ pub async fn create_tenant(
         root_transaction.deref_mut(),
         docbox_database::models::tenant::CreateTenant {
             id: create.id,
+            name: create.name,
             db_name: create.db_name,
             db_secret_name: create.db_secret_name,
             s3_name: create.s3_name,

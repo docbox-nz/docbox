@@ -49,6 +49,7 @@ pub async fn create_test_tenant_storage() -> (ContainerAsync<MinIO>, TenantStora
 
     let storage = storage_factory.create_storage_layer(&Tenant {
         id: Uuid::new_v4(),
+        name: "test".to_string(),
         db_name: "test".to_string(),
         db_secret_name: "test".to_string(),
         s3_name: "test".to_string(),

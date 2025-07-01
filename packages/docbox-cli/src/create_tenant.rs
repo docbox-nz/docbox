@@ -19,6 +19,9 @@ pub struct CreateTenant {
     /// Unique ID for the tenant
     pub id: TenantId,
 
+    /// Name of the tenant
+    pub name: String,
+
     /// Database name for the tenant
     pub db_name: String,
 
@@ -142,6 +145,7 @@ pub async fn create_tenant(config: &CliConfiguration, tenant_file: PathBuf) -> e
         &storage_factory,
         docbox_core::tenant::create_tenant::CreateTenant {
             id: tenant_config.id,
+            name: tenant_config.name,
             db_name: tenant_config.db_name,
             db_secret_name: tenant_config.db_secret_name,
             s3_name: tenant_config.s3_name,
