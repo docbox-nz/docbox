@@ -35,6 +35,24 @@ impl DocumentBox {
             .await
     }
 
+    /// Get a page from the document boxes list
+    pub async fn query(
+        db: impl DbExecutor<'_>,
+        offset: u64,
+        limit: u64,
+    ) -> DbResult<Vec<DocumentBox>> {
+        sqlx::query_as(
+            r#"
+            SELECT * FROM "docbox_boxes" 
+            ORDER BY "created_at" DESC 
+            OFFSET $1 LIMIT $2"#,
+        )
+        .bind(offset as i64)
+        .bind(limit as i64)
+        .fetch_all(db)
+        .await
+    }
+
     /// Find a specific document box by scope within a tenant
     pub async fn find_by_scope(
         db: impl DbExecutor<'_>,

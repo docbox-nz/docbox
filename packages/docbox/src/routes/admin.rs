@@ -3,6 +3,7 @@
 use crate::{
     error::{HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::tenant::{TenantDb, TenantParams, TenantSearch},
+    models::admin::{TenantDocumentBoxesRequest, TenantDocumentBoxesResponse},
 };
 use axum::{Extension, Json, http::StatusCode};
 use axum_valid::Garde;
@@ -13,11 +14,50 @@ use docbox_core::{
     storage::StorageLayerFactory,
     tenant::tenant_cache::TenantCache,
 };
-use docbox_database::{DatabasePoolCache, models::document_box::WithScope};
+use docbox_database::{
+    DatabasePoolCache,
+    models::document_box::{DocumentBox, WithScope},
+};
 use docbox_search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem};
 use std::sync::Arc;
 
 pub const ADMIN_TAG: &str = "Admin";
+
+/// Admin Boxes
+///
+/// Requests a list of document boxes within the tenant
+#[utoipa::path(
+    post,
+    operation_id = "admin_tenant_boxes",
+    tag = ADMIN_TAG,
+    path = "/admin/boxes",
+    responses(
+        (status = 201, description = "Searched successfully", body = AdminSearchResultResponse),
+        (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
+        (status = 409, description = "Scope already exists", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(TenantParams)
+)]
+#[tracing::instrument(skip_all, fields(req = ?req))]
+pub async fn tenant_boxes(
+    TenantDb(db): TenantDb,
+    Garde(Json(req)): Garde<Json<TenantDocumentBoxesRequest>>,
+) -> HttpResult<TenantDocumentBoxesResponse> {
+    let offset = req.offset.unwrap_or(0);
+    let limit = req.size.unwrap_or(100);
+
+    let document_boxes = DocumentBox::query(&db, offset, limit as u64)
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query document boxes");
+            HttpCommonError::ServerError
+        })?;
+
+    Ok(Json(TenantDocumentBoxesResponse {
+        results: document_boxes,
+    }))
+}
 
 /// Admin Search
 ///
