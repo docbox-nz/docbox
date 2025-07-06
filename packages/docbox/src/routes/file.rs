@@ -658,6 +658,41 @@ pub async fn get_raw(
         .body(body)?)
 }
 
+/// Get file raw named
+///
+/// Requests the raw contents of a file, this is used for downloading
+/// the file or viewing it in the browser or simply requesting its content
+///
+/// This is identical to [get_raw] except it takes an additional catch-all
+/// tail parameter that's used to give a file name to the browser for things
+/// like the in-browser PDF viewers. Browsers (Chrome) don't always listen to the
+/// Content-Disposition file name so this is required
+#[utoipa::path(
+    get,
+    operation_id = "file_get_raw_named",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/raw/{*file_name}",
+    responses(
+        (status = 200, description = "Obtained raw file successfully"),
+        (status = 404, description = "File not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, query = ?query))]
+pub async fn get_raw_named(
+    db: TenantDb,
+    storage: TenantStorage,
+    Path((scope, file_id, _tail)): Path<(DocumentBoxScope, FileId, String)>,
+    query: Query<RawFileQuery>,
+) -> Result<Response<Body>, DynHttpError> {
+    get_raw(db, storage, Path((scope, file_id)), query).await
+}
+
 /// Search
 ///
 /// Search within the contents of the file
@@ -848,4 +883,41 @@ pub async fn get_generated_raw(
             HeaderValue::from_str("inline;filename=\"preview.pdf\"")?,
         )
         .body(body)?)
+}
+
+/// Get generated file raw named
+///
+/// Request the contents of a specific generated file type
+/// for a file, will return the file contents
+///
+/// See [get_raw_named] for reasoning
+#[utoipa::path(
+    get,
+    operation_id = "file_get_generated_raw_named",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/generated/{type}/raw/{*tail}",
+    responses(
+        (status = 200, description = "Obtained raw file successfully"),
+        (status = 404, description = "Generated file not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type))]
+pub async fn get_generated_raw_named(
+    db: TenantDb,
+    storage: TenantStorage,
+    Path((scope, file_id, generated_type, _tail)): Path<(
+        DocumentBoxScope,
+        FileId,
+        GeneratedFileType,
+        String,
+    )>,
+) -> Result<Response<Body>, DynHttpError> {
+    get_generated_raw(db, storage, Path((scope, file_id, generated_type))).await
 }

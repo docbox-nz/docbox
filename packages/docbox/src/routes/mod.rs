@@ -87,7 +87,7 @@ pub fn file_router() -> Router {
                 .route("/raw", get(file::get_raw))
                 // Named access endpoint, allows specifying some file name after the URL
                 // (Used to work around a Chromium bug which makes inline viewers not respect the filename)
-                .route("/raw/{*name}", get(file::get_raw))
+                .route("/raw/{*name}", get(file::get_raw_named))
                 .route("/children", get(file::get_children))
                 .route("/edit-history", get(file::get_edit_history))
                 .route("/search", post(file::search))
@@ -101,7 +101,7 @@ pub fn file_router() -> Router {
                             .route("/raw", get(file::get_generated_raw))
                             // Named access endpoint, allows specifying some file name after the URL
                             // (Used to work around a Chromium bug which makes inline viewers not respect the filename)
-                            .route("/raw/{*name}", get(file::get_generated_raw)),
+                            .route("/raw/{*name}", get(file::get_generated_raw_named)),
                     ),
                 ),
         )
