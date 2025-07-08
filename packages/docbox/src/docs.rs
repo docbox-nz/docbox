@@ -55,10 +55,12 @@ use crate::{
         file::get_edit_history,
         file::update,
         file::get_raw,
+        file::get_raw_presigned,
         file::get_raw_named,
         file::delete,
         file::get_generated,
         file::get_generated_raw,
+        file::get_generated_raw_presigned,
         file::get_generated_raw_named,
         file::search,
         // Folder routes

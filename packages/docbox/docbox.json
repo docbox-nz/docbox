@@ -3,6 +3,10 @@
   "info": {
     "title": "Docbox API",
     "description": "Docbox HTTP API",
+    "contact": {
+      "name": "Jacobtread",
+      "email": "jacobtread@gmail.com"
+    },
     "license": {
       "name": "MIT",
       "url": "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md"
@@ -1341,6 +1345,182 @@
         }
       }
     },
+    "/box/{scope}/file/{file_id}/generated/{type}/raw-presigned": {
+      "post": {
+        "tags": [
+          "File"
+        ],
+        "summary": "Get generated file raw presigned",
+        "description": "Requests the raw contents of a generated file as a presigned URL,\nused for letting the client directly download a file from AWS\ninstead of downloading through the server and gateway",
+        "operationId": "file_get_generated_raw_presigned",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the file resides within",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentBoxScope"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "description": "ID of the file to query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "description": "ID of the file to query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/GeneratedFileType"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetPresignedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Obtained raw file successfully"
+          },
+          "404": {
+            "description": "Generated file not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/file/{file_id}/generated/{type}/raw/{*tail}": {
+      "get": {
+        "tags": [
+          "File"
+        ],
+        "summary": "Get generated file raw named",
+        "description": "Request the contents of a specific generated file type\nfor a file, will return the file contents\n\nSee [get_raw_named] for reasoning",
+        "operationId": "file_get_generated_raw_named",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the file resides within",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentBoxScope"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "description": "ID of the file to query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "description": "ID of the file to query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/GeneratedFileType"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Obtained raw file successfully"
+          },
+          "404": {
+            "description": "Generated file not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/box/{scope}/file/{file_id}/raw": {
       "get": {
         "tags": [
@@ -1349,6 +1529,164 @@
         "summary": "Get file raw",
         "description": "Requests the raw contents of a file, this is used for downloading\nthe file or viewing it in the browser or simply requesting its content",
         "operationId": "file_get_raw",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the file resides within",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentBoxScope"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "description": "ID of the file to query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Obtained raw file successfully"
+          },
+          "404": {
+            "description": "File not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/file/{file_id}/raw-presigned": {
+      "post": {
+        "tags": [
+          "File"
+        ],
+        "summary": "Get file raw presigned",
+        "description": "Requests the raw contents of a file as a presigned URL, used for\nletting the client directly download a file from AWS instead of\ndownloading through the server",
+        "operationId": "file_get_raw_presigned",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the file resides within",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentBoxScope"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "description": "ID of the file to download",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetPresignedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Obtained raw file successfully"
+          },
+          "404": {
+            "description": "File not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/file/{file_id}/raw/{*file_name}": {
+      "get": {
+        "tags": [
+          "File"
+        ],
+        "summary": "Get file raw named",
+        "description": "Requests the raw contents of a file, this is used for downloading\nthe file or viewing it in the browser or simply requesting its content\n\nThis is identical to [get_raw] except it takes an additional catch-all\ntail parameter that's used to give a file name to the browser for things\nlike the in-browser PDF viewers. Browsers (Chrome) don't always listen to the\nContent-Disposition file name so this is required",
+        "operationId": "file_get_raw_named",
         "parameters": [
           {
             "name": "scope",
@@ -3755,6 +4093,21 @@
           "HtmlContent",
           "Metadata"
         ]
+      },
+      "GetPresignedRequest": {
+        "type": "object",
+        "description": "Request to rename and or move a file",
+        "properties": {
+          "expires_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Expiry time in seconds for the presigned URL",
+            "default": 900
+          }
+        }
       },
       "HttpErrorResponse": {
         "type": "object",
