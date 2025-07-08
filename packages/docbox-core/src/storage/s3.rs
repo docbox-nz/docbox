@@ -229,6 +229,26 @@ impl StorageLayer for S3StorageLayer {
         Ok((result, expires_at))
     }
 
+    async fn create_presigned_download(
+        &self,
+        key: &str,
+        expires_in: Duration,
+    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)> {
+        let expires_at = Utc::now()
+            .checked_add_signed(TimeDelta::seconds(expires_in.as_secs() as i64))
+            .context("expiry time exceeds unix limit")?;
+
+        let result = self
+            .client
+            .get_object()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .presigned(PresigningConfig::expires_in(expires_in)?)
+            .await?;
+
+        Ok((result, expires_at))
+    }
+
     async fn add_bucket_notifications(&self, sqs_arn: &str) -> anyhow::Result<()> {
         // Connect the S3 bucket for file upload notifications
         self.client

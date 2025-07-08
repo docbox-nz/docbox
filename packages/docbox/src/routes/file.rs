@@ -9,9 +9,10 @@ use crate::{
     models::{
         document_box::DocumentBoxScope,
         file::{
-            CreatePresignedRequest, FileResponse, FileUploadResponse, HttpFileError,
-            PresignedStatusResponse, PresignedUploadResponse, RawFileQuery, UpdateFileRequest,
-            UploadFileRequest, UploadTaskResponse, UploadedFile,
+            CreatePresignedRequest, FileResponse, FileUploadResponse, GetPresignedRequest,
+            HttpFileError, PresignedDownloadResponse, PresignedStatusResponse,
+            PresignedUploadResponse, RawFileQuery, UpdateFileRequest, UploadFileRequest,
+            UploadTaskResponse, UploadedFile,
         },
         folder::HttpFolderError,
     },
@@ -45,7 +46,7 @@ use docbox_database::models::{
 };
 use docbox_search::models::{FileSearchRequest, FileSearchResultResponse};
 use mime::Mime;
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 pub const FILE_TAG: &str = "File";
 
@@ -658,6 +659,66 @@ pub async fn get_raw(
         .body(body)?)
 }
 
+/// Get file raw presigned
+///
+/// Requests the raw contents of a file as a presigned URL, used for
+/// letting the client directly download a file from AWS instead of
+/// downloading through the server
+#[utoipa::path(
+    post,
+    operation_id = "file_get_raw_presigned",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/raw-presigned",
+    responses(
+        (status = 200, description = "Obtained raw file successfully"),
+        (status = 404, description = "File not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to download"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, req = ?req))]
+pub async fn get_raw_presigned(
+    TenantDb(db): TenantDb,
+    TenantStorage(storage): TenantStorage,
+    Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
+    Json(req): Json<GetPresignedRequest>,
+) -> HttpResult<PresignedDownloadResponse> {
+    let DocumentBoxScope(scope) = scope;
+
+    let file = File::find(&db, &scope, file_id)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query file");
+            HttpCommonError::ServerError
+        })?
+        .ok_or(HttpFileError::UnknownFile)?;
+
+    let expires_at = req.expires_at.unwrap_or(900);
+    let expires_at = Duration::from_secs(expires_at as u64);
+
+    let (signed_request, expires_at) = storage
+        .create_presigned_download(&file.file_key, expires_at)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to created file presigned download");
+            HttpCommonError::ServerError
+        })?;
+
+    Ok(Json(PresignedDownloadResponse {
+        method: signed_request.method().to_string(),
+        uri: signed_request.uri().to_string(),
+        headers: signed_request
+            .headers()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect(),
+        expires_at,
+    }))
+}
+
 /// Get file raw named
 ///
 /// Requests the raw contents of a file, this is used for downloading
@@ -883,6 +944,67 @@ pub async fn get_generated_raw(
             HeaderValue::from_str("inline;filename=\"preview.pdf\"")?,
         )
         .body(body)?)
+}
+
+/// Get generated file raw presigned
+///
+/// Requests the raw contents of a generated file as a presigned URL,
+/// used for letting the client directly download a file from AWS
+/// instead of downloading through the server and gateway
+#[utoipa::path(
+    post,
+    operation_id = "file_get_generated_raw_presigned",
+    tag = FILE_TAG,
+    path = "/box/{scope}/file/{file_id}/generated/{type}/raw-presigned",
+    responses(
+        (status = 200, description = "Obtained raw file successfully"),
+        (status = 404, description = "Generated file not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
+        ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type, req = ?req))]
+pub async fn get_generated_raw_presigned(
+    TenantDb(db): TenantDb,
+    TenantStorage(storage): TenantStorage,
+    Path((scope, file_id, generated_type)): Path<(DocumentBoxScope, FileId, GeneratedFileType)>,
+    Json(req): Json<GetPresignedRequest>,
+) -> HttpResult<PresignedDownloadResponse> {
+    let DocumentBoxScope(scope) = scope;
+
+    let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to query generated file");
+            HttpCommonError::ServerError
+        })?
+        .ok_or(HttpFileError::NoMatchingGenerated)?;
+
+    let expires_at = req.expires_at.unwrap_or(900);
+    let expires_at = Duration::from_secs(expires_at as u64);
+
+    let (signed_request, expires_at) = storage
+        .create_presigned_download(&file.file_key, expires_at)
+        .await
+        .map_err(|cause| {
+            tracing::error!(?cause, "failed to created file presigned download");
+            HttpCommonError::ServerError
+        })?;
+
+    Ok(Json(PresignedDownloadResponse {
+        method: signed_request.method().to_string(),
+        uri: signed_request.uri().to_string(),
+        headers: signed_request
+            .headers()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect(),
+        expires_at,
+    }))
 }
 
 /// Get generated file raw named

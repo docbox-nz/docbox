@@ -190,6 +190,23 @@ pub struct UploadTaskResponse {
     pub created_at: DateTime<Utc>,
 }
 
+/// Request to rename and or move a file
+#[derive(Debug, Validate, Deserialize, ToSchema)]
+pub struct GetPresignedRequest {
+    /// Expiry time in seconds for the presigned URL
+    #[garde(skip)]
+    #[schema(default = 900)]
+    pub expires_at: Option<i64>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PresignedDownloadResponse {
+    pub method: String,
+    pub uri: String,
+    pub headers: HashMap<String, String>,
+    pub expires_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Error)]
 pub enum HttpFileError {
     #[error("unknown file")]

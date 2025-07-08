@@ -7,7 +7,7 @@ use docbox_database::models::tenant::Tenant;
 use futures::{Stream, StreamExt};
 use s3::{S3StorageLayer, S3StorageLayerFactory};
 use serde::{Deserialize, Serialize};
-use std::pin::Pin;
+use std::{pin::Pin, time::Duration};
 
 use crate::storage::s3::S3StorageLayerFactoryConfig;
 
@@ -82,6 +82,17 @@ impl TenantStorageLayer {
         }
     }
 
+    /// Create a presigned file download URL
+    pub async fn create_presigned_download(
+        &self,
+        key: &str,
+        expires_in: Duration,
+    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)> {
+        match self {
+            TenantStorageLayer::S3(layer) => layer.create_presigned_download(key, expires_in).await,
+        }
+    }
+
     /// Uploads a file to the S3 bucket for the tenant
     pub async fn upload_file(
         &self,
@@ -135,6 +146,13 @@ pub(crate) trait StorageLayer {
         &self,
         key: &str,
         size: i64,
+    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)>;
+
+    /// Create a presigned file download URL
+    async fn create_presigned_download(
+        &self,
+        key: &str,
+        expires_in: Duration,
     ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)>;
 
     /// Uploads a file to the S3 bucket for the tenant
