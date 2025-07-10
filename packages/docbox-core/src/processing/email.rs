@@ -156,6 +156,7 @@ pub fn process_email(
     let mut html_body = message
         .html_bodies()
         .next()
+        .filter(|body| body.is_text_html())
         .and_then(|body| body.text_contents())
         .map(|value| value.to_string());
 
