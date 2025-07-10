@@ -345,7 +345,7 @@ async fn test_process_email_text_only() {
     let text_content = String::from_utf8_lossy(second.bytes.as_ref());
     assert_eq!(
         text_content.as_ref().replace("\r\n", "\n"),
-        "Test title, this is a plain text email content\n\n"
+        "Test title, this is a plain text email content\n"
     );
 
     let index_metadata = output
@@ -360,7 +360,7 @@ async fn test_process_email_text_only() {
     assert_eq!(first_page.page, 0);
     assert_eq!(
         first_page.content.replace("\r\n", "\n"),
-        "Test title, this is a plain text email content\n\n"
+        "Test title, this is a plain text email content\n"
     );
 
     // Ensure no additional files are produced
