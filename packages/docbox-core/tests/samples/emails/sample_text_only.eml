@@ -1,0 +1,14 @@
+MIME-Version: 1.0
+Date: Sun, 8 Jun 2025 14:10:47 +1200
+Message-ID: <test-message-id>
+Subject: Test email
+From: Example <example@example.com>
+To: "Example (ExampleUser)" <example@example.com>
+Content-Type: multipart/alternative; boundary="000000000000b9f384063705f80e"
+
+--000000000000b9f384063705f80e
+Content-Type: text/plain; charset="UTF-8"
+
+Test title, this is a plain text email content
+
+--000000000000b9f384063705f80e--
