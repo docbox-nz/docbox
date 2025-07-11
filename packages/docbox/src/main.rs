@@ -28,6 +28,8 @@ use std::{
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
 
+use crate::middleware::api_key::ApiKeyLayer;
+
 mod docs;
 mod error;
 mod logging;
@@ -103,6 +105,9 @@ async fn server() -> anyhow::Result<()> {
     let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
         .context("missing environment variable DOCBOX_DB_CREDENTIAL_NAME")?;
 
+    // API key
+    let api_key = std::env::var("DOCBOX_API_KEY").ok();
+
     // Setup database cache / connector
     let db_cache = DatabasePoolCache::new(db_host, db_port, db_root_secret_name, secrets);
     let db_cache = Arc::new(db_cache);
@@ -170,7 +175,7 @@ async fn server() -> anyhow::Result<()> {
         .unwrap_or(DEFAULT_SERVER_ADDRESS);
 
     // Setup app layers and extension
-    let app = app
+    let mut app = app
         .layer(Extension(search_index_factory))
         .layer(Extension(storage_factory))
         .layer(Extension(db_cache))
@@ -181,6 +186,14 @@ async fn server() -> anyhow::Result<()> {
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(MAX_FILE_SIZE))
         .layer(TraceLayer::new_for_http());
+
+    if let Some(api_key) = api_key {
+        app = app.layer(ApiKeyLayer::new(api_key));
+    } else {
+        tracing::warn!(
+            "DOCBOX_API_KEY not specified, its recommended you set one for security reasons"
+        )
+    }
 
     // Development mode CORS access for local browser testing
     #[cfg(debug_assertions)]
