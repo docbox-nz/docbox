@@ -96,7 +96,7 @@ pub struct CreateDocumentBoxRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DocumentBoxOptions {
     /// Max allowed upload file size in bytes
-    pub max_file_size: usize,
+    pub max_file_size: i32,
 }
 
 /// Response for requesting a document box

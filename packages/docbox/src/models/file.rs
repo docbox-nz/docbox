@@ -1,4 +1,4 @@
-use crate::{MAX_FILE_SIZE, error::HttpError};
+use crate::error::HttpError;
 use axum::http::StatusCode;
 use axum_typed_multipart::{FieldData, TryFromMultipart};
 use bytes::Bytes;
@@ -34,7 +34,7 @@ pub struct CreatePresignedRequest {
     pub folder_id: FolderId,
 
     /// Size of the file being uploaded
-    #[garde(range(min = 1, max = MAX_FILE_SIZE as i32))]
+    #[garde(range(min = 1))]
     #[schema(minimum = 1)]
     pub size: i32,
 
@@ -215,6 +215,9 @@ pub enum HttpFileError {
     #[error("unknown task")]
     UnknownTask,
 
+    #[error("file size is larger than the maximum allowed size (requested: {0}, maximum: {1})")]
+    FileTooLarge(i32, i32),
+
     #[error("fixed file id already in use")]
     FileIdInUse,
 
@@ -235,6 +238,7 @@ pub enum HttpFileError {
 impl HttpError for HttpFileError {
     fn status(&self) -> axum::http::StatusCode {
         match self {
+            HttpFileError::FileTooLarge(_, _) => StatusCode::BAD_REQUEST,
             HttpFileError::FileIdInUse => StatusCode::CONFLICT,
             HttpFileError::UnknownFile
             | HttpFileError::NoMatchingGenerated

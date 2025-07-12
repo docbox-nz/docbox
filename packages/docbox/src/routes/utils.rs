@@ -4,8 +4,8 @@ use docbox_core::notifications::{
 };
 
 use crate::{
-    MAX_FILE_SIZE,
     error::{DynHttpError, HttpCommonError},
+    extensions::max_file_size::MaxFileSizeBytes,
     models::document_box::DocumentBoxOptions,
 };
 
@@ -23,10 +23,10 @@ pub const UTILS_TAG: &str = "Utils";
         (status = 200, description = "Got settings successfully", body = DocumentBoxOptions)
     )
 )]
-pub async fn get_options() -> Json<DocumentBoxOptions> {
-    Json(DocumentBoxOptions {
-        max_file_size: MAX_FILE_SIZE,
-    })
+pub async fn get_options(
+    Extension(MaxFileSizeBytes(max_file_size)): Extension<MaxFileSizeBytes>,
+) -> Json<DocumentBoxOptions> {
+    Json(DocumentBoxOptions { max_file_size })
 }
 
 /// POST /webhook/s3

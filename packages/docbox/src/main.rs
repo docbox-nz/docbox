@@ -28,17 +28,15 @@ use std::{
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
 
-use crate::middleware::api_key::ApiKeyLayer;
+use crate::{extensions::max_file_size::MaxFileSizeBytes, middleware::api_key::ApiKeyLayer};
 
 mod docs;
 mod error;
+mod extensions;
 mod logging;
 mod middleware;
 mod models;
 pub mod routes;
-
-// Current size limit 100MB, adjust according to our decided max size
-const MAX_FILE_SIZE: usize = 100 * 1000 * 1024;
 
 /// Default server address when not specified
 const DEFAULT_SERVER_ADDRESS: SocketAddr =
@@ -68,6 +66,12 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn server() -> anyhow::Result<()> {
+    let max_file_size_bytes = match std::env::var("DOCBOX_MAX_FILE_SIZE_BYTES") {
+        Ok(value) => value.parse::<i32>()?,
+        // Default max file size in bytes (100MB)
+        Err(_) => 100 * 1000 * 1024,
+    };
+
     // Create the converter
     let convert_server_addresses =
         std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://127.0.0.1:8081".to_string());
@@ -183,8 +187,9 @@ async fn server() -> anyhow::Result<()> {
         .layer(Extension(event_publisher_factory))
         .layer(Extension(processing))
         .layer(Extension(tenant_cache))
+        .layer(Extension(MaxFileSizeBytes(max_file_size_bytes)))
         .layer(DefaultBodyLimit::disable())
-        .layer(RequestBodyLimitLayer::new(MAX_FILE_SIZE))
+        .layer(RequestBodyLimitLayer::new(max_file_size_bytes as usize))
         .layer(TraceLayer::new_for_http());
 
     if let Some(api_key) = api_key {

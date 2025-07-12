@@ -2,6 +2,7 @@
 
 use crate::{
     error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
+    extensions::max_file_size::MaxFileSizeBytes,
     middleware::{
         action_user::{ActionUser, UserParams},
         tenant::{TenantDb, TenantEvents, TenantParams, TenantSearch, TenantStorage},
@@ -279,11 +280,16 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
 #[tracing::instrument(skip_all, fields(scope = %scope, req = ?req))]
 pub async fn create_presigned(
     action_user: ActionUser,
+    Extension(MaxFileSizeBytes(max_file_size)): Extension<MaxFileSizeBytes>,
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
     Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
     Garde(Json(req)): Garde<Json<CreatePresignedRequest>>,
 ) -> Result<(StatusCode, Json<PresignedUploadResponse>), DynHttpError> {
+    if req.size > max_file_size {
+        return Err(HttpFileError::FileTooLarge(req.size, max_file_size).into());
+    }
+
     let folder = Folder::find_by_id(&db, &scope, req.folder_id)
         .await
         .map_err(|cause| {
