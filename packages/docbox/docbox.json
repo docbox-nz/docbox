@@ -11,7 +11,7 @@
       "name": "MIT",
       "url": "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md"
     },
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "paths": {
     "/admin/flush-db-cache": {
@@ -3524,8 +3524,8 @@
         "properties": {
           "max_file_size": {
             "type": "integer",
-            "description": "Max allowed upload file size in bytes",
-            "minimum": 0
+            "format": "int32",
+            "description": "Max allowed upload file size in bytes"
           }
         }
       },
