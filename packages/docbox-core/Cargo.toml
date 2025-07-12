@@ -1,6 +1,6 @@
 [package]
 name = "docbox-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Docbox core business logic and functionality"
 
@@ -11,8 +11,8 @@ readme.workspace = true
 
 [dependencies]
 # Database access
-docbox-database = { version = "0.1.0", path = "../docbox-database" }
-docbox-search = { version = "0.1.0", default-features = false, path = "../docbox-search" }
+docbox-database = { version = "0.2.0", path = "../docbox-database" }
+docbox-search = { version = "0.2.0", default-features = false, path = "../docbox-search" }
 
 # PDF to image conversion, text extraction 
 pdf_process = "=0.2.0"
@@ -97,6 +97,6 @@ tokio = { workspace = true, features = ["full"] }
 mime_guess.workspace = true
 
 # Enable typesense search backend for testing
-docbox-search = { version = "0.1.0", default-features = false, path = "../docbox-search", features = [
+docbox-search = { version = "0.2.0", default-features = false, path = "../docbox-search", features = [
     "typesense",
 ] }

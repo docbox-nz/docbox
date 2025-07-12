@@ -1,6 +1,6 @@
 [package]
 name = "docbox-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 license.workspace = true
@@ -20,13 +20,13 @@ eyre = "=0.6.12"
 color-eyre = "=0.6.5"
 
 # Core business logic
-docbox-core = { version = "0.1.0", path = "../docbox-core" }
+docbox-core = { version = "0.2.0", path = "../docbox-core" }
 
 # Database access
-docbox-database = { version = "0.1.0", path = "../docbox-database" }
+docbox-database = { version = "0.2.0", path = "../docbox-database" }
 
 # Search access
-docbox-search = { version = "0.1.0", path = "../docbox-search" }
+docbox-search = { version = "0.2.0", path = "../docbox-search" }
 
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }
