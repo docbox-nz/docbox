@@ -14,6 +14,88 @@
     "version": "0.2.0"
   },
   "paths": {
+    "/admin/boxes": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Boxes",
+        "description": "Requests a list of document boxes within the tenant",
+        "operationId": "admin_tenant_boxes",
+        "parameters": [
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantDocumentBoxesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Searched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSearchResultResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed or invalid request not meeting validation requirements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Scope already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/flush-db-cache": {
       "post": {
         "tags": [
@@ -25,6 +107,21 @@
         "responses": {
           "204": {
             "description": "Database cache flushed"
+          }
+        }
+      }
+    },
+    "/admin/flush-tenant-cache": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Flush tenant cache",
+        "description": "Clears the tenant cache, you can use this endpoint if you've updated the\ntenant configuration and want it to be applied immediately without\nrestarting the server",
+        "operationId": "admin_flush_tenant_cache",
+        "responses": {
+          "204": {
+            "description": "Tenant cache flushed"
           }
         }
       }
@@ -43,6 +140,110 @@
           },
           "500": {
             "description": "Failed to purge presigned cache",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/rebuild-search-index": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Rebuild search index",
+        "description": "Rebuild the tenant search index from the data stored in the database\nand in storage",
+        "operationId": "admin_rebuild_search_index",
+        "parameters": [
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Rebuilt successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSearchResultResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/reprocess-octet-stream-files": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Reprocess octet-stream files",
+        "description": "Useful if a files were previously accepted into the tenant with some unknown\nfile type (or ingested through a source that was unable to get the correct mime).\n\nWill reprocess files that have this unknown file type mime to see if a different\ntype can be obtained",
+        "operationId": "admin_reprocess_octet_stream_files",
+        "parameters": [
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reprocessed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSearchResultResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -105,16 +306,6 @@
           },
           "400": {
             "description": "Malformed or invalid request not meeting validation requirements",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Scope already exists",
             "content": {
               "application/json": {
                 "schema": {
@@ -3293,6 +3484,21 @@
         }
       }
     },
+    "/health": {
+      "get": {
+        "tags": [
+          "Utils"
+        ],
+        "summary": "Health check",
+        "description": "Check that the server is running using this endpoint",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Health check success"
+          }
+        }
+      }
+    },
     "/options": {
       "get": {
         "tags": [
@@ -4687,6 +4893,31 @@
           "Completed",
           "Failed"
         ]
+      },
+      "TenantDocumentBoxesRequest": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Offset to start results from",
+            "default": null,
+            "minimum": 0
+          },
+          "size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of items to include in the response",
+            "default": null,
+            "minimum": 0
+          }
+        }
       },
       "UpdateFileRequest": {
         "type": "object",

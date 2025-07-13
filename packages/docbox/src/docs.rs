@@ -37,8 +37,12 @@ use crate::{
     ),
     paths(
         // Admin routes
+        admin::tenant_boxes,
         admin::search_tenant,
+        admin::reprocess_octet_stream_files_tenant,
+        admin::rebuild_search_index_tenant,
         admin::flush_database_pool_cache,
+        admin::flush_tenant_cache,
         admin::http_purge_expired_presigned_tasks,
         // Document box routes
         document_box::create,
