@@ -81,7 +81,8 @@ use crate::{
         // Task routes
         task::get,
         // Utils routes
-        utils::get_options
+        utils::get_options,
+        utils::health
     )
 )]
 #[allow(unused)]

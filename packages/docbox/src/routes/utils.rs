@@ -11,6 +11,22 @@ use crate::{
 
 pub const UTILS_TAG: &str = "Utils";
 
+/// Health check
+///
+/// Check that the server is running using this endpoint
+#[utoipa::path(
+    get,
+    operation_id = "health",
+    tag = UTILS_TAG,
+    path = "/health",
+    responses(
+        (status = 200, description = "Health check success")
+    )
+)]
+pub async fn health() -> StatusCode {
+    StatusCode::OK
+}
+
 /// Get options
 ///
 /// Requests options and settings from docbox
