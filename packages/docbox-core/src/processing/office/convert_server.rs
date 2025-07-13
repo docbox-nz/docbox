@@ -4,6 +4,7 @@ use office_convert_client::{
     OfficeConvertClient, OfficeConvertLoadBalancer, OfficeConverter, RequestError,
 };
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 use super::{ConvertToPdf, PdfConvertError};
 
@@ -73,6 +74,24 @@ pub const CONVERTABLE_FORMATS: &[&str] = &[
     "application/xhtml+xml",
 ];
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OfficeConvertServerConfig {
+    pub addresses: Vec<String>,
+}
+
+impl OfficeConvertServerConfig {
+    pub fn from_env() -> anyhow::Result<OfficeConvertServerConfig> {
+        let addresses =
+            std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://127.0.0.1:8081".to_string());
+        let addresses = addresses
+            .split(',')
+            .map(|value| value.to_string())
+            .collect();
+
+        Ok(OfficeConvertServerConfig { addresses })
+    }
+}
+
 /// Variant of [ConvertToPdf] that uses LibreOffice through a
 /// office-converter server for the conversion
 #[derive(Clone)]
@@ -83,6 +102,10 @@ pub struct OfficeConverterServer {
 impl OfficeConverterServer {
     pub fn new(client: OfficeConverter) -> Self {
         Self { client }
+    }
+
+    pub fn from_config(config: OfficeConvertServerConfig) -> anyhow::Result<Self> {
+        Self::from_addresses(config.addresses.iter().map(|value| value.as_str()))
     }
 
     pub fn from_addresses<'a, I>(addresses: I) -> anyhow::Result<Self>

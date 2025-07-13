@@ -39,6 +39,47 @@ const DB_CONNECT_INFO_CACHE_DURATION: Duration = Duration::from_secs(60 * 60 * 1
 /// Name of the root database
 pub const ROOT_DATABASE_NAME: &str = "docbox";
 
+///  Config for the database pool
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabasePoolCacheConfig {
+    pub host: String,
+    pub port: u16,
+    pub root_secret_name: String,
+}
+
+#[derive(Debug, Error)]
+pub enum DatabasePoolCacheConfigError {
+    #[error("missing DOCBOX_DB_HOST environment variable")]
+    MissingDatabaseHost,
+    #[error("missing DOCBOX_DB_PORT environment variable")]
+    MissingDatabasePort,
+    #[error("invalid DOCBOX_DB_PORT environment variable")]
+    InvalidDatabasePort,
+    #[error("missing DOCBOX_DB_CREDENTIAL_NAME environment variable")]
+    MissingDatabaseSecretName,
+}
+
+impl DatabasePoolCacheConfig {
+    pub fn from_env() -> Result<DatabasePoolCacheConfig, DatabasePoolCacheConfigError> {
+        let db_host: String = std::env::var("DOCBOX_DB_HOST")
+            .or(std::env::var("POSTGRES_HOST"))
+            .map_err(|_| DatabasePoolCacheConfigError::MissingDatabaseHost)?;
+        let db_port: u16 = std::env::var("DOCBOX_DB_PORT")
+            .or(std::env::var("POSTGRES_PORT"))
+            .map_err(|_| DatabasePoolCacheConfigError::MissingDatabasePort)?
+            .parse()
+            .map_err(|_| DatabasePoolCacheConfigError::InvalidDatabasePort)?;
+        let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
+            .map_err(|_| DatabasePoolCacheConfigError::MissingDatabaseSecretName)?;
+
+        Ok(DatabasePoolCacheConfig {
+            host: db_host,
+            port: db_port,
+            root_secret_name: db_root_secret_name,
+        })
+    }
+}
+
 /// Cache for database pools
 pub struct DatabasePoolCache<S: DbSecretManager> {
     /// Database host
@@ -92,6 +133,15 @@ impl<S> DatabasePoolCache<S>
 where
     S: DbSecretManager,
 {
+    pub fn from_config(config: DatabasePoolCacheConfig, secrets_manager: S) -> Self {
+        Self::new(
+            config.host,
+            config.port,
+            config.root_secret_name,
+            secrets_manager,
+        )
+    }
+
     pub fn new(host: String, port: u16, root_secret_name: String, secrets_manager: S) -> Self {
         let cache = Cache::builder()
             .time_to_idle(DB_CACHE_DURATION)

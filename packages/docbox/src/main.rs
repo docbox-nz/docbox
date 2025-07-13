@@ -1,3 +1,4 @@
+use crate::{extensions::max_file_size::MaxFileSizeBytes, middleware::api_key::ApiKeyLayer};
 use anyhow::Context;
 use axum::{Extension, extract::DefaultBodyLimit, routing::post};
 use docbox_core::{
@@ -10,13 +11,13 @@ use docbox_core::{
     },
     processing::{
         ProcessingLayer,
-        office::{OfficeConverter, OfficeProcessingLayer, convert_server::OfficeConverterServer},
+        office::{OfficeConverter, OfficeConverterConfig, OfficeProcessingLayer},
     },
     secrets::{AppSecretManager, SecretsManagerConfig},
     storage::{StorageLayerFactory, StorageLayerFactoryConfig},
     tenant::tenant_cache::TenantCache,
 };
-use docbox_database::DatabasePoolCache;
+use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
 use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
 use logging::{init_logging, init_logging_with_sentry};
@@ -27,8 +28,6 @@ use std::{
 };
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
-
-use crate::{extensions::max_file_size::MaxFileSizeBytes, middleware::api_key::ApiKeyLayer};
 
 mod docs;
 mod error;
@@ -73,13 +72,10 @@ async fn server() -> anyhow::Result<()> {
     };
 
     // Create the converter
-    let convert_server_addresses =
-        std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://127.0.0.1:8081".to_string());
-    let converter_server =
-        OfficeConverterServer::from_addresses(convert_server_addresses.split(','))?;
-    let converter = OfficeConverter::ConverterServer(converter_server);
+    let converter_config = OfficeConverterConfig::from_env()?;
+    let converter = OfficeConverter::from_config(converter_config)?;
 
-    // Setup processing layer data
+    // Setup processing layer
     let processing = ProcessingLayer {
         office: OfficeProcessingLayer { converter },
     };
@@ -100,21 +96,13 @@ async fn server() -> anyhow::Result<()> {
     let secrets = AppSecretManager::from_config(&aws_config, secrets_config);
 
     // Load database credentials
-    let db_host: String =
-        std::env::var("POSTGRES_HOST").context("missing environment variable POSTGRES_HOST")?;
-    let db_port: u16 = std::env::var("POSTGRES_PORT")
-        .context("missing environment variable POSTGRES_PORT")?
-        .parse()
-        .context("invalid POSTGRES_PORT port value")?;
-    let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
-        .context("missing environment variable DOCBOX_DB_CREDENTIAL_NAME")?;
+    let db_pool_config = DatabasePoolCacheConfig::from_env()?;
 
     // API key
     let api_key = std::env::var("DOCBOX_API_KEY").ok();
 
     // Setup database cache / connector
-    let db_cache = DatabasePoolCache::new(db_host, db_port, db_root_secret_name, secrets);
-    let db_cache = Arc::new(db_cache);
+    let db_cache = Arc::new(DatabasePoolCache::from_config(db_pool_config, secrets));
 
     // Create the SQS client
     // Warning: Will panic if the configuration provided is invalid

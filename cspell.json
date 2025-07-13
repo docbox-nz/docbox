@@ -11,6 +11,8 @@
     "Deque",
     "docbook",
     "docbox",
+    "dotenv",
+    "dotenvy",
     "epub",
     "exif",
     "favicons",

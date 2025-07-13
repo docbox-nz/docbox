@@ -2,7 +2,7 @@ use crate::{
     files::generated::QueuedUpload,
     processing::{
         ProcessingError, ProcessingOutput,
-        office::convert_server::is_known_pdf_convertable,
+        office::convert_server::{OfficeConvertServerConfig, is_known_pdf_convertable},
         pdf::{is_pdf_file, process_pdf},
     },
 };
@@ -11,6 +11,7 @@ use convert_server::OfficeConverterServer;
 use docbox_database::models::generated_file::GeneratedFileType;
 use mime::Mime;
 use office_convert_client::RequestError;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod convert_server;
@@ -30,6 +31,17 @@ pub enum PdfConvertError {
     EncryptedDocument,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum OfficeConverterConfig {
+    ConverterServer(OfficeConvertServerConfig),
+}
+
+impl OfficeConverterConfig {
+    pub fn from_env() -> anyhow::Result<OfficeConverterConfig> {
+        OfficeConvertServerConfig::from_env().map(OfficeConverterConfig::ConverterServer)
+    }
+}
+
 #[derive(Clone)]
 pub enum OfficeConverter {
     ConverterServer(OfficeConverterServer),
@@ -41,6 +53,15 @@ pub struct OfficeProcessingLayer {
 }
 
 impl OfficeConverter {
+    pub fn from_config(config: OfficeConverterConfig) -> anyhow::Result<OfficeConverter> {
+        match config {
+            OfficeConverterConfig::ConverterServer(config) => {
+                let converter_server = OfficeConverterServer::from_config(config)?;
+                Ok(OfficeConverter::ConverterServer(converter_server))
+            }
+        }
+    }
+
     pub async fn convert_to_pdf(&self, bytes: Bytes) -> Result<Bytes, PdfConvertError> {
         match self {
             OfficeConverter::ConverterServer(inner) => inner.convert_to_pdf(bytes).await,
