@@ -7,6 +7,7 @@ members = [
     "packages/docbox-search",
     "packages/docbox-database",
     "packages/docbox-web-scraper",
+    "packages/docbox-management",
 ]
 
 [workspace.package]

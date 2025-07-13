@@ -1990,6 +1990,7 @@ dependencies = [
  "color-eyre",
  "docbox-core",
  "docbox-database",
+ "docbox-management",
  "docbox-search",
  "dotenvy",
  "eyre",
@@ -2063,6 +2064,26 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "docbox-management"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "docbox-core",
+ "docbox-database",
+ "docbox-search",
+ "futures",
+ "itertools 0.14.0",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

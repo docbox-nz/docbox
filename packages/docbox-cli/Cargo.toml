@@ -28,6 +28,8 @@ docbox-database = { version = "0.2.0", path = "../docbox-database" }
 # Search access
 docbox-search = { version = "0.2.0", path = "../docbox-search" }
 
+docbox-management = { version = "0.1.0", path = "../docbox-management" }
+
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }
 futures.workspace = true

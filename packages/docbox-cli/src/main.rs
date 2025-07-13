@@ -1,20 +1,24 @@
 use clap::{Parser, Subcommand};
-use docbox_core::{secrets::SecretsManagerConfig, storage::StorageLayerFactoryConfig};
+use docbox_core::{
+    aws::aws_config,
+    secrets::{AppSecretManager, SecretsManagerConfig},
+    storage::{StorageLayerFactory, StorageLayerFactoryConfig},
+};
 use docbox_database::{
+    DbResult,
     models::tenant::TenantId,
     sqlx::{PgPool, postgres::PgConnectOptions},
 };
-use docbox_search::SearchIndexFactoryConfig;
-use eyre::Context;
+use docbox_management::tenant::{
+    create_tenant::CreateTenantConfig,
+    migrate_tenants::MigrateTenantsConfig,
+    migrate_tenants_search::{MigrateTenantsSearchConfig, migrate_tenants_search},
+};
+use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
+use eyre::{Context, ContextCompat};
 use serde::Deserialize;
 use std::path::PathBuf;
 
-mod create_root;
-mod create_tenant;
-mod delete_tenant;
-mod get_tenant;
-mod migrate;
-mod migrate_search;
 mod rebuild_tenant_index;
 mod reprocess_octet_stream_files;
 
@@ -176,21 +180,58 @@ async fn main() -> eyre::Result<()> {
     let config: CliConfiguration =
         serde_json::from_slice(&config_raw).context("failed to parse config")?;
 
+    let aws_config = aws_config().await;
+    let secrets = AppSecretManager::from_config(&aws_config, config.secrets.clone());
+    let search_factory =
+        SearchIndexFactory::from_config(&aws_config, config.search.clone()).map_err(AnyhowError)?;
+    let storage_factory = StorageLayerFactory::from_config(&aws_config, config.storage.clone());
+    let db_provider = DatabaseProvider {
+        config: config.database.clone(),
+    };
+
     match command {
         Commands::CreateRoot {} => {
-            create_root::create_root(&config).await?;
+            docbox_management::root::initialize::initialize(
+                &db_provider,
+                &secrets,
+                &config.database.root_secret_name,
+            )
+            .await
+            .context("failed to setup root")?;
             Ok(())
         }
         Commands::CreateTenant { file } => {
-            create_tenant::create_tenant(&config, file).await?;
+            // Load the create tenant config
+            let tenant_config_raw = tokio::fs::read(file).await?;
+            let tenant_config: CreateTenantConfig =
+                serde_json::from_slice(&tenant_config_raw).context("failed to parse config")?;
+
+            tracing::debug!(?tenant_config, "creating tenant");
+
+            let tenant = docbox_management::tenant::create_tenant::create_tenant(
+                &db_provider,
+                &search_factory,
+                &storage_factory,
+                &secrets,
+                tenant_config,
+            )
+            .await?;
+
+            tracing::info!(?tenant, "tenant created successfully");
             Ok(())
         }
         Commands::DeleteTenant { env, tenant_id } => {
-            delete_tenant::delete_tenant(&config, env, tenant_id).await?;
+            docbox_management::tenant::delete_tenant::delete_tenant(&db_provider, &env, tenant_id)
+                .await?;
             Ok(())
         }
         Commands::GetTenant { env, tenant_id } => {
-            get_tenant::get_tenant(&config, env, tenant_id).await?;
+            let tenant =
+                docbox_management::tenant::get_tenant::get_tenant(&db_provider, &env, tenant_id)
+                    .await?
+                    .context("tenant not found")?;
+            tracing::debug!(?tenant, "found tenant");
+
             Ok(())
         }
         Commands::Migrate {
@@ -198,7 +239,18 @@ async fn main() -> eyre::Result<()> {
             tenant_id,
             skip_failed,
         } => {
-            migrate::migrate(&config, env, tenant_id, skip_failed).await?;
+            let outcome = docbox_management::tenant::migrate_tenants::migrate_tenants(
+                &db_provider,
+                MigrateTenantsConfig {
+                    env: Some(env),
+                    tenant_id,
+                    skip_failed,
+                    target_migration_name: None,
+                },
+            )
+            .await?;
+
+            tracing::debug!(?outcome, "completed migrations");
             Ok(())
         }
         Commands::MigrateSearch {
@@ -207,7 +259,19 @@ async fn main() -> eyre::Result<()> {
             tenant_id,
             skip_failed,
         } => {
-            migrate_search::migrate_search(&config, env, name, tenant_id, skip_failed).await?;
+            let outcome = migrate_tenants_search(
+                &db_provider,
+                &search_factory,
+                MigrateTenantsSearchConfig {
+                    env: Some(env),
+                    tenant_id,
+                    skip_failed,
+                    target_migration_name: name,
+                },
+            )
+            .await?;
+
+            tracing::debug!(?outcome, "migration complete");
             Ok(())
         }
         Commands::RebuildTenantIndex { env, tenant_id } => {
@@ -228,8 +292,7 @@ async fn connect_db(
     username: &str,
     password: &str,
     database: &str,
-) -> eyre::Result<PgPool> {
-    println!("connecting to database {database}");
+) -> DbResult<PgPool> {
     let options = PgConnectOptions::new()
         .host(host)
         .port(port)
@@ -237,7 +300,24 @@ async fn connect_db(
         .password(password)
         .database(database);
 
-    PgPool::connect_with(options)
-        .await
-        .context("failed to connect to database")
+    PgPool::connect_with(options).await
+}
+
+pub struct DatabaseProvider {
+    config: CliDatabaseConfiguration,
+}
+
+impl docbox_management::database::DatabaseProvider for DatabaseProvider {
+    fn connect(
+        &self,
+        database: &str,
+    ) -> impl Future<Output = DbResult<docbox_database::DbPool>> + Send {
+        connect_db(
+            &self.config.host,
+            self.config.port,
+            &self.config.root_role_name,
+            &self.config.root_secret_password,
+            database,
+        )
+    }
 }

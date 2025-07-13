@@ -19,6 +19,7 @@ COPY packages/docbox-core/Cargo.toml packages/docbox-core/Cargo.toml
 COPY packages/docbox-database/Cargo.toml packages/docbox-database/Cargo.toml
 COPY packages/docbox-web-scraper/Cargo.toml packages/docbox-web-scraper/Cargo.toml
 COPY packages/docbox-search/Cargo.toml packages/docbox-search/Cargo.toml
+COPY packages/docbox-management/Cargo.toml packages/docbox-management/Cargo.toml
 
 # Create empty entrypoints
 RUN mkdir packages/docbox/src && echo "fn main() {}" >packages/docbox/src/main.rs
@@ -27,6 +28,7 @@ RUN mkdir packages/docbox-core/src && echo "//placeholder" >packages/docbox-core
 RUN mkdir packages/docbox-database/src && echo "//placeholder" >packages/docbox-database/src/lib.rs
 RUN mkdir packages/docbox-web-scraper/src && echo "//placeholder" >packages/docbox-web-scraper/src/lib.rs
 RUN mkdir packages/docbox-search/src && echo "//placeholder" >packages/docbox-search/src/lib.rs
+RUN mkdir packages/docbox-management/src && echo "//placeholder" >packages/docbox-management/src/lib.rs
 
 # Run a build to download dependencies
 RUN cargo build -p docbox --target x86_64-unknown-linux-musl --release
@@ -39,6 +41,7 @@ RUN touch packages/docbox-core/src/lib.rs
 RUN touch packages/docbox-database/src/lib.rs
 RUN touch packages/docbox-web-scraper/src/lib.rs
 RUN touch packages/docbox-search/src/lib.rs
+RUN touch packages/docbox-management/src/lib.rs
 
 RUN cargo build -p docbox --target x86_64-unknown-linux-musl --release
 

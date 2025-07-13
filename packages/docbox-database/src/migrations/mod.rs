@@ -1,5 +1,5 @@
 use crate::{
-    DbResult, DbTransaction,
+    DbExecutor, DbResult, DbTransaction,
     models::{
         tenant::Tenant,
         tenant_migration::{CreateTenantMigration, TenantMigration},
@@ -46,6 +46,27 @@ const TENANT_MIGRATIONS: &[(&str, &str)] = &[
         include_str!("./tenant/m9_create_presigned_upload_tasks_table.sql"),
     ),
 ];
+
+/// Get all pending migrations for a tenant that have not been applied yet
+pub async fn get_pending_tenant_migrations(
+    db: impl DbExecutor<'_>,
+    tenant: &Tenant,
+) -> DbResult<Vec<String>> {
+    let migrations = TenantMigration::find_by_tenant(db, tenant.id, &tenant.env).await?;
+
+    let pending = TENANT_MIGRATIONS
+        .iter()
+        .filter(|(migration_name, _migration)| {
+            // Skip already applied migrations
+            !migrations
+                .iter()
+                .any(|migration| migration.name.eq(migration_name))
+        })
+        .map(|(migration_name, _migration)| migration_name.to_string())
+        .collect();
+
+    Ok(pending)
+}
 
 /// Applies migrations to the provided tenant, only applies migrations that
 /// haven't already been applied
@@ -94,6 +115,7 @@ pub async fn apply_tenant_migrations(
 
     Ok(())
 }
+
 /// Applies migrations without checking if migrations have already been applied
 ///
 /// Should only be used for integration tests where you aren't setting up the root database
@@ -116,7 +138,7 @@ pub async fn force_apply_tenant_migrations(
 }
 
 /// Apply a migration to the specific tenant database
-async fn apply_tenant_migration(
+pub async fn apply_tenant_migration(
     db: &mut DbTransaction<'_>,
     migration_name: &str,
     migration: &str,
