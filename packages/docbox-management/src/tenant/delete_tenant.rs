@@ -1,10 +1,9 @@
+use crate::database::DatabaseProvider;
 use docbox_database::{
     DbErr, ROOT_DATABASE_NAME,
     models::tenant::{Tenant, TenantId},
 };
 use thiserror::Error;
-
-use crate::database::DatabaseProvider;
 
 #[derive(Debug, Error)]
 pub enum DeleteTenantError {

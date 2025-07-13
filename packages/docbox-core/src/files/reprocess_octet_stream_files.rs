@@ -1,84 +1,29 @@
-use docbox_core::{
-    aws::aws_config,
-    files::{index_file::store_file_index, upload_file::store_generated_files},
-    processing::office::{OfficeConverter, convert_server::OfficeConverterServer},
-    processing::{
-        ProcessingIndexMetadata, ProcessingLayer, office::OfficeProcessingLayer, process_file,
-    },
-    secrets::AppSecretManager,
-    storage::{StorageLayerFactory, TenantStorageLayer},
-    utils::file::get_file_name_ext,
-};
-use docbox_database::{
-    DatabasePoolCache, DbPool,
-    models::{
-        file::{File, FileWithScope},
-        tenant::{Tenant, TenantId},
-    },
-};
-use docbox_search::{SearchIndexFactory, TenantSearchIndex};
-use eyre::{Context, ContextCompat};
-use futures::{StreamExt, future::BoxFuture};
-use mime::Mime;
 use std::ops::DerefMut;
 
-use crate::{AnyhowError, CliConfiguration};
+use anyhow::Context;
+use docbox_database::{DbPool, models::file::FileWithScope};
+use docbox_search::TenantSearchIndex;
+use futures::{StreamExt, future::BoxFuture};
+use mime::Mime;
+
+use crate::{
+    files::{index_file::store_file_index, upload_file::store_generated_files},
+    processing::{ProcessingIndexMetadata, ProcessingLayer, process_file},
+    storage::TenantStorageLayer,
+    utils::file::get_file_name_ext,
+};
 
 pub async fn reprocess_octet_stream_files(
-    config: &CliConfiguration,
-    env: String,
-    tenant_id: TenantId,
-) -> eyre::Result<()> {
-    tracing::debug!(?env, ?tenant_id, "rebuilding tenant index");
-
-    // Load AWS configuration
-    let aws_config = aws_config().await;
-
-    // Connect to secrets manager
-    let secrets = AppSecretManager::from_config(&aws_config, config.secrets.clone());
-
-    // Setup database cache / connector
-    let db_cache = DatabasePoolCache::new(
-        config.database.host.clone(),
-        config.database.port,
-        config.database.root_secret_name.clone(),
-        secrets,
-    );
-
-    let search_factory = SearchIndexFactory::from_config(&aws_config, config.search.clone())
-        .map_err(|err| eyre::Error::msg(err.to_string()))?;
-
-    // Setup S3 access
-    let storage_factory = StorageLayerFactory::from_config(&aws_config, config.storage.clone());
-
-    let root_db = db_cache.get_root_pool().await?;
-    let tenant = Tenant::find_by_id(&root_db, tenant_id, &env)
-        .await?
-        .context("tenant not found")?;
-
-    let db = db_cache.get_tenant_pool(&tenant).await?;
-    let search = search_factory.create_search_index(&tenant);
-
-    tracing::info!(?tenant, "started re-indexing tenant");
-
+    db: &DbPool,
+    search: &TenantSearchIndex,
+    storage: &TenantStorageLayer,
+    processing: &ProcessingLayer,
+) -> anyhow::Result<()> {
     _ = search.create_index().await;
 
-    let files = get_files(&db).await?;
+    let files = get_files(db).await?;
     let mut skipped = Vec::new();
     let mut processing_files = Vec::new();
-
-    // Create the converter
-    let convert_server_addresses =
-        std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://localhost:8081".to_string());
-    let converter_server =
-        OfficeConverterServer::from_addresses(convert_server_addresses.split(','))
-            .map_err(AnyhowError)?;
-    let converter = OfficeConverter::ConverterServer(converter_server);
-
-    // Setup processing layer data
-    let processing = ProcessingLayer {
-        office: OfficeProcessingLayer { converter },
-    };
 
     for file in files {
         let guessed_mime = get_file_name_ext(&file.file.name).and_then(|ext| {
@@ -97,8 +42,8 @@ pub async fn reprocess_octet_stream_files(
     _ = futures::stream::iter(processing_files)
         .map(|(file, mime)| -> BoxFuture<'static, ()> {
             let db = db.clone();
-            let search = search_factory.create_search_index(&tenant);
-            let storage = storage_factory.create_storage_layer(&tenant);
+            let search = search.clone();
+            let storage = storage.clone();
             let processing = processing.clone();
 
             Box::pin(async move {
@@ -126,12 +71,12 @@ const DATABASE_PAGE_SIZE: u64 = 1000;
 /// Number of files to process in parallel
 const FILE_PROCESS_SIZE: usize = 50;
 
-pub async fn get_files(db: &DbPool) -> eyre::Result<Vec<FileWithScope>> {
+pub async fn get_files(db: &DbPool) -> anyhow::Result<Vec<FileWithScope>> {
     let mut page_index = 0;
     let mut data = Vec::new();
 
     loop {
-        let mut files = File::all_by_mime(
+        let mut files = docbox_database::models::file::File::all_by_mime(
             db,
             "application/octet-stream",
             page_index * DATABASE_PAGE_SIZE,
@@ -161,20 +106,18 @@ pub async fn perform_process_file(
     processing: ProcessingLayer,
     mut file: FileWithScope,
     mime: Mime,
-) -> eyre::Result<()> {
+) -> anyhow::Result<()> {
     // Start a database transaction
     let mut db = db.begin().await.map_err(|cause| {
         tracing::error!(?cause, "failed to begin transaction");
-        eyre::eyre!("failed to begin transaction")
+        anyhow::anyhow!("failed to begin transaction")
     })?;
 
     let bytes = storage
         .get_file(&file.file.file_key)
-        .await
-        .map_err(AnyhowError)?
+        .await?
         .collect_bytes()
-        .await
-        .map_err(AnyhowError)?;
+        .await?;
 
     let processing_output = process_file(&None, &processing, bytes, &mime).await?;
 

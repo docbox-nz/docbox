@@ -2,7 +2,7 @@
 
 use crate::{
     error::{HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
-    middleware::tenant::{TenantDb, TenantParams, TenantSearch},
+    middleware::tenant::{TenantDb, TenantParams, TenantSearch, TenantStorage},
     models::admin::{TenantDocumentBoxesRequest, TenantDocumentBoxesResponse},
 };
 use axum::{Extension, Json, http::StatusCode};
@@ -10,6 +10,7 @@ use axum_valid::Garde;
 use docbox_core::{
     document_box::search_document_box::{ResolvedSearchResult, search_document_boxes_admin},
     files::purge_expired_presigned_tasks::purge_expired_presigned_tasks,
+    processing::ProcessingLayer,
     secrets::AppSecretManager,
     storage::StorageLayerFactory,
     tenant::tenant_cache::TenantCache,
@@ -73,7 +74,6 @@ pub async fn tenant_boxes(
     responses(
         (status = 201, description = "Searched successfully", body = AdminSearchResultResponse),
         (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
-        (status = 409, description = "Scope already exists", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(TenantParams)
@@ -120,6 +120,77 @@ pub async fn search_tenant(
         total_hits: resolved.total_hits,
         results: out,
     }))
+}
+
+/// Reprocess octet-stream files
+///
+/// Useful if a files were previously accepted into the tenant with some unknown
+/// file type (or ingested through a source that was unable to get the correct mime).
+///
+/// Will reprocess files that have this unknown file type mime to see if a different
+/// type can be obtained
+#[utoipa::path(
+    post,
+    operation_id = "admin_reprocess_octet_stream_files",
+    tag = ADMIN_TAG,
+    path = "/admin/reprocess-octet-stream-files",
+    responses(
+        (status = 204, description = "Reprocessed successfully", body = AdminSearchResultResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(TenantParams)
+)]
+#[tracing::instrument(skip_all)]
+pub async fn reprocess_octet_stream_files_tenant(
+    TenantDb(db): TenantDb,
+    TenantSearch(search): TenantSearch,
+    TenantStorage(storage): TenantStorage,
+    Extension(processing): Extension<ProcessingLayer>,
+) -> HttpStatusResult {
+    docbox_core::files::reprocess_octet_stream_files::reprocess_octet_stream_files(
+        &db,
+        &search,
+        &storage,
+        &processing,
+    )
+    .await
+    .map_err(|error| {
+        tracing::error!(?error, "failed to reprocess octet-stream files");
+        HttpCommonError::ServerError
+    })?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Rebuild search index
+///
+/// Rebuild the tenant search index from the data stored in the database
+/// and in storage
+#[utoipa::path(
+    post,
+    operation_id = "admin_rebuild_search_index",
+    tag = ADMIN_TAG,
+    path = "/admin/rebuild-search-index",
+    responses(
+        (status = 204, description = "Rebuilt successfully", body = AdminSearchResultResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(TenantParams)
+)]
+#[tracing::instrument(skip_all)]
+pub async fn rebuild_search_index_tenant(
+    TenantDb(db): TenantDb,
+    TenantSearch(search): TenantSearch,
+    TenantStorage(storage): TenantStorage,
+) -> HttpStatusResult {
+    docbox_core::tenant::rebuild_tenant_index::rebuild_tenant_index(&db, &search, &storage)
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "failed to reprocess octet-stream files");
+            HttpCommonError::ServerError
+        })?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Flush database cache

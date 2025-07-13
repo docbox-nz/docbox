@@ -1,10 +1,9 @@
+use crate::database::DatabaseProvider;
 use docbox_database::{
     DbErr, DbResult, ROOT_DATABASE_NAME, migrations::apply_tenant_migrations,
     models::tenant::Tenant,
 };
 use thiserror::Error;
-
-use crate::database::DatabaseProvider;
 
 #[derive(Debug, Error)]
 pub enum MigrateTenantError {

@@ -3,24 +3,26 @@ use docbox_core::{
     aws::aws_config,
     secrets::{AppSecretManager, SecretsManagerConfig},
     storage::{StorageLayerFactory, StorageLayerFactoryConfig},
+    tenant::rebuild_tenant_index::{rebuild_tenant_index, recreate_search_index_data},
 };
 use docbox_database::{
     DbResult,
     models::tenant::TenantId,
     sqlx::{PgPool, postgres::PgConnectOptions},
 };
-use docbox_management::tenant::{
-    create_tenant::CreateTenantConfig,
-    migrate_tenants::MigrateTenantsConfig,
-    migrate_tenants_search::{MigrateTenantsSearchConfig, migrate_tenants_search},
+use docbox_management::{
+    database::DatabaseProvider,
+    tenant::{
+        create_tenant::CreateTenantConfig,
+        get_tenant::get_tenant,
+        migrate_tenants::MigrateTenantsConfig,
+        migrate_tenants_search::{MigrateTenantsSearchConfig, migrate_tenants_search},
+    },
 };
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
 use eyre::{Context, ContextCompat};
 use serde::Deserialize;
 use std::path::PathBuf;
-
-mod rebuild_tenant_index;
-mod reprocess_octet_stream_files;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -82,15 +84,10 @@ pub enum Commands {
         /// ID of the tenant to rebuild
         #[arg(short, long)]
         tenant_id: TenantId,
-    },
 
-    ReprocessOctetStreamFiles {
-        /// Environment of the tenant
+        /// File to save the rebuilt index to incase of failure
         #[arg(short, long)]
-        env: String,
-        /// ID of the tenant to rebuild
-        #[arg(short, long)]
-        tenant_id: TenantId,
+        file: PathBuf,
     },
 
     /// Delete a tenant
@@ -185,7 +182,7 @@ async fn main() -> eyre::Result<()> {
     let search_factory =
         SearchIndexFactory::from_config(&aws_config, config.search.clone()).map_err(AnyhowError)?;
     let storage_factory = StorageLayerFactory::from_config(&aws_config, config.storage.clone());
-    let db_provider = DatabaseProvider {
+    let db_provider = CliDatabaseProvider {
         config: config.database.clone(),
     };
 
@@ -274,13 +271,40 @@ async fn main() -> eyre::Result<()> {
             tracing::debug!(?outcome, "migration complete");
             Ok(())
         }
-        Commands::RebuildTenantIndex { env, tenant_id } => {
-            rebuild_tenant_index::rebuild_tenant_index(&config, env, tenant_id).await?;
-            Ok(())
-        }
-        Commands::ReprocessOctetStreamFiles { env, tenant_id } => {
-            reprocess_octet_stream_files::reprocess_octet_stream_files(&config, env, tenant_id)
-                .await?;
+        Commands::RebuildTenantIndex {
+            env,
+            tenant_id,
+            file,
+        } => {
+            let tenant = get_tenant(&db_provider, &env, tenant_id)
+                .await?
+                .context("tenant not found")?;
+
+            let search = search_factory.create_search_index(&tenant);
+            let storage = storage_factory.create_storage_layer(&tenant);
+
+            // Connect to the tenant database
+            let db = db_provider
+                .connect(&tenant.db_name)
+                .await
+                .context("failed to connect to tenant db")?;
+
+            let index_data = recreate_search_index_data(&db, &storage)
+                .await
+                .map_err(AnyhowError)?;
+            tracing::debug!("all data loaded: {}", index_data.len());
+
+            {
+                let serialized = serde_json::to_string(&index_data).unwrap();
+                tokio::fs::write(file, serialized)
+                    .await
+                    .context("failed to write index to file")?;
+            }
+
+            rebuild_tenant_index(&db, &search, &storage)
+                .await
+                .map_err(AnyhowError)
+                .context("failed to rebuild tenant index")?;
             Ok(())
         }
     }
@@ -303,11 +327,11 @@ async fn connect_db(
     PgPool::connect_with(options).await
 }
 
-pub struct DatabaseProvider {
+pub struct CliDatabaseProvider {
     config: CliDatabaseConfiguration,
 }
 
-impl docbox_management::database::DatabaseProvider for DatabaseProvider {
+impl docbox_management::database::DatabaseProvider for CliDatabaseProvider {
     fn connect(
         &self,
         database: &str,

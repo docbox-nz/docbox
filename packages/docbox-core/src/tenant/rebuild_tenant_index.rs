@@ -1,82 +1,36 @@
 use std::str::FromStr;
 
-use docbox_core::{
-    aws::aws_config,
-    processing::{office::is_pdf_compatible, pdf::PAGE_END_CHARACTER},
-    secrets::AppSecretManager,
-    storage::{StorageLayerFactory, TenantStorageLayer},
-};
+use anyhow::Context;
 use docbox_database::{
-    DatabasePoolCache, DbPool,
+    DbPool,
     models::{
         document_box::DocumentBoxScopeRaw,
         file::{File, FileWithScope},
         folder::Folder,
         generated_file::{GeneratedFile, GeneratedFileType},
         link::{Link, LinkWithScope},
-        tenant::{Tenant, TenantId},
     },
 };
 use docbox_search::{
-    SearchIndexFactory,
+    TenantSearchIndex,
     models::{DocumentPage, SearchIndexData, SearchIndexType},
 };
-use eyre::{Context, ContextCompat};
 use futures::{StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
 use itertools::Itertools;
+use pdf_process::text::PAGE_END_CHARACTER;
 
-use crate::{AnyhowError, CliConfiguration};
+use crate::{processing::office::is_pdf_compatible, storage::TenantStorageLayer};
 
+/// Rebuild the search index for the tenant based on that
+/// data stored in the database and the content stored in S3
 pub async fn rebuild_tenant_index(
-    config: &CliConfiguration,
-    env: String,
-    tenant_id: TenantId,
-) -> eyre::Result<()> {
-    tracing::debug!(?env, ?tenant_id, "rebuilding tenant index");
+    db: &DbPool,
+    search: &TenantSearchIndex,
+    storage: &TenantStorageLayer,
+) -> anyhow::Result<()> {
+    tracing::info!("started re-indexing tenant");
 
-    // Load AWS configuration
-    let aws_config = aws_config().await;
-
-    // Connect to secrets manager
-    let secrets = AppSecretManager::from_config(&aws_config, config.secrets.clone());
-
-    // Setup database cache / connector
-    let db_cache = DatabasePoolCache::new(
-        config.database.host.clone(),
-        config.database.port,
-        config.database.root_secret_name.clone(),
-        secrets,
-    );
-
-    let search_factory = SearchIndexFactory::from_config(&aws_config, config.search.clone())
-        .map_err(|err| eyre::Error::msg(err.to_string()))?;
-
-    // Setup S3 access
-    let storage_factory = StorageLayerFactory::from_config(&aws_config, config.storage.clone());
-
-    let root_db = db_cache.get_root_pool().await?;
-    let tenant = Tenant::find_by_id(&root_db, tenant_id, &env)
-        .await?
-        .context("tenant not found")?;
-
-    let db = db_cache.get_tenant_pool(&tenant).await?;
-    let search = search_factory.create_search_index(&tenant);
-    let storage = storage_factory.create_storage_layer(&tenant);
-
-    tracing::info!(?tenant, "started re-indexing tenant");
-
-    _ = search.create_index().await;
-
-    let links = create_links_index_data(&db).await?;
-    let folders = create_folders_index_data(&db).await?;
-    let files = create_files_index_data(&db, &storage).await?;
-
-    let index_data = links
-        .into_iter()
-        .chain(folders.into_iter())
-        .chain(files.into_iter())
-        .collect::<Vec<SearchIndexData>>();
-
+    let index_data = recreate_search_index_data(db, storage).await?;
     tracing::debug!("all data loaded: {}", index_data.len());
 
     {
@@ -86,15 +40,46 @@ pub async fn rebuild_tenant_index(
             .unwrap();
     }
 
-    let index_data_chunks = index_data.into_iter().chunks(INDEX_CHUNK_SIZE);
+    apply_rebuilt_tenant_index(search, index_data).await?;
+
+    Ok(())
+}
+
+/// Apply the rebuilt tenant index
+pub async fn apply_rebuilt_tenant_index(
+    search: &TenantSearchIndex,
+    data: Vec<SearchIndexData>,
+) -> anyhow::Result<()> {
+    // Ensure the index exists
+    _ = search.create_index().await;
+
+    let index_data_chunks = data.into_iter().chunks(INDEX_CHUNK_SIZE);
     let index_data_chunks = index_data_chunks.into_iter();
 
     for data in index_data_chunks {
         let chunk = data.collect::<Vec<_>>();
-        search.bulk_add_data(chunk).await.unwrap();
+        search.bulk_add_data(chunk).await?;
     }
 
     Ok(())
+}
+
+/// Rebuild the entire tenant search index
+pub async fn recreate_search_index_data(
+    db: &DbPool,
+    storage: &TenantStorageLayer,
+) -> anyhow::Result<Vec<SearchIndexData>> {
+    let links = create_links_index_data(db).await?;
+    let folders = create_folders_index_data(db).await?;
+    let files = create_files_index_data(db, storage).await?;
+
+    let index_data = links
+        .into_iter()
+        .chain(folders.into_iter())
+        .chain(files.into_iter())
+        .collect::<Vec<SearchIndexData>>();
+
+    Ok(index_data)
 }
 
 const INDEX_CHUNK_SIZE: usize = 5000;
@@ -104,7 +89,7 @@ const DATABASE_PAGE_SIZE: u64 = 1000;
 const FILE_PROCESS_SIZE: usize = 500;
 
 /// Collects all stored links and creates the [SearchIndexData] for them
-pub async fn create_links_index_data(db: &DbPool) -> eyre::Result<Vec<SearchIndexData>> {
+pub async fn create_links_index_data(db: &DbPool) -> anyhow::Result<Vec<SearchIndexData>> {
     let mut page_index = 0;
     let mut data = Vec::new();
 
@@ -140,7 +125,7 @@ pub async fn create_links_index_data(db: &DbPool) -> eyre::Result<Vec<SearchInde
 }
 
 /// Collects all stored non-root folders and creates the [SearchIndexData] for them
-pub async fn create_folders_index_data(db: &DbPool) -> eyre::Result<Vec<SearchIndexData>> {
+pub async fn create_folders_index_data(db: &DbPool) -> anyhow::Result<Vec<SearchIndexData>> {
     let mut page_index = 0;
     let mut data = Vec::new();
 
@@ -184,7 +169,7 @@ pub async fn create_folders_index_data(db: &DbPool) -> eyre::Result<Vec<SearchIn
 pub async fn create_files_index_data(
     db: &DbPool,
     storage: &TenantStorageLayer,
-) -> eyre::Result<Vec<SearchIndexData>> {
+) -> anyhow::Result<Vec<SearchIndexData>> {
     let mut page_index = 0;
     let mut data = Vec::new();
     let mut files_for_processing = Vec::new();
@@ -281,7 +266,7 @@ pub async fn try_pdf_compatible_document_pages(
     storage: &TenantStorageLayer,
     scope: &DocumentBoxScopeRaw,
     file: &File,
-) -> eyre::Result<Vec<DocumentPage>> {
+) -> anyhow::Result<Vec<DocumentPage>> {
     // Load the extracted text content for the file
     let text_file = GeneratedFile::find(db, scope, file.id, GeneratedFileType::TextContent)
         .await?
@@ -292,14 +277,12 @@ pub async fn try_pdf_compatible_document_pages(
     // Read the PDF file from S3
     let text_content = storage
         .get_file(&text_file.file_key)
-        .await
-        .map_err(AnyhowError)?
+        .await?
         .collect_bytes()
         .await
         .inspect_err(|cause| {
             tracing::error!(?cause, "failed to load pdf bytes from s3 stream");
-        })
-        .map_err(AnyhowError)?;
+        })?;
 
     // Load the text content
     let text_content = text_content.to_vec();

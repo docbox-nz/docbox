@@ -1,11 +1,3 @@
-use docbox_database::{
-    DbErr,
-    models::tenant::{Tenant, TenantId},
-};
-use docbox_search::SearchIndexFactory;
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
 use crate::{
     database::DatabaseProvider,
     tenant::{
@@ -14,6 +6,13 @@ use crate::{
         migrate_tenant_search::{MigrateTenantSearchError, migrate_tenant_search},
     },
 };
+use docbox_database::{
+    DbErr,
+    models::tenant::{Tenant, TenantId},
+};
+use docbox_search::SearchIndexFactory;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MigrateTenantsSearchError {

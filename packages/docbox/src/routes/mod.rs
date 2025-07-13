@@ -33,6 +33,11 @@ pub fn admin_router() -> Router {
             post(admin::search_tenant).layer(axum::middleware::from_fn(tenant_auth_middleware)),
         )
         .route(
+            "/reprocess_octet_stream_files_tenant",
+            post(admin::reprocess_octet_stream_files_tenant)
+                .layer(axum::middleware::from_fn(tenant_auth_middleware)),
+        )
+        .route(
             "/purge-expired-presigned-tasks",
             post(admin::http_purge_expired_presigned_tasks),
         )

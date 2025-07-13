@@ -1,10 +1,3 @@
-use docbox_database::{
-    DbErr, ROOT_DATABASE_NAME,
-    models::tenant::{Tenant, TenantId},
-};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
 use crate::{
     database::DatabaseProvider,
     tenant::{
@@ -12,6 +5,12 @@ use crate::{
         migrate_tenant::{MigrateTenantError, migrate_tenant},
     },
 };
+use docbox_database::{
+    DbErr, ROOT_DATABASE_NAME,
+    models::tenant::{Tenant, TenantId},
+};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MigrateTenantsError {

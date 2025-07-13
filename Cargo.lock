@@ -2026,6 +2026,7 @@ dependencies = [
  "futures",
  "html-escape",
  "image",
+ "itertools 0.14.0",
  "mail-parser",
  "mime",
  "mime2ext",
@@ -2075,15 +2076,11 @@ dependencies = [
  "docbox-core",
  "docbox-database",
  "docbox-search",
- "futures",
- "itertools 0.14.0",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
- "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

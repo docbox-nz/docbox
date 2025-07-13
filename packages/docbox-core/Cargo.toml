@@ -57,12 +57,15 @@ urlencoding = "=2.1.3"
 bytes.workspace = true
 bytes-utils.workspace = true
 
+itertools.workspace = true
+
 uuid.workspace = true
 
 chrono.workspace = true
 
 mime.workspace = true
 mime2ext.workspace = true
+mime_guess.workspace = true
 
 sha256 = { version = "=1.6.0", default-features = false }
 
@@ -94,7 +97,6 @@ testcontainers-modules = { version = "0.12.1", features = [
 
 tokio = { workspace = true, features = ["full"] }
 
-mime_guess.workspace = true
 
 # Enable typesense search backend for testing
 docbox-search = { version = "0.2.0", default-features = false, path = "../docbox-search", features = [
