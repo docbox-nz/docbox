@@ -17,7 +17,7 @@ mock-browser = []
 dotenvy = "=0.15.7"
 
 # Core business logic
-docbox-core = { version = "0.2.0", path = "../docbox-core" }
+docbox-core = { version = "0.3.0", path = "../docbox-core" }
 
 # Database access
 docbox-database = { version = "0.3.0", path = "../docbox-database" }
