@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod create_tenant;
 pub mod delete_tenant;
+pub mod get_pending_tenant_migrations;
 pub mod get_tenant;
 pub mod get_tenants;
 pub mod migrate_tenant;

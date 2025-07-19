@@ -1,7 +1,6 @@
 use crate::database::DatabaseProvider;
 use docbox_database::{
-    DbErr, DbResult, ROOT_DATABASE_NAME, migrations::apply_tenant_migrations,
-    models::tenant::Tenant,
+    DbErr, ROOT_DATABASE_NAME, migrations::apply_tenant_migrations, models::tenant::Tenant,
 };
 use thiserror::Error;
 
@@ -66,15 +65,4 @@ pub async fn migrate_tenant(
         .map_err(MigrateTenantError::CommitTransaction)?;
 
     Ok(())
-}
-
-pub async fn get_pending_tenant_migrations(
-    db_provider: &impl DatabaseProvider,
-    tenant: &Tenant,
-) -> DbResult<Vec<String>> {
-    // Connect to the root database
-    let root_db = db_provider.connect(ROOT_DATABASE_NAME).await?;
-    let migrations =
-        docbox_database::migrations::get_pending_tenant_migrations(&root_db, tenant).await?;
-    Ok(migrations)
 }
