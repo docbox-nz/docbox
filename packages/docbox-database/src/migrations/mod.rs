@@ -45,6 +45,10 @@ const TENANT_MIGRATIONS: &[(&str, &str)] = &[
         "m9_create_presigned_upload_tasks_table",
         include_str!("./tenant/m9_create_presigned_upload_tasks_table.sql"),
     ),
+    (
+        "m10_add_pinned_column",
+        include_str!("./tenant/m10_add_pinned_column.sql"),
+    ),
 ];
 
 /// Get all pending migrations for a tenant that have not been applied yet

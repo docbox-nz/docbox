@@ -47,6 +47,7 @@ async fn test_delete_folder_success() {
             folder: root,
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -131,6 +132,7 @@ async fn test_delete_folder_children_success() {
             folder: root,
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -147,6 +149,7 @@ async fn test_delete_folder_children_success() {
             folder: folder.clone(),
             name: "Sub Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -233,6 +236,7 @@ async fn test_delete_unknown_folder() {
         folder_id: Default::default(),
         created_at: Default::default(),
         created_by: Default::default(),
+        pinned: Default::default(),
     };
 
     // Delete the folder

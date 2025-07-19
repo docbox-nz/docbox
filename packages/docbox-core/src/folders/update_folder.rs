@@ -42,6 +42,9 @@ pub struct UpdateFolder {
 
     /// Update the folder name
     pub name: Option<String>,
+
+    /// Update the pinned state
+    pub pinned: Option<bool>,
 }
 
 pub async fn update_folder(
@@ -85,9 +88,15 @@ pub async fn update_folder(
     };
 
     if let Some(new_name) = update.name {
-        folder = update_folder_name(&mut db, user_id, folder, new_name)
+        folder = update_folder_name(&mut db, user_id.clone(), folder, new_name)
             .await
             .inspect_err(|cause| tracing::error!(?cause, "failed to update folder name"))?;
+    }
+
+    if let Some(new_value) = update.pinned {
+        folder = update_folder_pinned(&mut db, user_id, folder, new_value)
+            .await
+            .inspect_err(|cause| tracing::error!(?cause, "failed to update folder pinned state"))?;
     }
 
     // Update search index data for the new name and value
@@ -114,6 +123,29 @@ pub async fn update_folder(
     Ok(())
 }
 
+/// Add a new edit history item for a folder
+#[tracing::instrument(skip_all, fields(?user_id, %folder_id, ?metadata))]
+async fn add_edit_history(
+    db: &mut DbTransaction<'_>,
+    user_id: Option<UserId>,
+    folder_id: FolderId,
+    metadata: EditHistoryMetadata,
+) -> DbResult<()> {
+    // Track the edit history
+    EditHistory::create(
+        db.deref_mut(),
+        CreateEditHistory {
+            ty: CreateEditHistoryType::Folder(folder_id),
+            user_id,
+            metadata,
+        },
+    )
+    .await
+    .inspect_err(|error| tracing::error!(?error, "failed to store folder edit history entry"))?;
+
+    Ok(())
+}
+
 #[tracing::instrument(skip_all, fields(?user_id, folder_id = %folder.id, target_folder_id = %target_folder.id))]
 async fn move_folder(
     db: &mut DbTransaction<'_>,
@@ -123,25 +155,47 @@ async fn move_folder(
     target_folder: Folder,
 ) -> DbResult<Folder> {
     // Track the edit history
-    EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::Folder(folder.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::MoveToFolder {
-                original_id: folder_id,
-                target_id: target_folder.id,
-            },
+    add_edit_history(
+        db,
+        user_id,
+        folder.id,
+        EditHistoryMetadata::MoveToFolder {
+            original_id: folder_id,
+            target_id: target_folder.id,
         },
     )
-    .await
-    .inspect_err(|error| tracing::error!(?error, "failed to store folder move edit history"))?;
+    .await?;
 
     // Perform the move
     folder
         .move_to_folder(db.deref_mut(), target_folder.id)
         .await
         .inspect_err(|error| tracing::error!(?error, "failed to move folder"))
+}
+
+#[tracing::instrument(skip_all, fields(?user_id, folder_id = %folder.id, %new_value))]
+async fn update_folder_pinned(
+    db: &mut DbTransaction<'_>,
+    user_id: Option<UserId>,
+    folder: Folder,
+    new_value: bool,
+) -> DbResult<Folder> {
+    // Track the edit history
+    add_edit_history(
+        db,
+        user_id,
+        folder.id,
+        EditHistoryMetadata::ChangePinned {
+            previous_value: folder.pinned,
+            new_value,
+        },
+    )
+    .await?;
+
+    folder
+        .set_pinned(db.deref_mut(), new_value)
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to update folder pinned state"))
 }
 
 #[tracing::instrument(skip_all, fields(?user_id, folder_id = %folder.id, %new_name))]
@@ -152,19 +206,16 @@ async fn update_folder_name(
     new_name: String,
 ) -> DbResult<Folder> {
     // Track the edit history
-    EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::Folder(folder.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::Rename {
-                original_name: folder.name.clone(),
-                new_name: new_name.clone(),
-            },
+    add_edit_history(
+        db,
+        user_id,
+        folder.id,
+        EditHistoryMetadata::Rename {
+            original_name: folder.name.clone(),
+            new_name: new_name.clone(),
         },
     )
-    .await
-    .inspect_err(|error| tracing::error!(?error, "failed to store folder rename edit history"))?;
+    .await?;
 
     // Perform the rename
     folder

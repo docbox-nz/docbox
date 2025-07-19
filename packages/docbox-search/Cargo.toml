@@ -15,7 +15,7 @@ opensearch = ["dep:opensearch"]
 typesense = []
 
 [dependencies]
-docbox-database = { version = "0.2.0", path = "../docbox-database" }
+docbox-database = { version = "0.3.0", path = "../docbox-database" }
 
 reqwest.workspace = true
 

@@ -165,6 +165,11 @@ pub struct UpdateFileRequest {
     #[garde(skip)]
     #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
+
+    /// Whether to pin the file
+    #[garde(skip)]
+    #[schema(value_type = Option<bool>)]
+    pub pinned: Option<bool>,
 }
 
 /// Response for requesting a document box

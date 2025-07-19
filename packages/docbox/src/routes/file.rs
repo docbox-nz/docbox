@@ -244,6 +244,7 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
             last_modified_at: None,
             last_modified_by: file::LastModifiedByUser(None),
             parent_id: file.parent_id,
+            pinned: file.pinned,
         },
         generated,
 
@@ -590,6 +591,7 @@ pub async fn update(
     let update = UpdateFile {
         folder_id: req.folder_id,
         name: req.name,
+        pinned: req.pinned,
     };
 
     docbox_core::files::update_file::update_file(&db, &search, &scope, file, user_id, update)

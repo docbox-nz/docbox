@@ -39,6 +39,7 @@ async fn test_create_link_success() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await

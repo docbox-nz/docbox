@@ -23,6 +23,8 @@ pub enum EditHistoryType {
     Rename,
     /// Link value was changed
     LinkValue,
+    /// Pinned state changed
+    ChangePinned,
 }
 
 impl TryFrom<String> for EditHistoryType {
@@ -57,6 +59,14 @@ pub enum EditHistoryMetadata {
         previous_value: String,
         /// New URL
         new_value: String,
+    },
+
+    ChangePinned {
+        // Previous pinned state
+        previous_value: bool,
+
+        // New pinned state
+        new_value: bool,
     },
 }
 
@@ -148,6 +158,7 @@ impl EditHistory {
             EditHistoryMetadata::MoveToFolder { .. } => EditHistoryType::MoveToFolder,
             EditHistoryMetadata::Rename { .. } => EditHistoryType::Rename,
             EditHistoryMetadata::LinkValue { .. } => EditHistoryType::LinkValue,
+            EditHistoryMetadata::ChangePinned { .. } => EditHistoryType::ChangePinned,
         };
 
         let metadata = serde_json::to_value(&metadata).map_err(|err| DbErr::Encode(err.into()))?;

@@ -20,7 +20,7 @@ dotenvy = "=0.15.7"
 docbox-core = { version = "0.2.0", path = "../docbox-core" }
 
 # Database access
-docbox-database = { version = "0.2.0", path = "../docbox-database" }
+docbox-database = { version = "0.3.0", path = "../docbox-database" }
 
 # Search access
 docbox-search = { version = "0.2.0", default-features = false, path = "../docbox-search", features = [

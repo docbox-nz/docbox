@@ -88,6 +88,7 @@ async fn create_root_folder(
             document_box,
             folder_id: None,
             created_by,
+            pinned: false,
         },
     )
     .await

@@ -104,6 +104,7 @@ async fn test_delete_document_box_deletes_children() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await

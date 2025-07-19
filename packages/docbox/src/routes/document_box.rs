@@ -84,6 +84,7 @@ pub async fn create(
                 created_by: folder::CreatedByUser(created_by),
                 last_modified_at: None,
                 last_modified_by: folder::LastModifiedByUser(None),
+                pinned: root.pinned,
             },
             children: Default::default(),
         }),

@@ -103,6 +103,9 @@ pub struct Folder {
     /// Name of the file
     pub name: String,
 
+    /// Whether the folder is marked as pinned
+    pub pinned: bool,
+
     /// ID of the document box the folder belongs to
     pub document_box: DocumentBoxScopeRaw,
     /// Parent folder ID if the folder is a child
@@ -122,6 +125,9 @@ pub struct FolderWithExtra {
     pub id: FolderId,
     /// Name of the file
     pub name: String,
+
+    /// Whether the folder is marked as pinned
+    pub pinned: bool,
 
     /// Parent folder ID if the folder is a child
     #[schema(value_type = Option<Uuid>)]
@@ -204,6 +210,7 @@ impl<'r> FromRow<'r, PgRow> for LastModifiedByUser {
 
 pub struct CreateFolder {
     pub name: String,
+    pub pinned: bool,
     pub document_box: DocumentBoxScopeRaw,
     pub folder_id: Option<FolderId>,
     pub created_by: Option<UserId>,
@@ -365,6 +372,18 @@ impl Folder {
         Ok(self)
     }
 
+    pub async fn set_pinned(mut self, db: impl DbExecutor<'_>, pinned: bool) -> DbResult<Folder> {
+        sqlx::query(r#"UPDATE "docbox_folders" SET "pinned" = $1 WHERE "id" = $2"#)
+            .bind(pinned)
+            .bind(self.id)
+            .execute(db)
+            .await?;
+
+        self.pinned = pinned;
+
+        Ok(self)
+    }
+
     pub async fn find_by_id(
         db: impl DbExecutor<'_>,
         scope: &DocumentBoxScopeRaw,
@@ -428,6 +447,7 @@ impl Folder {
             document_box,
             folder_id,
             created_by,
+            pinned,
         }: CreateFolder,
     ) -> DbResult<Folder> {
         let folder = Folder {
@@ -437,15 +457,16 @@ impl Folder {
             folder_id,
             created_by,
             created_at: Utc::now(),
+            pinned,
         };
 
         sqlx::query(
             r#"
             INSERT INTO "docbox_folders" (
-                "id", "name", "document_box", 
-                "folder_id", "created_by", "created_at"
+                "id", "name", "document_box",  "folder_id", 
+                "created_by", "created_at", "pinned"
             ) 
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
         "#,
         )
         .bind(folder.id)
@@ -454,6 +475,7 @@ impl Folder {
         .bind(folder.folder_id)
         .bind(folder.created_by.as_ref())
         .bind(folder.created_at)
+        .bind(folder.pinned)
         .execute(db)
         .await?;
 

@@ -32,6 +32,8 @@ pub struct File {
     pub size: i32,
     /// Whether the file was determined to be encrypted when processing
     pub encrypted: bool,
+    /// Whether the file is marked as pinned
+    pub pinned: bool,
     /// S3 key pointing to the file
     #[serde(skip)]
     pub file_key: String,
@@ -70,6 +72,8 @@ pub struct FileWithExtra {
     pub size: i32,
     /// Whether the file was determined to be encrypted when processing
     pub encrypted: bool,
+    /// Whether the file is marked as pinned
+    pub pinned: bool,
     /// When the file was created
     pub created_at: DateTime<Utc>,
     /// User who created the file
@@ -161,6 +165,7 @@ pub struct CreateFile {
     pub file_key: String,
     pub created_by: Option<UserId>,
     pub encrypted: bool,
+    pub pinned: bool,
 }
 
 impl File {
@@ -241,6 +246,19 @@ impl File {
         Ok(self)
     }
 
+    /// Updates the pinned state of the file
+    pub async fn set_pinned(mut self, db: impl DbExecutor<'_>, pinned: bool) -> DbResult<File> {
+        sqlx::query(r#"UPDATE "docbox_files" SET "pinned" = $1 WHERE "id" = $2"#)
+            .bind(pinned)
+            .bind(self.id)
+            .execute(db)
+            .await?;
+
+        self.pinned = pinned;
+
+        Ok(self)
+    }
+
     /// Updates the encryption state of the file
     pub async fn set_encrypted(
         mut self,
@@ -284,6 +302,7 @@ impl File {
             file_key,
             created_by,
             encrypted,
+            pinned,
         }: CreateFile,
     ) -> DbResult<File> {
         let id = fixed_id.unwrap_or_else(Uuid::new_v4);
@@ -293,9 +312,9 @@ impl File {
             r#"INSERT INTO "docbox_files" (
                     "id", "name", "mime", "folder_id", "hash", "size",
                     "encrypted", "file_key", "created_by", "created_at",
-                    "parent_id"
+                    "parent_id", "pinned"
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 "#,
         )
         .bind(id)
@@ -309,6 +328,7 @@ impl File {
         .bind(created_by.as_ref())
         .bind(created_at)
         .bind(parent_id)
+        .bind(pinned)
         .execute(db)
         .await?;
 
@@ -324,6 +344,7 @@ impl File {
             created_by,
             created_at,
             parent_id,
+            pinned,
         })
     }
 

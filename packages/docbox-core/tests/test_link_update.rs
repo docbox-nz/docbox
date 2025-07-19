@@ -7,6 +7,7 @@ use docbox_core::{
         update_link::{UpdateLink, UpdateLinkError, update_link},
     },
 };
+use docbox_database::models::link::Link;
 use docbox_search::models::{SearchIndexType, SearchRequest};
 use uuid::Uuid;
 
@@ -40,6 +41,7 @@ async fn test_update_link_name_success() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -56,6 +58,7 @@ async fn test_update_link_name_success() {
             folder_id: None,
             name: Some("Other Name Which Should Never Match".to_string()),
             value: None,
+            pinned: None,
         },
     )
     .await
@@ -134,6 +137,7 @@ async fn test_update_link_value_success() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -150,6 +154,7 @@ async fn test_update_link_value_success() {
             folder_id: None,
             name: None,
             value: Some("http://test.com".to_string()),
+            pinned: None,
         },
     )
     .await
@@ -202,6 +207,87 @@ async fn test_update_link_value_success() {
     }
 }
 
+/// Tests that a link pinned state can be updated successfully
+#[tokio::test]
+async fn test_update_link_pinned_success() {
+    let (_container_db, db) = create_test_tenant_database().await;
+    let (_container_search, search) = create_test_tenant_typesense().await;
+    let events = TenantEventPublisher::Noop(NoopEventPublisher);
+    let (document_box, root) = create_document_box(
+        &db,
+        &events,
+        CreateDocumentBox {
+            scope: "test".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let link = safe_create_link(
+        &db,
+        search.clone(),
+        &events,
+        CreateLinkData {
+            folder: root,
+            name: "Test Link".to_string(),
+            value: "http://example.com".to_string(),
+            created_by: None,
+            pinned: Some(false),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Update the link
+    update_link(
+        &db,
+        &search,
+        &document_box.scope,
+        link.clone(),
+        None,
+        UpdateLink {
+            folder_id: None,
+            name: None,
+            value: None,
+            pinned: Some(true),
+        },
+    )
+    .await
+    .unwrap();
+
+    let link = Link::find(&db, &document_box.scope, link.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(link.pinned);
+
+    // Update the link
+    update_link(
+        &db,
+        &search,
+        &document_box.scope,
+        link.clone(),
+        None,
+        UpdateLink {
+            folder_id: None,
+            name: None,
+            value: None,
+            pinned: Some(false),
+        },
+    )
+    .await
+    .unwrap();
+
+    let link = Link::find(&db, &document_box.scope, link.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(!link.pinned);
+}
+
 /// Tests that a link can be moved to another folder
 #[tokio::test]
 async fn test_update_link_folder_success() {
@@ -227,6 +313,7 @@ async fn test_update_link_folder_success() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -241,6 +328,7 @@ async fn test_update_link_folder_success() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -256,6 +344,7 @@ async fn test_update_link_folder_success() {
             folder: root.clone(),
             name: "New Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -272,6 +361,7 @@ async fn test_update_link_folder_success() {
             folder_id: Some(new_folder.id),
             name: None,
             value: None,
+            pinned: None,
         },
     )
     .await
@@ -346,6 +436,7 @@ async fn test_update_link_folder_unknown() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -364,6 +455,7 @@ async fn test_update_link_folder_unknown() {
             folder_id: Some(Uuid::nil()),
             name: None,
             value: None,
+            pinned: None,
         },
     )
     .await

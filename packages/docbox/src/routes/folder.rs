@@ -77,6 +77,7 @@ pub async fn create(
         folder: parent_folder,
         name: req.name,
         created_by: created_by.as_ref().map(|value| value.id.to_string()),
+        pinned: req.pinned,
     };
 
     // Perform Folder creation
@@ -98,6 +99,7 @@ pub async fn create(
                 created_by: folder::CreatedByUser(created_by),
                 last_modified_at: None,
                 last_modified_by: folder::LastModifiedByUser(None),
+                pinned: folder.pinned,
             },
             children: ResolvedFolderWithExtra::default(),
         }),
@@ -244,6 +246,7 @@ pub async fn update(
     let update = UpdateFolder {
         folder_id: req.folder_id,
         name: req.name,
+        pinned: req.pinned,
     };
 
     docbox_core::folders::update_folder::update_folder(

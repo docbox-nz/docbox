@@ -85,6 +85,7 @@ pub async fn create(
         name: req.name,
         value: req.value,
         created_by: created_by.as_ref().map(|value| value.id.to_string()),
+        pinned: req.pinned,
     };
 
     // Perform Link creation
@@ -106,6 +107,7 @@ pub async fn create(
             created_by: CreatedByUser(created_by),
             last_modified_at: None,
             last_modified_by: LastModifiedByUser(None),
+            pinned: link.pinned,
         }),
     ))
 }
@@ -412,6 +414,7 @@ pub async fn update(
         folder_id: req.folder_id,
         name: req.name,
         value: req.value,
+        pinned: req.pinned,
     };
 
     docbox_core::links::update_link::update_link(&db, &search, &scope, link, user_id, update)

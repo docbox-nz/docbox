@@ -6,6 +6,7 @@ use docbox_core::{
         update_folder::{UpdateFolder, UpdateFolderError, update_folder},
     },
 };
+use docbox_database::models::folder::Folder;
 use docbox_search::models::{SearchIndexType, SearchRequest};
 use uuid::Uuid;
 
@@ -38,6 +39,7 @@ async fn test_update_folder_name_success() {
             folder: root,
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -53,6 +55,7 @@ async fn test_update_folder_name_success() {
         UpdateFolder {
             folder_id: None,
             name: Some("Other Name Which Should Never Match".to_string()),
+            pinned: None,
         },
     )
     .await
@@ -130,6 +133,7 @@ async fn test_update_folder_folder_success() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -143,6 +147,7 @@ async fn test_update_folder_folder_success() {
             folder: test_folder.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -158,6 +163,7 @@ async fn test_update_folder_folder_success() {
             folder: root.clone(),
             name: "New Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -173,6 +179,7 @@ async fn test_update_folder_folder_success() {
         UpdateFolder {
             folder_id: Some(new_folder.id),
             name: None,
+            pinned: None,
         },
     )
     .await
@@ -221,6 +228,84 @@ async fn test_update_folder_folder_success() {
     }
 }
 
+/// Tests that a folder pinned state can be updated
+#[tokio::test]
+async fn test_update_folder_pinned_success() {
+    let (_container_db, db) = create_test_tenant_database().await;
+    let (_container_search, search) = create_test_tenant_typesense().await;
+    let events = TenantEventPublisher::Noop(NoopEventPublisher);
+    let (document_box, root) = create_document_box(
+        &db,
+        &events,
+        CreateDocumentBox {
+            scope: "test".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let folder = safe_create_folder(
+        &db,
+        search.clone(),
+        &events,
+        CreateFolderData {
+            folder: root.clone(),
+            name: "Test Folder".to_string(),
+            created_by: None,
+            pinned: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Update the folder
+    update_folder(
+        &db,
+        &search,
+        &document_box.scope,
+        folder.clone(),
+        None,
+        UpdateFolder {
+            folder_id: None,
+            name: None,
+            pinned: Some(true),
+        },
+    )
+    .await
+    .unwrap();
+
+    let folder = Folder::find_by_id(&db, &document_box.scope, folder.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(folder.pinned);
+
+    // Update the folder
+    update_folder(
+        &db,
+        &search,
+        &document_box.scope,
+        folder.clone(),
+        None,
+        UpdateFolder {
+            folder_id: None,
+            name: None,
+            pinned: Some(false),
+        },
+    )
+    .await
+    .unwrap();
+
+    let folder = Folder::find_by_id(&db, &document_box.scope, folder.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(!folder.pinned);
+}
+
 /// Tests that a folder cannot be moved to an unknown folder
 #[tokio::test]
 async fn test_update_folder_folder_unknown() {
@@ -246,6 +331,7 @@ async fn test_update_folder_folder_unknown() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -263,6 +349,7 @@ async fn test_update_folder_folder_unknown() {
         UpdateFolder {
             folder_id: Some(Uuid::nil()),
             name: None,
+            pinned: None,
         },
     )
     .await
@@ -299,6 +386,7 @@ async fn test_update_folder_folder_self() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
+            pinned: None,
         },
     )
     .await
@@ -316,6 +404,7 @@ async fn test_update_folder_folder_self() {
         UpdateFolder {
             folder_id: Some(folder.id),
             name: None,
+            pinned: None,
         },
     )
     .await
@@ -354,6 +443,7 @@ async fn test_update_folder_folder_root() {
         UpdateFolder {
             folder_id: None,
             name: None,
+            pinned: None,
         },
     )
     .await

@@ -6,7 +6,7 @@ use docbox_database::{
             CreateEditHistory, CreateEditHistoryType, EditHistory, EditHistoryMetadata,
         },
         folder::{Folder, FolderId},
-        link::Link,
+        link::{Link, LinkId},
         user::UserId,
     },
 };
@@ -38,6 +38,9 @@ pub struct UpdateLink {
 
     /// Update the link value
     pub value: Option<String>,
+
+    /// Update the pinned state
+    pub pinned: Option<bool>,
 }
 
 pub async fn update_link(
@@ -75,9 +78,15 @@ pub async fn update_link(
     }
 
     if let Some(new_value) = update.value {
-        link = update_link_value(&mut db, user_id, link, new_value)
+        link = update_link_value(&mut db, user_id.clone(), link, new_value)
             .await
             .inspect_err(|error| tracing::error!(?error, "failed to update link value"))?;
+    }
+
+    if let Some(new_value) = update.pinned {
+        link = update_link_pinned(&mut db, user_id, link, new_value)
+            .await
+            .inspect_err(|error| tracing::error!(?error, "failed to update link pinned state"))?;
     }
 
     // Update search index data for the new name and value
@@ -102,6 +111,28 @@ pub async fn update_link(
     Ok(())
 }
 
+/// Add a new edit history item for a link
+#[tracing::instrument(skip_all, fields(?user_id, %link_id, ?metadata))]
+async fn add_edit_history(
+    db: &mut DbTransaction<'_>,
+    user_id: Option<UserId>,
+    link_id: LinkId,
+    metadata: EditHistoryMetadata,
+) -> DbResult<()> {
+    EditHistory::create(
+        db.deref_mut(),
+        CreateEditHistory {
+            ty: CreateEditHistoryType::Link(link_id),
+            user_id,
+            metadata,
+        },
+    )
+    .await
+    .inspect_err(|error| tracing::error!(?error, "failed to store link edit history entry"))?;
+
+    Ok(())
+}
+
 /// Moves a link to the provided folder, creates a new edit history
 /// item for the change
 #[tracing::instrument(skip_all, fields(?user_id, link_id = %link.id, target_folder_id = %target_folder.id))]
@@ -112,19 +143,16 @@ async fn move_link(
     target_folder: Folder,
 ) -> DbResult<Link> {
     // Track the edit history
-    EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::Link(link.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::MoveToFolder {
-                original_id: link.folder_id,
-                target_id: target_folder.id,
-            },
+    add_edit_history(
+        db,
+        user_id,
+        link.id,
+        EditHistoryMetadata::MoveToFolder {
+            original_id: link.folder_id,
+            target_id: target_folder.id,
         },
     )
-    .await
-    .inspect_err(|error| tracing::error!(?error, "failed to store link move edit history"))?;
+    .await?;
 
     link.move_to_folder(db.deref_mut(), target_folder.id)
         .await
@@ -141,23 +169,46 @@ async fn update_link_value(
     new_value: String,
 ) -> DbResult<Link> {
     // Track the edit history
-    EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::Link(link.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::LinkValue {
-                previous_value: link.value.clone(),
-                new_value: new_value.clone(),
-            },
+    add_edit_history(
+        db,
+        user_id,
+        link.id,
+        EditHistoryMetadata::LinkValue {
+            previous_value: link.value.clone(),
+            new_value: new_value.clone(),
         },
     )
-    .await
-    .inspect_err(|error| tracing::error!(?error, "failed to store link value edit history"))?;
+    .await?;
 
     link.update_value(db.deref_mut(), new_value)
         .await
         .inspect_err(|error| tracing::error!(?error, "failed to update link value"))
+}
+
+/// Updates a link pinned state, creates a new edit history
+/// item for the change
+#[tracing::instrument(skip_all, fields(?user_id, link_id = %link.id, %new_value))]
+async fn update_link_pinned(
+    db: &mut DbTransaction<'_>,
+    user_id: Option<UserId>,
+    link: Link,
+    new_value: bool,
+) -> DbResult<Link> {
+    // Track the edit history
+    add_edit_history(
+        db,
+        user_id,
+        link.id,
+        EditHistoryMetadata::ChangePinned {
+            previous_value: link.pinned,
+            new_value,
+        },
+    )
+    .await?;
+
+    link.set_pinned(db.deref_mut(), new_value)
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to update link pinned state"))
 }
 
 /// Updates a link name, creates a new edit history
@@ -170,19 +221,16 @@ async fn update_link_name(
     new_name: String,
 ) -> DbResult<Link> {
     // Track the edit history
-    EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::Link(link.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::Rename {
-                original_name: link.name.clone(),
-                new_name: new_name.clone(),
-            },
+    add_edit_history(
+        db,
+        user_id,
+        link.id,
+        EditHistoryMetadata::Rename {
+            original_name: link.name.clone(),
+            new_name: new_name.clone(),
         },
     )
-    .await
-    .inspect_err(|error| tracing::error!(?error, "failed to store link rename edit history"))?;
+    .await?;
 
     link.rename(db.deref_mut(), new_name)
         .await

@@ -26,6 +26,8 @@ pub struct Link {
     pub name: String,
     /// value of the link
     pub value: String,
+    /// Whether the link is pinned
+    pub pinned: bool,
     /// Parent folder ID
     pub folder_id: FolderId,
     /// When the link was created
@@ -49,6 +51,8 @@ pub struct LinkWithExtra {
     pub name: String,
     /// value of the link
     pub value: String,
+    /// Whether the link is pinned
+    pub pinned: bool,
     /// Parent folder ID
     pub folder_id: Uuid,
     /// When the link was created
@@ -122,6 +126,7 @@ pub struct CreateLink {
     pub value: String,
     pub folder_id: FolderId,
     pub created_by: Option<UserId>,
+    pub pinned: bool,
 }
 
 impl Link {
@@ -132,6 +137,7 @@ impl Link {
             value,
             folder_id,
             created_by,
+            pinned,
         }: CreateLink,
     ) -> DbResult<Link> {
         let id = Uuid::new_v4();
@@ -144,8 +150,9 @@ impl Link {
                 "value",
                 "folder_id",
                 "created_by",
-                "created_at"
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                "created_at",
+                "pinned"
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
         )
         .bind(id)
@@ -154,6 +161,7 @@ impl Link {
         .bind(folder_id)
         .bind(created_by.as_ref())
         .bind(created_at)
+        .bind(pinned)
         .execute(db)
         .await?;
 
@@ -164,6 +172,7 @@ impl Link {
             folder_id,
             created_by,
             created_at,
+            pinned,
         })
     }
 
@@ -191,6 +200,17 @@ impl Link {
             .await?;
 
         self.name = name;
+        Ok(self)
+    }
+
+    pub async fn set_pinned(mut self, db: impl DbExecutor<'_>, pinned: bool) -> DbResult<Link> {
+        sqlx::query(r#"UPDATE "docbox_links" SET "pinned" = $1 WHERE "id" = $2"#)
+            .bind(pinned)
+            .bind(self.id)
+            .execute(db)
+            .await?;
+
+        self.pinned = pinned;
         Ok(self)
     }
 

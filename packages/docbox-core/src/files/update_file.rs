@@ -5,7 +5,7 @@ use docbox_database::{
         edit_history::{
             CreateEditHistory, CreateEditHistoryType, EditHistory, EditHistoryMetadata,
         },
-        file::File,
+        file::{File, FileId},
         folder::{Folder, FolderId},
         user::UserId,
     },
@@ -35,6 +35,9 @@ pub struct UpdateFile {
 
     /// Update the file name
     pub name: Option<String>,
+
+    /// Update the file pinned state
+    pub pinned: Option<bool>,
 }
 
 pub async fn update_file(
@@ -66,9 +69,15 @@ pub async fn update_file(
     };
 
     if let Some(new_name) = update.name {
-        file = update_file_name(&mut db, user_id, file, new_name)
+        file = update_file_name(&mut db, user_id.clone(), file, new_name)
             .await
             .inspect_err(|cause| tracing::error!(?cause, "failed to update file name"))?;
+    }
+
+    if let Some(new_value) = update.pinned {
+        file = update_file_pinned(&mut db, user_id, file, new_value)
+            .await
+            .inspect_err(|cause| tracing::error!(?cause, "failed to update file pinned state"))?;
     }
 
     // Update search index data for the new name and value
@@ -96,7 +105,53 @@ pub async fn update_file(
     Ok(())
 }
 
-#[tracing::instrument(skip_all, fields(user_id = ?user_id, file_id = %file.id, new_name = %new_name))]
+/// Add a new edit history item for a file
+#[tracing::instrument(skip_all, fields(?user_id, %file_id, ?metadata))]
+async fn add_edit_history(
+    db: &mut DbTransaction<'_>,
+    user_id: Option<UserId>,
+    file_id: FileId,
+    metadata: EditHistoryMetadata,
+) -> DbResult<()> {
+    EditHistory::create(
+        db.deref_mut(),
+        CreateEditHistory {
+            ty: CreateEditHistoryType::File(file_id),
+            user_id,
+            metadata,
+        },
+    )
+    .await
+    .inspect_err(|error| tracing::error!(?error, "failed to store file edit history entry"))?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip_all, fields(?user_id, file_id = %file.id, %new_value))]
+async fn update_file_pinned(
+    db: &mut DbTransaction<'_>,
+    user_id: Option<UserId>,
+    file: File,
+    new_value: bool,
+) -> DbResult<File> {
+    // Track the edit history
+    add_edit_history(
+        db,
+        user_id,
+        file.id,
+        EditHistoryMetadata::ChangePinned {
+            previous_value: file.pinned,
+            new_value,
+        },
+    )
+    .await?;
+
+    file.set_pinned(db.deref_mut(), new_value)
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to update file pinned state"))
+}
+
+#[tracing::instrument(skip_all, fields(?user_id, file_id = %file.id, %new_name))]
 async fn update_file_name(
     db: &mut DbTransaction<'_>,
     user_id: Option<UserId>,
@@ -104,19 +159,16 @@ async fn update_file_name(
     new_name: String,
 ) -> DbResult<File> {
     // Track the edit history
-    EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::File(file.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::Rename {
-                original_name: file.name.clone(),
-                new_name: new_name.clone(),
-            },
+    add_edit_history(
+        db,
+        user_id,
+        file.id,
+        EditHistoryMetadata::Rename {
+            original_name: file.name.clone(),
+            new_name: new_name.clone(),
         },
     )
-    .await
-    .inspect_err(|error| tracing::error!(?error, "failed to store file rename edit history"))?;
+    .await?;
 
     file.rename(db.deref_mut(), new_name.clone())
         .await
@@ -131,19 +183,16 @@ async fn move_file(
     target_folder: Folder,
 ) -> DbResult<File> {
     // Track the edit history
-    EditHistory::create(
-        db.deref_mut(),
-        CreateEditHistory {
-            ty: CreateEditHistoryType::File(file.id),
-            user_id: user_id.clone(),
-            metadata: EditHistoryMetadata::MoveToFolder {
-                original_id: file.folder_id,
-                target_id: target_folder.id,
-            },
+    add_edit_history(
+        db,
+        user_id,
+        file.id,
+        EditHistoryMetadata::MoveToFolder {
+            original_id: file.folder_id,
+            target_id: target_folder.id,
         },
     )
-    .await
-    .inspect_err(|error| tracing::error!(?error, "failed to store file move edit history"))?;
+    .await?;
 
     file.move_to_folder(db.deref_mut(), target_folder.id)
         .await

@@ -24,6 +24,11 @@ pub struct CreateLink {
     #[garde(skip)]
     #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
+
+    /// Whether to pin the link
+    #[garde(skip)]
+    #[schema(value_type = Option<bool>)]
+    pub pinned: Option<bool>,
 }
 
 /// Request to rename a file
@@ -43,6 +48,11 @@ pub struct UpdateLinkRequest {
     #[garde(skip)]
     #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
+
+    /// Whether to pin the link
+    #[garde(skip)]
+    #[schema(value_type = Option<bool>)]
+    pub pinned: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

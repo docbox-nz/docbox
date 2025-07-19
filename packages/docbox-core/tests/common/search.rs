@@ -26,6 +26,7 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
 
     let container = GenericImage::new("typesense/typesense", "28.0")
         .with_exposed_port(8108.tcp())
+        .with_wait_for(WaitFor::seconds(5))
         .with_wait_for(WaitFor::http(
             HttpWaitStrategy::new("/health").with_expected_status_code(200u16),
         ))
