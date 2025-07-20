@@ -3614,6 +3614,13 @@
             "description": "Name for the folder",
             "maxLength": 255,
             "minLength": 1
+          },
+          "pinned": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to pin the folder"
           }
         }
       },
@@ -3636,6 +3643,13 @@
             "description": "Name for the link",
             "maxLength": 255,
             "minLength": 1
+          },
+          "pinned": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to pin the link"
           },
           "value": {
             "type": "string",
@@ -3921,6 +3935,28 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "previous_value",
+              "new_value",
+              "type"
+            ],
+            "properties": {
+              "new_value": {
+                "type": "boolean"
+              },
+              "previous_value": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ChangePinned"
+                ]
+              }
+            }
           }
         ],
         "description": "Metadata associated with an edit history"
@@ -3930,7 +3966,8 @@
         "enum": [
           "MoveToFolder",
           "Rename",
-          "LinkValue"
+          "LinkValue",
+          "ChangePinned"
         ]
       },
       "EditHistoryUser": {
@@ -4068,6 +4105,7 @@
           "hash",
           "size",
           "encrypted",
+          "pinned",
           "created_at",
           "created_by",
           "last_modified_by"
@@ -4142,6 +4180,10 @@
             "format": "uuid",
             "description": "Optional parent file if the file is a child"
           },
+          "pinned": {
+            "type": "boolean",
+            "description": "Whether the file is marked as pinned"
+          },
           "size": {
             "type": "integer",
             "format": "int32",
@@ -4188,6 +4230,7 @@
         "required": [
           "id",
           "name",
+          "pinned",
           "created_at",
           "created_by",
           "last_modified_by"
@@ -4244,6 +4287,10 @@
           "name": {
             "type": "string",
             "description": "Name of the file"
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Whether the folder is marked as pinned"
           }
         }
       },
@@ -4333,6 +4380,7 @@
           "id",
           "name",
           "value",
+          "pinned",
           "folder_id",
           "created_at",
           "created_by",
@@ -4387,6 +4435,10 @@
           "name": {
             "type": "string",
             "description": "Name of the link"
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Whether the link is pinned"
           },
           "value": {
             "type": "string",
@@ -4939,6 +4991,13 @@
             "description": "Name for the folder",
             "maxLength": 255,
             "minLength": 1
+          },
+          "pinned": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to pin the file"
           }
         }
       },
@@ -4962,6 +5021,13 @@
             "description": "Name for the folder",
             "maxLength": 255,
             "minLength": 1
+          },
+          "pinned": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to pin the folder"
           }
         }
       },
@@ -4985,6 +5051,13 @@
             "description": "Name for the link",
             "maxLength": 255,
             "minLength": 1
+          },
+          "pinned": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to pin the link"
           },
           "value": {
             "type": [
