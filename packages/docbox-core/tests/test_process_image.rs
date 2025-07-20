@@ -21,11 +21,11 @@ async fn test_image_formats_supported() {
         let sample_file = samples_path.join(sample);
         let bytes = tokio::fs::read(sample_file).await.unwrap();
         let bytes = Bytes::from(bytes);
-        let file_ext = get_file_name_ext(sample)
-            .unwrap_or_else(|| panic!("Failed to get ext for'{}' ", sample));
+        let file_ext =
+            get_file_name_ext(sample).unwrap_or_else(|| panic!("Failed to get ext for '{sample}'"));
 
         let image_format = ImageFormat::from_extension(file_ext)
-            .unwrap_or_else(|| panic!("Failed to get mime type for'{}' ", sample));
+            .unwrap_or_else(|| panic!("Failed to get mime type for '{sample}'"));
         let _output = process_image_async(bytes, image_format).await.unwrap();
     }
 }

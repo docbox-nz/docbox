@@ -817,11 +817,7 @@ impl TypesenseIndex {
         }
 
         if let Some(folder_id) = query.folder_id {
-            filter_parts.push(format!(
-                r#"folder_id:="{}""#,
-                // UUID does not need to be escaped
-                folder_id
-            ));
+            filter_parts.push(format!(r#"folder_id:="{folder_id}""#));
         }
 
         filter_parts.join("&&")

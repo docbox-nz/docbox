@@ -223,7 +223,7 @@ pub fn process_email(
             // Create a data URL for the content
             let data = attachment.contents();
             let base64_data = BASE64_STANDARD.encode(data);
-            let data_uri = format!("data:{};base64,{}", raw_mime, base64_data);
+            let data_uri = format!("data:{raw_mime};base64,{base64_data}");
 
             let key = format!("cid:{content_id}");
 

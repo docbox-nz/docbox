@@ -12,7 +12,7 @@ impl fmt::Display for CompositeError {
             .map(|e| format!("{e}"))
             .collect::<Vec<_>>()
             .join(", ");
-        write!(f, "multiple errors occurred: {}", messages)
+        write!(f, "multiple errors occurred: {messages}")
     }
 }
 

@@ -185,7 +185,7 @@ where
 
     /// Obtains a database pool connection to the database with the provided name
     async fn get_pool(&self, db_name: &str, secret_name: &str) -> Result<PgPool, DbConnectErr> {
-        let cache_key = format!("{}-{}", db_name, secret_name);
+        let cache_key = format!("{db_name}-{secret_name}");
 
         if let Some(pool) = self.cache.get(&cache_key).await {
             return Ok(pool);

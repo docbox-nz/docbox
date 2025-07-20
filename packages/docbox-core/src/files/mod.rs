@@ -30,7 +30,7 @@ pub fn create_file_key(document_box: &str, name: &str, mime: &Mime, file_key: Uu
     let file_key = format!("{file_key}_{clean_file_name}.{file_ext}");
 
     // Prefix file key with the scope directory
-    format!("{}/{}", document_box, file_key)
+    format!("{document_box}/{file_key}")
 }
 
 pub fn create_generated_file_key(base_file_key: &str, mime: &Mime) -> String {
@@ -41,7 +41,7 @@ pub fn create_generated_file_key(base_file_key: &str, mime: &Mime) -> String {
     let file_key = Uuid::new_v4().to_string();
 
     // Prefix the file key with the document box scope and a "generated" suffix
-    format!("{}_{}.generated.{}", base_file_key, file_key, file_ext)
+    format!("{base_file_key}_{file_key}.generated.{file_ext}")
 }
 
 #[cfg(test)]
