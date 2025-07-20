@@ -89,12 +89,8 @@ moka.workspace = true
 age = "=0.11.1"
 
 [dev-dependencies]
-testcontainers = { version = "=0.24.0", features = ["http_wait"] }
-testcontainers-modules = { version = "=0.12.1", features = [
-    "postgres",
-    "minio",
-] }
-
+testcontainers = { workspace = true, features = ["http_wait"] }
+testcontainers-modules = { workspace = true, features = ["postgres", "minio"] }
 tokio = { workspace = true, features = ["full"] }
 
 
