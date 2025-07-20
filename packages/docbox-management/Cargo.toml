@@ -33,4 +33,4 @@ thiserror.workspace = true
 aws-config = { workspace = true, features = ["behavior-version-latest"] }
 
 # Random for random password generation
-rand = "0.8.5"
+rand = "=0.8.5"
