@@ -23,7 +23,7 @@ docbox-core = { version = "0.3.0", path = "../docbox-core" }
 docbox-database = { version = "0.3.0", path = "../docbox-database" }
 
 # Search access
-docbox-search = { version = "0.2.0", default-features = false, path = "../docbox-search", features = [
+docbox-search = { version = "0.3.0", default-features = false, path = "../docbox-search", features = [
     "typesense",
     "opensearch",
 ] }

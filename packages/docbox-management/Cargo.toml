@@ -16,7 +16,7 @@ docbox-core = { version = "0.3.0", path = "../docbox-core" }
 docbox-database = { version = "0.3.0", path = "../docbox-database" }
 
 # Search access
-docbox-search = { version = "0.2.0", path = "../docbox-search" }
+docbox-search = { version = "0.3.0", path = "../docbox-search" }
 
 # Serialization and JSON
 serde = { workspace = true, features = ["derive"] }

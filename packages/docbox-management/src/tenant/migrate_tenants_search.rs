@@ -20,7 +20,7 @@ pub enum MigrateTenantsSearchError {
     GetTenants(DbErr),
 
     #[error(transparent)]
-    MigrateTenant(MigrateTenantSearchError),
+    MigrateTenant(#[from] MigrateTenantSearchError),
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -32,7 +32,7 @@ pub struct MigrateTenantsSearchConfig {
     /// Filter to skip failed migrations and continue
     pub skip_failed: bool,
     /// Specific migrations to run
-    pub target_migration_name: String,
+    pub target_migration_name: Option<String>,
 }
 
 pub async fn migrate_tenants_search(
@@ -68,8 +68,13 @@ pub async fn migrate_tenants_search(
     let mut failed_tenants = Vec::new();
 
     for tenant in tenants {
-        let target_migration_name = config.target_migration_name.as_str();
-        let result = migrate_tenant_search(search_factory, &tenant, target_migration_name).await;
+        let result = migrate_tenant_search(
+            db_provider,
+            search_factory,
+            &tenant,
+            config.target_migration_name.as_deref(),
+        )
+        .await;
         match result {
             Ok(_) => {
                 applied_tenants.push(TenantTarget {

@@ -557,6 +557,13 @@ impl SearchIndex for OpenSearchIndex {
         Ok(())
     }
 
+    async fn get_pending_migrations(
+        &self,
+        _applied_names: Vec<String>,
+    ) -> anyhow::Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+
     async fn apply_migration(&self, _name: &str) -> anyhow::Result<()> {
         Ok(())
     }

@@ -12,7 +12,7 @@ readme.workspace = true
 [dependencies]
 # Database access
 docbox-database = { version = "0.3.0", path = "../docbox-database" }
-docbox-search = { version = "0.2.0", default-features = false, path = "../docbox-search" }
+docbox-search = { version = "0.3.0", default-features = false, path = "../docbox-search" }
 
 # PDF to image conversion, text extraction 
 pdf_process = "=0.2.0"
@@ -98,6 +98,6 @@ tokio = { workspace = true, features = ["full"] }
 
 
 # Enable typesense search backend for testing
-docbox-search = { version = "0.2.0", default-features = false, path = "../docbox-search", features = [
+docbox-search = { version = "0.3.0", default-features = false, path = "../docbox-search", features = [
     "typesense",
 ] }

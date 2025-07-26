@@ -256,6 +256,26 @@ impl TenantSearchIndex {
         }
     }
 
+    pub async fn get_pending_migrations(
+        &self,
+        applied_names: Vec<String>,
+    ) -> anyhow::Result<Vec<String>> {
+        match self {
+            #[cfg(feature = "typesense")]
+            TenantSearchIndex::Typesense(index) => {
+                index.get_pending_migrations(applied_names).await
+            }
+            #[cfg(feature = "opensearch")]
+            TenantSearchIndex::OpenSearch(index) => {
+                index.get_pending_migrations(applied_names).await
+            }
+
+            // Fallback error when no features are available
+            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            _ => panic!("no matching search index is available"),
+        }
+    }
+
     pub async fn apply_migration(&self, name: &str) -> anyhow::Result<()> {
         match self {
             #[cfg(feature = "typesense")]
@@ -307,6 +327,12 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
 
     /// Deletes all data contained within the specified `scope`
     async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()>;
+
+    /// Get all pending migrations based on the `applied_names` list of applied migrations
+    async fn get_pending_migrations(
+        &self,
+        applied_names: Vec<String>,
+    ) -> anyhow::Result<Vec<String>>;
 
     /// Apply a migration by name
     async fn apply_migration(&self, name: &str) -> anyhow::Result<()>;
