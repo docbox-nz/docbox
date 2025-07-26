@@ -11,7 +11,7 @@
       "name": "MIT",
       "url": "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md"
     },
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "paths": {
     "/admin/boxes": {
@@ -3614,13 +3614,6 @@
             "description": "Name for the folder",
             "maxLength": 255,
             "minLength": 1
-          },
-          "pinned": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Whether to pin the folder"
           }
         }
       },
@@ -3643,13 +3636,6 @@
             "description": "Name for the link",
             "maxLength": 255,
             "minLength": 1
-          },
-          "pinned": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Whether to pin the link"
           },
           "value": {
             "type": "string",
