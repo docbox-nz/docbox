@@ -334,7 +334,6 @@ async fn create_file_record(
             size,
             created_by: upload.created_by.clone(),
             encrypted,
-            pinned: false,
         },
     )
     .await

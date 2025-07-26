@@ -35,9 +35,6 @@ pub struct CreateFolderData {
 
     /// User creating the link
     pub created_by: Option<UserId>,
-
-    /// Whether the folder should be pinned
-    pub pinned: Option<bool>,
 }
 
 /// State structure to keep track of resources created
@@ -88,7 +85,6 @@ async fn create_folder(
             document_box: create.folder.document_box,
             folder_id: Some(folder_id),
             created_by: create.created_by,
-            pinned: create.pinned.unwrap_or_default(),
         },
     )
     .await

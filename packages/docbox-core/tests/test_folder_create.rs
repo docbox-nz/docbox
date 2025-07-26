@@ -37,7 +37,6 @@ async fn test_create_folder_success() {
             folder: root,
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await

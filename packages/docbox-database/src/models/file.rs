@@ -165,7 +165,6 @@ pub struct CreateFile {
     pub file_key: String,
     pub created_by: Option<UserId>,
     pub encrypted: bool,
-    pub pinned: bool,
 }
 
 impl File {
@@ -302,7 +301,6 @@ impl File {
             file_key,
             created_by,
             encrypted,
-            pinned,
         }: CreateFile,
     ) -> DbResult<File> {
         let id = fixed_id.unwrap_or_else(Uuid::new_v4);
@@ -312,9 +310,9 @@ impl File {
             r#"INSERT INTO "docbox_files" (
                     "id", "name", "mime", "folder_id", "hash", "size",
                     "encrypted", "file_key", "created_by", "created_at",
-                    "parent_id", "pinned"
+                    "parent_id"
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 "#,
         )
         .bind(id)
@@ -328,7 +326,6 @@ impl File {
         .bind(created_by.as_ref())
         .bind(created_at)
         .bind(parent_id)
-        .bind(pinned)
         .execute(db)
         .await?;
 
@@ -344,7 +341,7 @@ impl File {
             created_by,
             created_at,
             parent_id,
-            pinned,
+            pinned: false,
         })
     }
 

@@ -41,7 +41,6 @@ async fn test_update_link_name_success() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -137,7 +136,6 @@ async fn test_update_link_value_success() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -233,7 +231,6 @@ async fn test_update_link_pinned_success() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
-            pinned: Some(false),
         },
     )
     .await
@@ -313,7 +310,6 @@ async fn test_update_link_folder_success() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -328,7 +324,6 @@ async fn test_update_link_folder_success() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -344,7 +339,6 @@ async fn test_update_link_folder_success() {
             folder: root.clone(),
             name: "New Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -436,7 +430,6 @@ async fn test_update_link_folder_unknown() {
             name: "Test Link".to_string(),
             value: "http://example.com".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await

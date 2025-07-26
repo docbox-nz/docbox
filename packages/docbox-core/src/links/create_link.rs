@@ -46,9 +46,6 @@ pub struct CreateLinkData {
     /// Link value
     pub value: String,
 
-    /// Pinned state
-    pub pinned: Option<bool>,
-
     /// User creating the link
     pub created_by: Option<UserId>,
 }
@@ -90,7 +87,6 @@ async fn create_link(
         DbCreateLink {
             name: create.name,
             value: create.value,
-            pinned: create.pinned.unwrap_or_default(),
             folder_id: create.folder.id,
             created_by: create.created_by,
         },

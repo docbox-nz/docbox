@@ -210,7 +210,6 @@ impl<'r> FromRow<'r, PgRow> for LastModifiedByUser {
 
 pub struct CreateFolder {
     pub name: String,
-    pub pinned: bool,
     pub document_box: DocumentBoxScopeRaw,
     pub folder_id: Option<FolderId>,
     pub created_by: Option<UserId>,
@@ -447,7 +446,6 @@ impl Folder {
             document_box,
             folder_id,
             created_by,
-            pinned,
         }: CreateFolder,
     ) -> DbResult<Folder> {
         let folder = Folder {
@@ -457,16 +455,16 @@ impl Folder {
             folder_id,
             created_by,
             created_at: Utc::now(),
-            pinned,
+            pinned: false,
         };
 
         sqlx::query(
             r#"
             INSERT INTO "docbox_folders" (
                 "id", "name", "document_box",  "folder_id", 
-                "created_by", "created_at", "pinned"
+                "created_by", "created_at" 
             ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6)
         "#,
         )
         .bind(folder.id)

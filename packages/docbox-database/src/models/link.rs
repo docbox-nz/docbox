@@ -126,7 +126,6 @@ pub struct CreateLink {
     pub value: String,
     pub folder_id: FolderId,
     pub created_by: Option<UserId>,
-    pub pinned: bool,
 }
 
 impl Link {
@@ -137,7 +136,6 @@ impl Link {
             value,
             folder_id,
             created_by,
-            pinned,
         }: CreateLink,
     ) -> DbResult<Link> {
         let id = Uuid::new_v4();
@@ -150,9 +148,8 @@ impl Link {
                 "value",
                 "folder_id",
                 "created_by",
-                "created_at",
-                "pinned"
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                "created_at"
+            ) VALUES ($1, $2, $3, $4, $5, $6)
             "#,
         )
         .bind(id)
@@ -161,7 +158,6 @@ impl Link {
         .bind(folder_id)
         .bind(created_by.as_ref())
         .bind(created_at)
-        .bind(pinned)
         .execute(db)
         .await?;
 
@@ -172,7 +168,7 @@ impl Link {
             folder_id,
             created_by,
             created_at,
-            pinned,
+            pinned: false,
         })
     }
 

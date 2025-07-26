@@ -47,7 +47,6 @@ async fn test_delete_folder_success() {
             folder: root,
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -132,7 +131,6 @@ async fn test_delete_folder_children_success() {
             folder: root,
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -149,7 +147,6 @@ async fn test_delete_folder_children_success() {
             folder: folder.clone(),
             name: "Sub Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await

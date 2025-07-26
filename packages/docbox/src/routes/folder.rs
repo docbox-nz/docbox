@@ -77,7 +77,6 @@ pub async fn create(
         folder: parent_folder,
         name: req.name,
         created_by: created_by.as_ref().map(|value| value.id.to_string()),
-        pinned: req.pinned,
     };
 
     // Perform Folder creation

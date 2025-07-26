@@ -85,7 +85,6 @@ pub async fn create(
         name: req.name,
         value: req.value,
         created_by: created_by.as_ref().map(|value| value.id.to_string()),
-        pinned: req.pinned,
     };
 
     // Perform Link creation

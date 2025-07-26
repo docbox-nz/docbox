@@ -39,7 +39,6 @@ async fn test_update_folder_name_success() {
             folder: root,
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -133,7 +132,6 @@ async fn test_update_folder_folder_success() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -147,7 +145,6 @@ async fn test_update_folder_folder_success() {
             folder: test_folder.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -163,7 +160,6 @@ async fn test_update_folder_folder_success() {
             folder: root.clone(),
             name: "New Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -253,7 +249,6 @@ async fn test_update_folder_pinned_success() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -331,7 +326,6 @@ async fn test_update_folder_folder_unknown() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await
@@ -386,7 +380,6 @@ async fn test_update_folder_folder_self() {
             folder: root.clone(),
             name: "Test Folder".to_string(),
             created_by: None,
-            pinned: None,
         },
     )
     .await

@@ -19,11 +19,6 @@ pub struct CreateFolderRequest {
     #[garde(skip)]
     #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
-
-    /// Whether to pin the folder
-    #[garde(skip)]
-    #[schema(value_type = Option<bool>)]
-    pub pinned: Option<bool>,
 }
 
 /// Response for requesting a document box
