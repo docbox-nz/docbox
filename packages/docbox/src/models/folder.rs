@@ -62,6 +62,9 @@ pub enum HttpFolderError {
     #[error("unknown target folder")]
     UnknownTargetFolder,
 
+    #[error("cannot delete root folder")]
+    CannotDeleteRoot,
+
     #[error("cannot modify root folder")]
     CannotModifyRoot,
 
@@ -75,9 +78,9 @@ impl HttpError for HttpFolderError {
             HttpFolderError::UnknownFolder | HttpFolderError::UnknownTargetFolder => {
                 StatusCode::NOT_FOUND
             }
-            HttpFolderError::CannotModifyRoot | HttpFolderError::CannotMoveIntoSelf => {
-                StatusCode::BAD_REQUEST
-            }
+            HttpFolderError::CannotModifyRoot
+            | HttpFolderError::CannotDeleteRoot
+            | HttpFolderError::CannotMoveIntoSelf => StatusCode::BAD_REQUEST,
             HttpFolderError::CreateError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

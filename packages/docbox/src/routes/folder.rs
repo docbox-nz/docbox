@@ -309,6 +309,11 @@ pub async fn delete(
         // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
+    // Root folder cannot be deleted through the API
+    if folder.folder_id.is_none() {
+        return Err(HttpFolderError::CannotDeleteRoot.into());
+    }
+
     delete_folder(&db, &storage, &search, &events, folder)
         .await
         .map_err(|cause| {

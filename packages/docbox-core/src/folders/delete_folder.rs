@@ -29,8 +29,6 @@ pub enum RemoveStackItem {
     Link(Link),
 }
 
-// TODO: Probably shouldn't be able to delete the root folder unless done
-// from the document box deletion code
 pub async fn delete_folder(
     db: &DbPool,
     storage: &TenantStorageLayer,
