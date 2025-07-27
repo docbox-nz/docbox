@@ -660,7 +660,9 @@ pub async fn get_raw(
 
     let csp = match mime::Mime::from_str(&file.mime) {
         // Images are served with a strict image only content security policy
-        Ok(mime) if mime.type_() == mime::IMAGE => "default-src 'none'; img-src 'self' data:;",
+        Ok(mime) if mime.type_() == mime::IMAGE => {
+            "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+        }
         // Default policy
         _ => "script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
     };
