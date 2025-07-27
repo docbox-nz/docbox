@@ -658,8 +658,16 @@ pub async fn get_raw(
 
     let disposition = format!("{};filename=\"{}\"", ty, file.name);
 
+    let csp = match mime::Mime::from_str(&file.mime) {
+        // Images are served with a strict image only content security policy
+        Ok(mime) if mime.type_() == mime::IMAGE => "default-src 'none'; img-src 'self' data:;",
+        // Default policy
+        _ => "script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+    };
+
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, file.mime)
+        .header(header::CONTENT_SECURITY_POLICY, csp)
         .header(
             header::CONTENT_DISPOSITION,
             HeaderValue::from_str(&disposition)?,
@@ -945,8 +953,16 @@ pub async fn get_generated_raw(
 
     let body = axum::body::Body::from_stream(byte_stream);
 
+    let csp = match mime::Mime::from_str(&file.mime) {
+        // Images are served with a strict image only content security policy
+        Ok(mime) if mime.type_() == mime::IMAGE => "default-src 'none'; img-src 'self' data:;",
+        // Default policy
+        _ => "script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+    };
+
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, file.mime)
+        .header(header::CONTENT_SECURITY_POLICY, csp)
         .header(
             header::CONTENT_DISPOSITION,
             HeaderValue::from_str("inline;filename=\"preview.pdf\"")?,

@@ -259,6 +259,10 @@ pub async fn get_favicon(
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, favicon.content_type.to_string())
+        .header(
+            header::CONTENT_SECURITY_POLICY,
+            "default-src 'none'; img-src 'self' data:;",
+        )
         .body(body)?)
 }
 
@@ -314,6 +318,10 @@ pub async fn get_image(
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, og_image.content_type.to_string())
+        .header(
+            header::CONTENT_SECURITY_POLICY,
+            "default-src 'none'; img-src 'self' data:;",
+        )
         .body(body)?)
 }
 
