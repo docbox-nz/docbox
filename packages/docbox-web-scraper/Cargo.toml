@@ -1,6 +1,6 @@
 [package]
 name = "docbox-web-scraper"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Web scraping logic for docbox, document parsing, favicon resolution, ogp resolution"
 

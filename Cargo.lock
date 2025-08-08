@@ -1840,7 +1840,7 @@ dependencies = [
 
 [[package]]
 name = "docbox"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -1873,7 +1873,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "age",
  "anyhow",
@@ -1916,7 +1916,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-database"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "moka",
@@ -1971,7 +1971,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-web-scraper"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
