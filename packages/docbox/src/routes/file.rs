@@ -48,6 +48,7 @@ use docbox_database::models::{
 use docbox_search::models::{FileSearchRequest, FileSearchResultResponse};
 use mime::Mime;
 use std::{str::FromStr, time::Duration};
+use tracing::Instrument;
 
 pub const FILE_TAG: &str = "File";
 
@@ -183,32 +184,41 @@ pub async fn upload(
         return Ok(Json(FileUploadResponse::Sync(Box::new(result))));
     }
 
+    let span = tracing::Span::current();
+
     // Spawn background task
-    let (task_id, created_at) = background_task(db.clone(), scope.clone(), async move {
-        let result = safe_upload_file(db, search, storage, events, processing, upload)
-            .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to upload file");
-                DynHttpError::from(HttpCommonError::ServerError)
-            })
-            // Map the response into the desired format
-            .map(|data| map_uploaded_file(data, &created_by))
-            // Serialize the response for storage
-            .and_then(|value| {
-                serde_json::to_value(&value).map_err(|cause| {
-                    tracing::error!(?cause, "failed to serialize upload task outcome");
+    let (task_id, created_at) = background_task(
+        db.clone(),
+        scope.clone(),
+        async move {
+            let result = safe_upload_file(db, search, storage, events, processing, upload)
+                .await
+                .map_err(|cause| {
+                    tracing::error!(?cause, "failed to upload file");
                     DynHttpError::from(HttpCommonError::ServerError)
                 })
-            });
+                // Map the response into the desired format
+                .map(|data| map_uploaded_file(data, &created_by))
+                // Serialize the response for storage
+                .and_then(|value| {
+                    serde_json::to_value(&value).map_err(|cause| {
+                        tracing::error!(?cause, "failed to serialize upload task outcome");
+                        DynHttpError::from(HttpCommonError::ServerError)
+                    })
+                });
 
-        match result {
-            Ok(value) => (TaskStatus::Completed, value),
-            Err(err) => (
-                TaskStatus::Failed,
-                serde_json::json!({ "error": err.to_string() }),
-            ),
+            match result {
+                Ok(value) => (TaskStatus::Completed, value),
+                Err(err) => (
+                    TaskStatus::Failed,
+                    serde_json::json!({ "error": err.to_string() }),
+                ),
+            }
         }
-    })
+        // Ensure the logging span is passed onto the background task so that
+        // logging context continues
+        .instrument(span),
+    )
     .await
     .map_err(|cause| {
         tracing::error!(?cause, "failed to create background task");

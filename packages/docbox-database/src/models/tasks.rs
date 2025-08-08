@@ -4,6 +4,7 @@ use crate::{DbExecutor, DbPool, DbResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Database, Decode, error::BoxDynError, prelude::FromRow};
+use tracing::Instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -75,15 +76,20 @@ where
     let task_id = task.id;
     let created_at = task.created_at;
 
-    // Swap background task
-    tokio::spawn(async move {
-        let (status, output) = future.await;
+    let span = tracing::Span::current();
 
-        // Update task completion
-        if let Err(cause) = task.complete_task(&db, status, Some(output)).await {
-            tracing::error!(?cause, "failed to mark task as complete");
+    // Swap background task
+    tokio::spawn(
+        async move {
+            let (status, output) = future.await;
+
+            // Update task completion
+            if let Err(cause) = task.complete_task(&db, status, Some(output)).await {
+                tracing::error!(?cause, "failed to mark task as complete");
+            }
         }
-    });
+        .instrument(span),
+    );
 
     Ok((task_id, created_at))
 }

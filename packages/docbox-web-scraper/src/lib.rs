@@ -11,6 +11,7 @@ use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tracing::Instrument;
 use url_validation::{TokioDomainResolver, is_allowed_url};
 
 mod data_uri;
@@ -214,42 +215,47 @@ impl WebsiteMetaService {
 
     /// Resolves the metadata for the website at the provided URL
     pub async fn resolve_website(&self, url: &Url) -> Option<ResolvedWebsiteMetadata> {
+        let span = tracing::Span::current();
         self.cache
-            .get_with(url.to_string(), async move {
-                // Check if we are allowed to access the URL
-                if !is_allowed_url::<TokioDomainResolver>(url).await {
-                    tracing::warn!("skipping resolve website metadata for disallowed url");
-                    return None;
-                }
-
-                // Check that the site allows scraping based on its robots.txt
-                let is_allowed_scraping = is_allowed_robots_txt(&self.client, url)
-                    .await
-                    .unwrap_or(false);
-
-                if !is_allowed_scraping {
-                    return None;
-                }
-
-                // Get the website metadata
-                let res = match get_website_metadata(&self.client, url).await {
-                    Ok(value) => value,
-                    Err(cause) => {
-                        tracing::error!(?cause, "failed to get website metadata");
+            .get_with(
+                url.to_string(),
+                async move {
+                    // Check if we are allowed to access the URL
+                    if !is_allowed_url::<TokioDomainResolver>(url).await {
+                        tracing::warn!("skipping resolve website metadata for disallowed url");
                         return None;
                     }
-                };
 
-                let best_favicon = determine_best_favicon(&res.favicons).cloned();
+                    // Check that the site allows scraping based on its robots.txt
+                    let is_allowed_scraping = is_allowed_robots_txt(&self.client, url)
+                        .await
+                        .unwrap_or(false);
 
-                Some(ResolvedWebsiteMetadata {
-                    title: res.title,
-                    og_title: res.og_title,
-                    og_description: res.og_description,
-                    og_image: res.og_image,
-                    best_favicon,
-                })
-            })
+                    if !is_allowed_scraping {
+                        return None;
+                    }
+
+                    // Get the website metadata
+                    let res = match get_website_metadata(&self.client, url).await {
+                        Ok(value) => value,
+                        Err(cause) => {
+                            tracing::error!(?cause, "failed to get website metadata");
+                            return None;
+                        }
+                    };
+
+                    let best_favicon = determine_best_favicon(&res.favicons).cloned();
+
+                    Some(ResolvedWebsiteMetadata {
+                        title: res.title,
+                        og_title: res.og_title,
+                        og_description: res.og_description,
+                        og_image: res.og_image,
+                        best_favicon,
+                    })
+                }
+                .instrument(span),
+            )
             .await
     }
 
@@ -284,26 +290,31 @@ impl WebsiteMetaService {
         cache_key: ImageCacheKey,
         image: String,
     ) -> Option<ResolvedImage> {
+        let span = tracing::Span::current();
         self.image_cache
-            .get_with((url.to_string(), cache_key), async move {
-                let image_url = resolve_full_url(url, &image).ok()?;
+            .get_with(
+                (url.to_string(), cache_key),
+                async move {
+                    let image_url = resolve_full_url(url, &image).ok()?;
 
-                // Check we are allowed to access the URL if its absolute
-                if let ResolvedUri::Absolute(image_url) = &image_url {
-                    if !is_allowed_url::<TokioDomainResolver>(image_url).await {
-                        tracing::warn!("skipping resolve image for disallowed url");
-                        return None;
+                    // Check we are allowed to access the URL if its absolute
+                    if let ResolvedUri::Absolute(image_url) = &image_url {
+                        if !is_allowed_url::<TokioDomainResolver>(image_url).await {
+                            tracing::warn!("skipping resolve image for disallowed url");
+                            return None;
+                        }
                     }
+
+                    let (bytes, content_type) =
+                        download_image_href(&self.client, image_url).await.ok()?;
+
+                    Some(ResolvedImage {
+                        bytes,
+                        content_type,
+                    })
                 }
-
-                let (bytes, content_type) =
-                    download_image_href(&self.client, image_url).await.ok()?;
-
-                Some(ResolvedImage {
-                    bytes,
-                    content_type,
-                })
-            })
+                .instrument(span),
+            )
             .await
     }
 }

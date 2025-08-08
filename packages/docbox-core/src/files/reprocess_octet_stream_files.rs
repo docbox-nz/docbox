@@ -5,6 +5,7 @@ use docbox_database::{DbPool, models::file::FileWithScope};
 use docbox_search::TenantSearchIndex;
 use futures::{StreamExt, future::BoxFuture};
 use mime::Mime;
+use tracing::Instrument;
 
 use crate::{
     files::{index_file::store_file_index, upload_file::store_generated_files},
@@ -38,6 +39,8 @@ pub async fn reprocess_octet_stream_files(
         }
     }
 
+    let span = tracing::Span::current();
+
     // Process all the files
     _ = futures::stream::iter(processing_files)
         .map(|(file, mime)| -> BoxFuture<'static, ()> {
@@ -45,15 +48,19 @@ pub async fn reprocess_octet_stream_files(
             let search = search.clone();
             let storage = storage.clone();
             let processing = processing.clone();
+            let span = span.clone();
 
-            Box::pin(async move {
-                tracing::debug!(?file, "stating file");
-                if let Err(error) =
-                    perform_process_file(db, storage, search, processing, file, mime).await
-                {
-                    tracing::error!(?error, "failed to migrate file");
-                };
-            })
+            Box::pin(
+                async move {
+                    tracing::debug!(?file, "stating file");
+                    if let Err(error) =
+                        perform_process_file(db, storage, search, processing, file, mime).await
+                    {
+                        tracing::error!(?error, "failed to migrate file");
+                    };
+                }
+                .instrument(span),
+            )
         })
         .buffered(FILE_PROCESS_SIZE)
         .collect::<Vec<()>>()

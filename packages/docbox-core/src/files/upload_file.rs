@@ -23,6 +23,7 @@ use mime::Mime;
 use serde::{Deserialize, Serialize};
 use std::ops::DerefMut;
 use thiserror::Error;
+use tracing::Instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -160,14 +161,19 @@ pub async fn safe_upload_file(
     {
         Ok(value) => value,
         Err(err) => {
-            // Attempt to rollback any allocated resources in the background
-            tokio::spawn(async move {
-                if let Err(cause) = db.rollback().await {
-                    tracing::error!(?cause, "failed to roll back database transaction");
-                }
+            let span = tracing::Span::current();
 
-                rollback_upload_file(&search, &storage, upload_state).await;
-            });
+            // Attempt to rollback any allocated resources in the background
+            tokio::spawn(
+                async move {
+                    if let Err(cause) = db.rollback().await {
+                        tracing::error!(?cause, "failed to roll back database transaction");
+                    }
+
+                    rollback_upload_file(&search, &storage, upload_state).await;
+                }
+                .instrument(span),
+            );
 
             return Err(anyhow::Error::from(err));
         }
@@ -176,11 +182,15 @@ pub async fn safe_upload_file(
     // Commit the transaction
     if let Err(cause) = db.commit().await {
         tracing::error!(?cause, "failed to commit transaction");
+        let span = tracing::Span::current();
 
         // Attempt to rollback any allocated resources in the background
-        tokio::spawn(async move {
-            rollback_upload_file(&search, &storage, upload_state).await;
-        });
+        tokio::spawn(
+            async move {
+                rollback_upload_file(&search, &storage, upload_state).await;
+            }
+            .instrument(span),
+        );
 
         return Err(anyhow::anyhow!("failed to commit transaction"));
     }

@@ -28,6 +28,7 @@ use mime::Mime;
 use serde::Serialize;
 use std::{collections::HashMap, ops::DerefMut, str::FromStr};
 use thiserror::Error;
+use tracing::Instrument;
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -190,28 +191,33 @@ pub async fn safe_complete_presigned(
         Err(err) => {
             let error_message = err.to_string();
 
+            let span = tracing::Span::current();
+
             // Attempt to rollback any allocated resources in the background
-            tokio::spawn(async move {
-                if let Err(cause) = db.rollback().await {
-                    tracing::error!(?cause, "failed to roll back database transaction");
-                }
+            tokio::spawn(
+                async move {
+                    if let Err(cause) = db.rollback().await {
+                        tracing::error!(?cause, "failed to roll back database transaction");
+                    }
 
-                // Update the task status
-                if let Err(cause) = complete
-                    .task
-                    .set_status(
-                        &db_pool,
-                        PresignedTaskStatus::Failed {
-                            error: error_message,
-                        },
-                    )
-                    .await
-                {
-                    tracing::error!(?cause, "failed to set presigned task status to failure");
-                }
+                    // Update the task status
+                    if let Err(cause) = complete
+                        .task
+                        .set_status(
+                            &db_pool,
+                            PresignedTaskStatus::Failed {
+                                error: error_message,
+                            },
+                        )
+                        .await
+                    {
+                        tracing::error!(?cause, "failed to set presigned task status to failure");
+                    }
 
-                rollback_presigned_upload_file(&search, &storage, upload_state).await;
-            });
+                    rollback_presigned_upload_file(&search, &storage, upload_state).await;
+                }
+                .instrument(span),
+            );
 
             return Err(anyhow::Error::from(err));
         }
@@ -235,10 +241,15 @@ pub async fn safe_complete_presigned(
             tracing::error!(?cause, "failed to set presigned task status to failure");
         }
 
+        let span = tracing::Span::current();
+
         // Attempt to rollback any allocated resources in the background
-        tokio::spawn(async move {
-            rollback_presigned_upload_file(&search, &storage, upload_state).await;
-        });
+        tokio::spawn(
+            async move {
+                rollback_presigned_upload_file(&search, &storage, upload_state).await;
+            }
+            .instrument(span),
+        );
 
         return Err(anyhow::anyhow!("failed to commit transaction"));
     }

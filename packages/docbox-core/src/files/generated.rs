@@ -8,7 +8,7 @@ use futures::{
     stream::{FuturesOrdered, FuturesUnordered},
 };
 use mime::Mime;
-use tracing::{debug, error};
+use tracing::{Instrument, debug, error};
 
 use docbox_database::models::{
     file::FileId,
@@ -91,13 +91,11 @@ pub async fn upload_generated_files(
             // Task needs its own copies of state
             let file_id = *file_id;
             let file_hash = file_hash.to_string();
+            let file_mime = queued_upload.mime.to_string();
+            let file_key = create_generated_file_key(base_file_key, &queued_upload.mime);
+            let span = tracing::info_span!("upload_generated_files", %file_id, %file_hash, %file_key, %file_mime);
 
             async move {
-                let file_mime = queued_upload.mime.to_string();
-                let file_key = create_generated_file_key(base_file_key, &queued_upload.mime);
-
-                debug!(%file_id, %file_hash, %file_key, %file_mime, "uploading file to s3");
-
                 // Upload the file to S3
                 storage
                     .upload_file(&file_key, file_mime, queued_upload.bytes)
@@ -112,6 +110,7 @@ pub async fn upload_generated_files(
                     file_key,
                 })
             }
+            .instrument(span)
         })
         .collect::<FuturesOrdered<_>>()
         .collect()
