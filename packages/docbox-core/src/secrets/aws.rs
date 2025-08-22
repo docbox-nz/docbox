@@ -2,7 +2,10 @@ use std::{collections::HashMap, fmt::Debug};
 
 use aws_sdk_secretsmanager::{
     error::SdkError,
-    operation::{create_secret::CreateSecretError, get_secret_value::GetSecretValueError},
+    operation::{
+        create_secret::CreateSecretError, get_secret_value::GetSecretValueError,
+        update_secret::UpdateSecretError,
+    },
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -50,10 +53,12 @@ impl AwsSecretManager {
 
 #[derive(Debug, Error)]
 pub enum AwsSecretError {
-    #[error(transparent)]
+    #[error("failed to get secret value: {0}")]
     GetSecretValue(SdkError<GetSecretValueError>),
-    #[error(transparent)]
+    #[error("failed to create secret: {0}")]
     CreateSecret(SdkError<CreateSecretError>),
+    #[error("failed to update secret: {0}")]
+    UpdateSecret(SdkError<UpdateSecretError>),
 }
 
 impl SecretManager for AwsSecretManager {
@@ -78,14 +83,34 @@ impl SecretManager for AwsSecretManager {
     }
 
     async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
-        self.client
+        let err = match self
+            .client
             .create_secret()
             .secret_string(value)
             .name(name)
             .send()
             .await
-            .map_err(AwsSecretError::CreateSecret)?;
+        {
+            Ok(_) => return Ok(()),
+            Err(err) => err,
+        };
 
-        Ok(())
+        // Handle secret already existing
+        if err
+            .as_service_error()
+            .is_some_and(|value| value.is_resource_exists_exception())
+        {
+            self.client
+                .update_secret()
+                .secret_string(value)
+                .secret_id(name)
+                .send()
+                .await
+                .map_err(AwsSecretError::UpdateSecret)?;
+
+            return Ok(());
+        }
+
+        Err(AwsSecretError::CreateSecret(err).into())
     }
 }

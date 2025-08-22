@@ -30,10 +30,10 @@ pub enum CreateTenantError {
     #[error("error creating tenant database role: {0}")]
     CreateTenantRole(DbErr),
 
-    #[error("error serializing root secret: {0}")]
+    #[error("error serializing tenant secret: {0}")]
     SerializeSecret(serde_json::Error),
 
-    #[error("failed to create root secret: {0}")]
+    #[error("failed to create tenant secret: {0}")]
     CreateTenantSecret(anyhow::Error),
 
     #[error("failed to init tenant: {0}")]
