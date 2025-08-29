@@ -2,6 +2,7 @@
 name = "docbox-management"
 version = "0.1.0"
 edition = "2024"
+description = "Management core library for managing docbox used by the cli and other tools"
 
 license.workspace = true
 authors.workspace = true
