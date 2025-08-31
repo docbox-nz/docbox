@@ -1,12 +1,11 @@
-use docbox_core::{
-    secrets::AppSecretManager, storage::StorageLayerFactory, tenant::create_tenant::InitTenantError,
-};
+use docbox_core::{storage::StorageLayerFactory, tenant::create_tenant::InitTenantError};
 use docbox_database::{
     DbErr, DbPool, ROOT_DATABASE_NAME,
     create::{create_database, create_restricted_role},
     models::tenant::{Tenant, TenantId},
 };
 use docbox_search::SearchIndexFactory;
+use docbox_secrets::AppSecretManager;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;

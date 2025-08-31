@@ -129,6 +129,14 @@ pub trait DbSecretManager: Send + Sync {
     ) -> impl Future<Output = Result<Option<DbSecrets>, DbConnectErr>> + Send;
 }
 
+impl DbSecretManager for docbox_secrets::AppSecretManager {
+    async fn get_secret(&self, name: &str) -> Result<Option<DbSecrets>, DbConnectErr> {
+        self.parsed_secret(name)
+            .await
+            .map_err(|err| DbConnectErr::SecretsManager(err.into()))
+    }
+}
+
 impl<S> DatabasePoolCache<S>
 where
     S: DbSecretManager,

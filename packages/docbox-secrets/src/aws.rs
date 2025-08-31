@@ -10,7 +10,7 @@ use aws_sdk_secretsmanager::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::aws::SecretsManagerClient;
+use crate::SecretsManagerClient;
 
 use super::{Secret, SecretManager};
 

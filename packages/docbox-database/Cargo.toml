@@ -55,5 +55,8 @@ strum = { version = "=0.27.2", features = ["derive"] }
 
 utoipa.workspace = true
 
+# Secret management
+docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }
+
 [dev-dependencies]
 testcontainers-modules = { workspace = true, features = ["postgres"] }

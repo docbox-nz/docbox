@@ -4,9 +4,8 @@ use age::secrecy::SecretString;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::secrets::SecretManager;
-
 use super::Secret;
+use crate::SecretManager;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct JsonSecretManagerConfig {

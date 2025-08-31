@@ -12,12 +12,12 @@ use axum::{
 };
 use docbox_core::{
     events::{EventPublisherFactory, TenantEventPublisher},
-    secrets::AppSecretManager,
     storage::{StorageLayerFactory, TenantStorageLayer},
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{DatabasePoolCache, DbPool, models::tenant::Tenant};
 use docbox_search::{SearchIndexFactory, TenantSearchIndex};
+use docbox_secrets::AppSecretManager;
 use thiserror::Error;
 use tracing::Instrument;
 use utoipa::IntoParams;

@@ -1,16 +1,14 @@
 use aws::AwsSecretManager;
 use aws_config::SdkConfig;
-use docbox_database::{DbConnectErr, DbSecretManager, DbSecrets};
 use memory::MemorySecretManager;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::{
-    aws::SecretsManagerClient,
-    secrets::{
-        aws::AwsSecretManagerConfig,
-        json::{JsonSecretManager, JsonSecretManagerConfig},
-    },
+    aws::AwsSecretManagerConfig,
+    json::{JsonSecretManager, JsonSecretManagerConfig},
 };
+
+pub type SecretsManagerClient = aws_sdk_secretsmanager::Client;
 
 pub mod aws;
 pub mod json;
@@ -119,12 +117,4 @@ pub(crate) trait SecretManager: Send + Sync {
     async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>>;
 
     async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()>;
-}
-
-impl DbSecretManager for AppSecretManager {
-    async fn get_secret(&self, name: &str) -> Result<Option<DbSecrets>, DbConnectErr> {
-        self.parsed_secret(name)
-            .await
-            .map_err(|err| DbConnectErr::SecretsManager(err.into()))
-    }
 }

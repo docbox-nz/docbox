@@ -1,8 +1,9 @@
 use crate::{
     files::purge_expired_presigned_tasks::safe_purge_expired_presigned_tasks,
-    secrets::AppSecretManager, storage::StorageLayerFactory,
+    storage::StorageLayerFactory,
 };
 use docbox_database::DatabasePoolCache;
+use docbox_secrets::AppSecretManager;
 use futures::StreamExt;
 use scheduler::{SchedulerEventStream, SchedulerQueueEvent};
 use std::sync::Arc;

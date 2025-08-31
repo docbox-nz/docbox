@@ -1851,6 +1851,7 @@ dependencies = [
  "docbox-core",
  "docbox-database",
  "docbox-search",
+ "docbox-secrets",
  "docbox-web-scraper",
  "dotenvy",
  "garde",
@@ -1888,6 +1889,7 @@ dependencies = [
  "chrono",
  "docbox-database",
  "docbox-search",
+ "docbox-secrets",
  "futures",
  "html-escape",
  "image",
@@ -1919,6 +1921,7 @@ name = "docbox-database"
 version = "0.3.1"
 dependencies = [
  "chrono",
+ "docbox-secrets",
  "moka",
  "serde",
  "serde_json",
@@ -1941,6 +1944,7 @@ dependencies = [
  "docbox-core",
  "docbox-database",
  "docbox-search",
+ "docbox-secrets",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1967,6 +1971,23 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "docbox-secrets"
+version = "0.1.0"
+dependencies = [
+ "age",
+ "anyhow",
+ "aws-config",
+ "aws-sdk-secretsmanager",
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

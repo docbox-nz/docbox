@@ -13,12 +13,12 @@ use docbox_core::{
         ProcessingLayer,
         office::{OfficeConverter, OfficeConverterConfig, OfficeProcessingLayer},
     },
-    secrets::{AppSecretManager, SecretsManagerConfig},
     storage::{StorageLayerFactory, StorageLayerFactoryConfig},
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
+use docbox_secrets::{AppSecretManager, SecretsManagerConfig};
 use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
 use logging::{init_logging, init_logging_with_sentry};
 use routes::router;

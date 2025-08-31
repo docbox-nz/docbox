@@ -13,7 +13,7 @@ readme.workspace = true
 mock-browser = []
 
 [dependencies]
-# Environment variables 
+# Environment variables
 dotenvy = "=0.15.7"
 
 # Core business logic
@@ -31,6 +31,9 @@ docbox-search = { version = "0.3.0", default-features = false, path = "../docbox
 # Web scraping
 docbox-web-scraper = { version = "0.2.0", path = "../docbox-web-scraper" }
 
+# Secret management
+docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }
+
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }
 
@@ -41,7 +44,7 @@ axum = { version = "=0.8.4", features = ["multipart"] }
 tower-http = { version = "=0.6.6", features = ["limit", "cors", "trace"] }
 tower = { version = "=0.5.2" }
 
-# Typed multipart extraction 
+# Typed multipart extraction
 axum_typed_multipart = "=0.16.3"
 
 # Validation & Axum validation integration

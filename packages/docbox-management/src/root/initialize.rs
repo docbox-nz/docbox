@@ -1,10 +1,10 @@
-use docbox_core::secrets::AppSecretManager;
 use docbox_database::{
     DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
     create::{create_database, create_restricted_role, create_tenants_table},
     models::tenant::Tenant,
     sqlx::types::Uuid,
 };
+use docbox_secrets::AppSecretManager;
 use serde_json::json;
 use thiserror::Error;
 

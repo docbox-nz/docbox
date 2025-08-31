@@ -1,0 +1,39 @@
+[package]
+name = "docbox-secrets"
+version = "0.1.0"
+edition = "2024"
+description = "Docbox secret management abstraction"
+
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+# Asynchronous runtime & Helpers
+tokio = { workspace = true, features = ["full"] }
+futures.workspace = true
+
+# HTTP client
+reqwest.workspace = true
+
+# Error handling
+anyhow.workspace = true
+thiserror.workspace = true
+
+# Serialization and JSON
+serde.workspace = true
+serde_json.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# AWS Config, AWS S3 sdk, AWS typing internals
+aws-config.workspace = true
+aws-sdk-secretsmanager = "=1.80.0"
+
+# File encryption for JSON file secrets manager
+age = "=0.11.1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

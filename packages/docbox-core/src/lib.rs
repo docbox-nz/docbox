@@ -7,7 +7,6 @@ pub mod folders;
 pub mod links;
 pub mod notifications;
 pub mod processing;
-pub mod secrets;
 pub mod storage;
 pub mod tenant;
 pub mod utils;

@@ -19,6 +19,9 @@ docbox-database = { version = "0.3.0", path = "../docbox-database" }
 # Search access
 docbox-search = { version = "0.3.0", path = "../docbox-search" }
 
+# Secret management
+docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }
+
 # Serialization and JSON
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
