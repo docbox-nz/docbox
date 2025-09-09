@@ -11,7 +11,6 @@ use docbox_core::{
     document_box::search_document_box::{ResolvedSearchResult, search_document_boxes_admin},
     files::purge_expired_presigned_tasks::purge_expired_presigned_tasks,
     processing::ProcessingLayer,
-    storage::StorageLayerFactory,
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{
@@ -19,6 +18,7 @@ use docbox_database::{
     models::document_box::{DocumentBox, WithScope},
 };
 use docbox_search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem};
+use docbox_storage::StorageLayerFactory;
 use std::sync::Arc;
 
 pub const ADMIN_TAG: &str = "Admin";

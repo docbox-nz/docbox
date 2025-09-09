@@ -1,10 +1,10 @@
-use crate::storage::StorageLayerFactory;
 use crate::utils::rollback::RollbackGuard;
 use docbox_database::migrations::apply_tenant_migrations;
 use docbox_database::models::tenant::TenantId;
 use docbox_database::{DbConnectErr, DbPool};
 use docbox_database::{DbErr, models::tenant::Tenant};
 use docbox_search::SearchIndexFactory;
+use docbox_storage::StorageLayerFactory;
 use std::ops::DerefMut;
 use thiserror::Error;
 

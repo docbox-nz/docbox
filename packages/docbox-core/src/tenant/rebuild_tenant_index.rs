@@ -15,11 +15,12 @@ use docbox_search::{
     TenantSearchIndex,
     models::{DocumentPage, SearchIndexData, SearchIndexType},
 };
+use docbox_storage::TenantStorageLayer;
 use futures::{StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
 use itertools::Itertools;
 use pdf_process::text::PAGE_END_CHARACTER;
 
-use crate::{processing::office::is_pdf_compatible, storage::TenantStorageLayer};
+use crate::processing::office::is_pdf_compatible;
 
 /// Rebuild the search index for the tenant based on that
 /// data stored in the database and the content stored in S3

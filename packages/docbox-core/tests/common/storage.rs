@@ -1,11 +1,9 @@
-use docbox_core::{
-    aws::aws_config,
-    storage::{
-        StorageLayerFactory, StorageLayerFactoryConfig, TenantStorageLayer,
-        s3::S3StorageLayerFactoryConfig,
-    },
-};
+use docbox_core::aws::aws_config;
 use docbox_database::models::tenant::Tenant;
+use docbox_storage::{
+    StorageLayerFactory, StorageLayerFactoryConfig, TenantStorageLayer,
+    s3::S3StorageLayerFactoryConfig,
+};
 use testcontainers::ImageExt;
 use testcontainers_modules::{minio::MinIO, testcontainers::ContainerAsync};
 use uuid::Uuid;
@@ -39,7 +37,7 @@ pub async fn create_test_tenant_storage() -> (ContainerAsync<MinIO>, TenantStora
     // Setup storage factory
     let aws_config = aws_config().await;
     let storage_factory_config = StorageLayerFactoryConfig::S3(S3StorageLayerFactoryConfig {
-        endpoint: docbox_core::storage::s3::S3Endpoint::Custom {
+        endpoint: docbox_storage::s3::S3Endpoint::Custom {
             endpoint: url,
             access_key_id: user.to_string(),
             access_key_secret: password.to_string(),

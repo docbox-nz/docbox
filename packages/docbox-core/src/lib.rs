@@ -7,6 +7,5 @@ pub mod folders;
 pub mod links;
 pub mod notifications;
 pub mod processing;
-pub mod storage;
 pub mod tenant;
 pub mod utils;

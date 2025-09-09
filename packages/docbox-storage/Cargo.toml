@@ -1,0 +1,39 @@
+[package]
+name = "docbox-storage"
+version = "0.1.0"
+edition = "2024"
+description = "Docbox storage layer abstraction"
+
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+docbox-database = { version = "0.4.0", path = "../docbox-database" }
+
+# Asynchronous runtime & Helpers
+tokio = { workspace = true, features = ["full"] }
+futures.workspace = true
+
+# Error handling
+anyhow.workspace = true
+
+# Serialization
+serde.workspace = true
+
+# Logging
+tracing.workspace = true
+
+aws-config.workspace = true
+
+# S3 SDK
+aws-sdk-s3 = "=1.98.0"
+
+bytes.workspace = true
+bytes-utils.workspace = true
+
+chrono.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

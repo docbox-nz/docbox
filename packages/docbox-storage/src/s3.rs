@@ -1,7 +1,4 @@
-use std::{error::Error, time::Duration};
-
-use super::{FileStream, StorageLayer};
-use crate::aws::S3Client;
+use crate::{FileStream, StorageLayer};
 use anyhow::Context;
 use aws_config::SdkConfig;
 use aws_sdk_s3::{
@@ -16,8 +13,10 @@ use aws_sdk_s3::{
 use bytes::Bytes;
 use chrono::{DateTime, TimeDelta, Utc};
 use futures::Stream;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use std::{error::Error, time::Duration};
+
+pub type S3Client = aws_sdk_s3::Client;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct S3StorageLayerFactoryConfig {
@@ -291,9 +290,11 @@ impl StorageLayer for S3StorageLayer {
             .await
         {
             // Handle "NotImplemented" errors (Local minio testing server does not have CORS support)
-            if cause.raw_response().is_some_and(|response| {
-                response.status().as_u16() == StatusCode::NOT_IMPLEMENTED.as_u16()
-            }) {
+            if cause
+                .raw_response()
+                // (501 Not Implemented)
+                .is_some_and(|response| response.status().as_u16() == 501)
+            {
                 return Ok(());
             }
 

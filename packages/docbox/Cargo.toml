@@ -34,6 +34,9 @@ docbox-web-scraper = { version = "0.2.0", path = "../docbox-web-scraper" }
 # Secret management
 docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }
 
+# Storage access
+docbox-storage = { version = "0.1.0", path = "../docbox-storage" }
+
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }
 

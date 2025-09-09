@@ -5,36 +5,33 @@ use bytes_utils::SegmentedBuf;
 use chrono::{DateTime, Utc};
 use docbox_database::models::tenant::Tenant;
 use futures::{Stream, StreamExt};
-use s3::{S3StorageLayer, S3StorageLayerFactory};
 use serde::{Deserialize, Serialize};
 use std::{pin::Pin, time::Duration};
-
-use crate::storage::s3::S3StorageLayerFactoryConfig;
 
 pub mod s3;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum StorageLayerFactoryConfig {
-    S3(S3StorageLayerFactoryConfig),
+    S3(s3::S3StorageLayerFactoryConfig),
 }
 
 impl StorageLayerFactoryConfig {
     pub fn from_env() -> anyhow::Result<Self> {
-        S3StorageLayerFactoryConfig::from_env().map(Self::S3)
+        s3::S3StorageLayerFactoryConfig::from_env().map(Self::S3)
     }
 }
 
 #[derive(Clone)]
 pub enum StorageLayerFactory {
-    S3(S3StorageLayerFactory),
+    S3(s3::S3StorageLayerFactory),
 }
 
 impl StorageLayerFactory {
     pub fn from_config(aws_config: &SdkConfig, config: StorageLayerFactoryConfig) -> Self {
         match config {
             StorageLayerFactoryConfig::S3(config) => {
-                Self::S3(S3StorageLayerFactory::from_config(aws_config, config))
+                Self::S3(s3::S3StorageLayerFactory::from_config(aws_config, config))
             }
         }
     }
@@ -53,7 +50,7 @@ impl StorageLayerFactory {
 #[derive(Clone)]
 pub enum TenantStorageLayer {
     /// Storage layer backed by S3
-    S3(S3StorageLayer),
+    S3(s3::S3StorageLayer),
 }
 
 impl TenantStorageLayer {

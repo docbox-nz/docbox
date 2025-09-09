@@ -1852,6 +1852,7 @@ dependencies = [
  "docbox-database",
  "docbox-search",
  "docbox-secrets",
+ "docbox-storage",
  "docbox-web-scraper",
  "dotenvy",
  "garde",
@@ -1885,11 +1886,11 @@ dependencies = [
  "aws-smithy-types",
  "base64 0.22.1",
  "bytes",
- "bytes-utils",
  "chrono",
  "docbox-database",
  "docbox-search",
  "docbox-secrets",
+ "docbox-storage",
  "futures",
  "html-escape",
  "image",
@@ -1945,6 +1946,7 @@ dependencies = [
  "docbox-database",
  "docbox-search",
  "docbox-secrets",
+ "docbox-storage",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1988,6 +1990,23 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "docbox-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-sdk-s3",
+ "bytes",
+ "bytes-utils",
+ "chrono",
+ "docbox-database",
+ "futures",
+ "serde",
  "tokio",
  "tracing",
 ]

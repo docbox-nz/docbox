@@ -1,6 +1,5 @@
 use crate::files::{create_file_key, index_file::store_file_index};
 use crate::processing::{ProcessingError, ProcessingIndexMetadata, ProcessingLayer, process_file};
-use crate::storage::TenantStorageLayer;
 use crate::utils::error::CompositeError;
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
@@ -19,6 +18,7 @@ use docbox_database::{
     },
 };
 use docbox_search::TenantSearchIndex;
+use docbox_storage::TenantStorageLayer;
 use mime::Mime;
 use serde::{Deserialize, Serialize};
 use std::ops::DerefMut;

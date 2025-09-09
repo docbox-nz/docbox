@@ -1,8 +1,9 @@
 //! Business logic for working with generated files
 
-use crate::{files::create_generated_file_key, storage::TenantStorageLayer};
+use crate::files::create_generated_file_key;
 use anyhow::Context;
 use bytes::Bytes;
+use docbox_storage::TenantStorageLayer;
 use futures::{
     StreamExt,
     stream::{FuturesOrdered, FuturesUnordered},

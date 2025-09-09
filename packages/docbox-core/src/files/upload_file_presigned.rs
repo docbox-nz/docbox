@@ -8,7 +8,6 @@ use crate::{
         },
     },
     processing::{ProcessingError, ProcessingLayer},
-    storage::TenantStorageLayer,
 };
 use docbox_database::{
     DbErr, DbPool, DbTransaction,
@@ -24,6 +23,7 @@ use docbox_database::{
     },
 };
 use docbox_search::TenantSearchIndex;
+use docbox_storage::TenantStorageLayer;
 use mime::Mime;
 use serde::Serialize;
 use std::{collections::HashMap, ops::DerefMut, str::FromStr};

@@ -12,10 +12,15 @@ readme.workspace = true
 [dependencies]
 # Database access
 docbox-database = { version = "0.4.0", path = "../docbox-database" }
+
+# Search access
 docbox-search = { version = "0.4.0", default-features = false, path = "../docbox-search" }
 
 # Secret management
 docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }
+
+# Storage access
+docbox-storage = { version = "0.1.0", path = "../docbox-storage" }
 
 # PDF to image conversion, text extraction
 pdf_process = "=0.2.0"
@@ -61,7 +66,6 @@ aws-smithy-types = { version = "=1.3.2", features = [
 urlencoding = "=2.1.3"
 
 bytes.workspace = true
-bytes-utils.workspace = true
 
 itertools.workspace = true
 

@@ -1,18 +1,16 @@
-use std::ops::DerefMut;
-
-use anyhow::Context;
-use docbox_database::{DbPool, models::file::FileWithScope};
-use docbox_search::TenantSearchIndex;
-use futures::{StreamExt, future::BoxFuture};
-use mime::Mime;
-use tracing::Instrument;
-
 use crate::{
     files::{index_file::store_file_index, upload_file::store_generated_files},
     processing::{ProcessingIndexMetadata, ProcessingLayer, process_file},
-    storage::TenantStorageLayer,
     utils::file::get_file_name_ext,
 };
+use anyhow::Context;
+use docbox_database::{DbPool, models::file::FileWithScope};
+use docbox_search::TenantSearchIndex;
+use docbox_storage::TenantStorageLayer;
+use futures::{StreamExt, future::BoxFuture};
+use mime::Mime;
+use std::ops::DerefMut;
+use tracing::Instrument;
 
 pub async fn reprocess_octet_stream_files(
     db: &DbPool,

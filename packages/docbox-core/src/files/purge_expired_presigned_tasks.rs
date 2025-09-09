@@ -1,4 +1,3 @@
-use crate::storage::{StorageLayerFactory, TenantStorageLayer};
 use chrono::Utc;
 use docbox_database::{
     DatabasePoolCache, DbPool,
@@ -7,6 +6,7 @@ use docbox_database::{
         tenant::Tenant,
     },
 };
+use docbox_storage::{StorageLayerFactory, TenantStorageLayer};
 use std::sync::Arc;
 
 pub async fn safe_purge_expired_presigned_tasks(

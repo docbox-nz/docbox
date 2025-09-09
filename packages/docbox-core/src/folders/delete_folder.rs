@@ -1,9 +1,6 @@
+use crate::events::{TenantEventMessage, TenantEventPublisher};
 use crate::files::delete_file::delete_file;
 use crate::links::delete_link::delete_link;
-use crate::{
-    events::{TenantEventMessage, TenantEventPublisher},
-    storage::TenantStorageLayer,
-};
 use docbox_database::{
     DbPool,
     models::{
@@ -14,6 +11,7 @@ use docbox_database::{
     },
 };
 use docbox_search::TenantSearchIndex;
+use docbox_storage::TenantStorageLayer;
 use std::collections::VecDeque;
 
 /// Item to be removed
