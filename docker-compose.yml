@@ -1,149 +1,148 @@
 services:
-  # Search index
-  typesense:
-    image: typesense/typesense:28.0
-    container_name: typesense
-    ports:
-      - "8108:8108"
-    volumes:
-      - typesense-data:/data
-    environment:
-      TYPESENSE_API_KEY: typesensedev     
-      TYPESENSE_DATA_DIR: /data
-  
-  opensearch-node1:
-    image: opensearchproject/opensearch:3.0.0
-    container_name: opensearch-node1
-    environment:
-      - cluster.name=opensearch-cluster
-      - node.name=opensearch-node1
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # minimum and maximum Java heap size, recommend setting both to 50% of system RAM
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=SOhB1TUmi04cseJRs1Ki
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
-        hard: 65536
-    volumes:
-      - opensearch-data1:/usr/share/opensearch/data
-    ports:
-      - 9200:9200
-      - 9600:9600 # required for Performance Analyzer
-    networks:
-      - opensearch-net
-    profiles: ["opensearch"]
+    # Search index
+    typesense:
+        image: typesense/typesense:28.0
+        container_name: typesense
+        ports:
+            - "8108:8108"
+        volumes:
+            - typesense-data:/data
+        environment:
+            TYPESENSE_API_KEY: typesensedev
+            TYPESENSE_DATA_DIR: /data
 
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:3.0.0
-    container_name: opensearch-dashboards
-    ports:
-      - 5601:5601
-    expose:
-      - "5601"
-    environment:
-      OPENSEARCH_HOSTS: '["https://opensearch-node1:9200"]'
-    networks:
-      - opensearch-net
-    profiles: ["opensearch"]
+    opensearch-node1:
+        image: opensearchproject/opensearch:3.0.0
+        container_name: opensearch-node1
+        environment:
+            - cluster.name=opensearch-cluster
+            - node.name=opensearch-node1
+            - discovery.type=single-node
+            - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
+            - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # minimum and maximum Java heap size, recommend setting both to 50% of system RAM
+            - OPENSEARCH_INITIAL_ADMIN_PASSWORD=SOhB1TUmi04cseJRs1Ki
+        ulimits:
+            memlock:
+                soft: -1
+                hard: -1
+            nofile:
+                soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
+                hard: 65536
+        volumes:
+            - opensearch-data1:/usr/share/opensearch/data
+        ports:
+            - 9200:9200
+            - 9600:9600 # required for Performance Analyzer
+        networks:
+            - opensearch-net
+        profiles: ["opensearch"]
 
+    opensearch-dashboards:
+        image: opensearchproject/opensearch-dashboards:3.0.0
+        container_name: opensearch-dashboards
+        ports:
+            - 5601:5601
+        expose:
+            - "5601"
+        environment:
+            OPENSEARCH_HOSTS: '["https://opensearch-node1:9200"]'
+        networks:
+            - opensearch-net
+        profiles: ["opensearch"]
 
-  # Database
-  database:
-    image: "postgres:latest"
-    ports:
-      - "5432:5432"
-  
-    env_file:
-      - .env
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - docbox
+    # Database
+    database:
+        image: "postgres:latest"
+        ports:
+            - "5432:5432"
 
-  # UI for working with local postgres instance
-  pgadmin:
-    image: dpage/pgadmin4:8.14
-    ports:
-      - 5433:80
-    env_file:
-      - .env
-    depends_on:
-      - database
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin/
-    networks:
-      - docbox
+        env_file:
+            - .env
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        networks:
+            - docbox
 
-  # S3 compatible server
-  minio:
-    image: minio/minio:latest
-    container_name: minio
-    ports:
-      - "9090:9000" # S3 API
-      - "9091:9001" # Web UI
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-      MINIO_NOTIFY_WEBHOOK_ENABLE_primary: "on"
-      MINIO_NOTIFY_WEBHOOK_ENDPOINT_primary: "http://host.docker.internal:8080/webhook/s3"
-      MINIO_NOTIFY_WEBHOOK_QUEUE_DIR: "/data/events"
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio-data:/data
-    networks:
-      - docbox
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # UI for working with local postgres instance
+    pgadmin:
+        image: dpage/pgadmin4:8.14
+        ports:
+            - 5433:80
+        env_file:
+            - .env
+        depends_on:
+            - database
+        volumes:
+            - pgadmin-data:/var/lib/pgadmin/
+        networks:
+            - docbox
 
-  # HTTP proxy server
-  squid:
-    image: sameersbn/squid:3.5.27-2
-    ports:
-      - "3128:3128"
-    volumes:
-      - ./dev.squid.conf:/etc/squid/squid.conf
+    # S3 compatible server
+    minio:
+        image: minio/minio:latest
+        container_name: minio
+        ports:
+            - "9090:9000" # S3 API
+            - "9091:9001" # Web UI
+        environment:
+            MINIO_ROOT_USER: minioadmin
+            MINIO_ROOT_PASSWORD: minioadmin
+            MINIO_NOTIFY_WEBHOOK_ENABLE_primary: "on"
+            MINIO_NOTIFY_WEBHOOK_ENDPOINT_primary: "http://host.docker.internal:8080/webhook/s3"
+            MINIO_NOTIFY_WEBHOOK_QUEUE_DIR: "/data/events"
+        command: server /data --console-address ":9001"
+        volumes:
+            - minio-data:/data
+        networks:
+            - docbox
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
 
-  # Docbox server
-  docbox:
-    build:
-      context: .
-      dockerfile: ./containers/Docbox.Dockerfile
-    ports:
-      - 8080:8080
-    env_file:
-      - .env
-    networks:
-      - docbox
-    depends_on:
-      - database
-      - minio
-      - opensearch-node1
-      - opensearch-node2
-      - opensearch-dashboards
-      - squid
-    profiles: ["api"]
+    # HTTP proxy server
+    squid:
+        image: sameersbn/squid:3.5.27-2
+        ports:
+            - "3128:3128"
+        volumes:
+            - ./dev.squid.conf:/etc/squid/squid.conf
 
-  # Office file converter server
-  office-convert-server:
-    image: jacobtread/office-convert-server:0.2.2
-    ports:
-      - 3000:3000
-    networks:
-      - docbox
-    restart: unless-stopped
+    # Docbox server
+    docbox:
+        build:
+            context: .
+            dockerfile: ./containers/Docbox.Dockerfile
+        ports:
+            - 8080:8080
+        env_file:
+            - .env
+        networks:
+            - docbox
+        depends_on:
+            - database
+            - minio
+            - opensearch-node1
+            - opensearch-node2
+            - opensearch-dashboards
+            - squid
+        profiles: ["api"]
+
+    # Office file converter server
+    office-convert-server:
+        image: jacobtread/office-convert-server:0.2.2
+        ports:
+            - 3500:3000
+        networks:
+            - docbox
+        restart: unless-stopped
 
 volumes:
-  opensearch-data1:
-  postgres_data:
-  pgadmin-data:
-  minio-data:
-  typesense-data:
-  
+    opensearch-data1:
+    postgres_data:
+    pgadmin-data:
+    minio-data:
+    typesense-data:
+
 networks:
-  opensearch-net:
-  docbox:
-    driver: bridge
+    opensearch-net:
+    docbox:
+        driver: bridge

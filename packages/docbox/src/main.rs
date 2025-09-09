@@ -119,7 +119,7 @@ async fn server() -> anyhow::Result<()> {
     // Setup search index factory
     let search_config = SearchIndexFactoryConfig::from_env()?;
     let search_index_factory =
-        SearchIndexFactory::from_config(&aws_config, secrets, search_config)?;
+        SearchIndexFactory::from_config(&aws_config, secrets, db_cache.clone(), search_config)?;
 
     // Setup storage factory
     let storage_factory_config = StorageLayerFactoryConfig::from_env()?;

@@ -13,6 +13,7 @@ readme.workspace = true
 default = ["opensearch", "typesense"]
 opensearch = ["dep:opensearch"]
 typesense = []
+database = []
 
 [dependencies]
 docbox-database.workspace = true

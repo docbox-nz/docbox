@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use docbox_core::aws::aws_config;
-use docbox_database::models::tenant::Tenant;
+use docbox_database::{DatabasePoolCache, models::tenant::Tenant};
 use docbox_search::{
     SearchIndexFactory, SearchIndexFactoryConfig, TenantSearchIndex, TypesenseApiKey,
     TypesenseSearchConfig,
@@ -52,9 +52,19 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
     });
 
     let aws_config = aws_config().await;
-    let secrets = AppSecretManager::Memory(MemorySecretManager::default());
+    let secrets = Arc::new(AppSecretManager::Memory(MemorySecretManager::default()));
 
-    let index = SearchIndexFactory::from_config(&aws_config, Arc::new(secrets), config).unwrap();
+    // This will absolutely fail if you try and use it, but we don't we only provide it because
+    // its required due to the possibility of a database search backend in the real app
+    let db_cache = DatabasePoolCache::new(
+        "null".to_string(),
+        0,
+        "test/test".to_string(),
+        secrets.clone(),
+    );
+
+    let index =
+        SearchIndexFactory::from_config(&aws_config, secrets, Arc::new(db_cache), config).unwrap();
     let index = index.create_search_index(&Tenant {
         id: Uuid::new_v4(),
         name: "test".to_string(),

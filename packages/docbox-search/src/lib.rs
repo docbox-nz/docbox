@@ -3,7 +3,7 @@ use std::{ops::DerefMut, sync::Arc};
 use aws_config::SdkConfig;
 use chrono::Utc;
 use docbox_database::{
-    DbTransaction,
+    DatabasePoolCache, DbTransaction,
     models::{
         document_box::DocumentBoxScopeRaw,
         file::FileId,
@@ -29,6 +29,8 @@ pub use typesense::{
     TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseSearchConfig,
 };
 
+#[cfg(feature = "database")]
+mod database;
 #[cfg(feature = "opensearch")]
 mod opensearch;
 #[cfg(feature = "typesense")]
@@ -41,6 +43,8 @@ pub enum SearchIndexFactoryConfig {
     Typesense(typesense::TypesenseSearchConfig),
     #[cfg(feature = "opensearch")]
     OpenSearch(opensearch::OpenSearchConfig),
+    #[cfg(feature = "database")]
+    Database(database::DatabaseSearchConfig),
 }
 
 impl SearchIndexFactoryConfig {
@@ -52,12 +56,23 @@ impl SearchIndexFactoryConfig {
             "open_search" => opensearch::OpenSearchConfig::from_env().map(Self::OpenSearch),
             #[cfg(feature = "typesense")]
             "typesense" => typesense::TypesenseSearchConfig::from_env().map(Self::Typesense),
+            #[cfg(feature = "database")]
+            "database" => database::DatabaseSearchConfig::from_env().map(Self::Database),
+
+            // Default when database is enabled
+            #[cfg(feature = "database")]
+            _ => database::DatabaseSearchConfig::from_env().map(Self::Database),
 
             // Default when typesense is enabled
-            #[cfg(feature = "typesense")]
+            #[cfg(all(not(feature = "database"), feature = "typesense"))]
             _ => typesense::TypesenseSearchConfig::from_env().map(Self::Typesense),
+
             // Default when typesense is disabled
-            #[cfg(all(not(feature = "typesense"), feature = "opensearch"))]
+            #[cfg(all(
+                not(feature = "database"),
+                not(feature = "typesense"),
+                feature = "opensearch"
+            ))]
             _ => opensearch::OpenSearchConfig::from_env().map(Self::OpenSearch),
 
             // Fallback error when no features are available
@@ -73,12 +88,15 @@ pub enum SearchIndexFactory {
     Typesense(typesense::TypesenseIndexFactory),
     #[cfg(feature = "opensearch")]
     OpenSearch(opensearch::OpenSearchIndexFactory),
+    #[cfg(feature = "database")]
+    Database(database::DatabaseSearchIndexFactory),
 }
 
 impl SearchIndexFactory {
     pub fn from_config(
         aws_config: &SdkConfig,
         secrets: Arc<AppSecretManager>,
+        #[allow(unused)] db: Arc<DatabasePoolCache>,
         config: SearchIndexFactoryConfig,
     ) -> anyhow::Result<Self> {
         #[cfg(not(feature = "opensearch"))]
@@ -97,6 +115,12 @@ impl SearchIndexFactory {
                 opensearch::OpenSearchIndexFactory::from_config(aws_config, config)
                     .map(SearchIndexFactory::OpenSearch)
             }
+            #[cfg(feature = "database")]
+            SearchIndexFactoryConfig::Database(config) => {
+                tracing::debug!("using opensearch search index");
+                database::DatabaseSearchIndexFactory::from_config(db, config)
+                    .map(SearchIndexFactory::Database)
+            }
         }
     }
 
@@ -114,6 +138,11 @@ impl SearchIndexFactory {
                 TenantSearchIndex::OpenSearch(factory.create_search_index(search_index))
             }
 
+            #[cfg(feature = "database")]
+            SearchIndexFactory::Database(factory) => {
+                TenantSearchIndex::Database(factory.create_search_index(tenant))
+            }
+
             // Fallback error when no features are available
             #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
@@ -127,6 +156,8 @@ pub enum TenantSearchIndex {
     Typesense(typesense::TypesenseIndex),
     #[cfg(feature = "opensearch")]
     OpenSearch(opensearch::OpenSearchIndex),
+    #[cfg(feature = "database")]
+    Database(database::DatabaseSearchIndex),
 }
 
 impl TenantSearchIndex {
@@ -136,9 +167,11 @@ impl TenantSearchIndex {
             TenantSearchIndex::Typesense(index) => index.create_index().await,
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.create_index().await,
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => index.create_index().await,
 
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -149,9 +182,11 @@ impl TenantSearchIndex {
             TenantSearchIndex::Typesense(index) => index.delete_index().await,
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.delete_index().await,
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => index.delete_index().await,
 
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -172,8 +207,13 @@ impl TenantSearchIndex {
                 index.search_index(scope, query, folder_children).await
             }
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => {
+                index.search_index(scope, query, folder_children).await
+            }
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -190,13 +230,19 @@ impl TenantSearchIndex {
             TenantSearchIndex::Typesense(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
+
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => {
+                index.search_index_file(scope, file_id, query).await
+            }
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -205,11 +251,15 @@ impl TenantSearchIndex {
         match self {
             #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.add_data(data).await,
+
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.add_data(data).await,
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => index.add_data(data).await,
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -218,11 +268,15 @@ impl TenantSearchIndex {
         match self {
             #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.bulk_add_data(data).await,
+
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.bulk_add_data(data).await,
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => index.bulk_add_data(data).await,
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -235,11 +289,15 @@ impl TenantSearchIndex {
         match self {
             #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.update_data(item_id, data).await,
+
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.update_data(item_id, data).await,
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => index.update_data(item_id, data).await,
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -248,11 +306,15 @@ impl TenantSearchIndex {
         match self {
             #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.delete_data(id).await,
+
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.delete_data(id).await,
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => index.delete_data(id).await,
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -261,11 +323,15 @@ impl TenantSearchIndex {
         match self {
             #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.delete_by_scope(scope).await,
+
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.delete_by_scope(scope).await,
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => index.delete_by_scope(scope).await,
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -279,13 +345,17 @@ impl TenantSearchIndex {
             TenantSearchIndex::Typesense(index) => {
                 index.get_pending_migrations(applied_names).await
             }
+
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => {
                 index.get_pending_migrations(applied_names).await
             }
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => index.get_pending_migrations(applied_names).await,
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
     }
@@ -306,6 +376,7 @@ impl TenantSearchIndex {
                     .apply_migration(tenant, root_t, tenant_t, name)
                     .await?
             }
+
             #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => {
                 index
@@ -313,8 +384,15 @@ impl TenantSearchIndex {
                     .await?
             }
 
+            #[cfg(feature = "database")]
+            TenantSearchIndex::Database(index) => {
+                index
+                    .apply_migration(tenant, root_t, tenant_t, name)
+                    .await?
+            }
+
             // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
+            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
 
