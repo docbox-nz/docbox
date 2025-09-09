@@ -131,6 +131,7 @@ impl TenantStorageLayer {
     }
 }
 
+/// Internal trait defining required async implementations for a storage backend
 pub(crate) trait StorageLayer {
     /// Creates the tenant S3 bucket
     async fn create_bucket(&self) -> anyhow::Result<()>;

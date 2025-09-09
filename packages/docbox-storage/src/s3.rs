@@ -289,12 +289,13 @@ impl StorageLayer for S3StorageLayer {
             .send()
             .await
         {
-            // Handle "NotImplemented" errors (Local minio testing server does not have CORS support)
+            // Handle "NotImplemented" errors (minio does not have CORS support)
             if cause
                 .raw_response()
                 // (501 Not Implemented)
                 .is_some_and(|response| response.status().as_u16() == 501)
             {
+                tracing::warn!("storage s3 backend does not support PutBucketCors.. skipping..");
                 return Ok(());
             }
 
@@ -349,6 +350,12 @@ impl StorageLayer for S3StorageLayer {
 
 pub struct AwsFileStream {
     inner: ByteStream,
+}
+
+impl AwsFileStream {
+    pub fn into_inner(self) -> ByteStream {
+        self.inner
+    }
 }
 
 impl Stream for AwsFileStream {
