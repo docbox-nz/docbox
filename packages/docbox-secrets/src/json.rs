@@ -1,16 +1,28 @@
-use std::{collections::HashMap, fmt::Debug, path::PathBuf, str::FromStr};
+//! # JSON Secret Manager
+//!
+//! Encrypted local JSON based secrets manager, secrets are stored within a local
+//! JSON file encrypted using [age](https://github.com/str4d/rage) encryption
+//!
+//! Intended for self-hosted environments where AWS secrets manager is not available
+//!
+//! ## Environment Variables
+//!
+//! * `DOCBOX_SECRET_MANAGER_KEY` - Specifies the encryption key to use
+//! * `DOCBOX_SECRET_MANAGER_PATH` - Path to the encrypted JSON file
 
+use crate::{Secret, SecretManager};
 use age::secrecy::SecretString;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-
-use super::Secret;
-use crate::SecretManager;
+use std::{collections::HashMap, fmt::Debug, path::PathBuf, str::FromStr};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct JsonSecretManagerConfig {
-    path: PathBuf,
-    key: String,
+    /// Encryption key to use
+    pub key: String,
+
+    /// Path to the encrypted JSON file
+    pub path: PathBuf,
 }
 
 impl Debug for JsonSecretManagerConfig {
@@ -22,11 +34,13 @@ impl Debug for JsonSecretManagerConfig {
 }
 
 impl JsonSecretManagerConfig {
+    /// Load a config from environment variables
     pub fn from_env() -> anyhow::Result<Self> {
         let key = std::env::var("DOCBOX_SECRET_MANAGER_KEY")
             .context("missing DOCBOX_SECRET_MANAGER_KEY secret key to access store")?;
         let path = std::env::var("DOCBOX_SECRET_MANAGER_PATH")
             .context("missing DOCBOX_SECRET_MANAGER_PATH file path to access store")?;
+
         Ok(Self {
             key,
             path: PathBuf::from_str(&path)?,
@@ -34,15 +48,17 @@ impl JsonSecretManagerConfig {
     }
 }
 
-#[derive(Deserialize, Serialize)]
-struct SecretFile {
-    secrets: HashMap<String, String>,
-}
-
 // Local encrypted JSON based secret manager
 pub struct JsonSecretManager {
     path: PathBuf,
     key: SecretString,
+}
+
+/// Temporary structure secrets are loaded into when loaded from a file
+#[derive(Deserialize, Serialize)]
+struct SecretFile {
+    /// Secrets contained within the file as key-value pair
+    secrets: HashMap<String, String>,
 }
 
 impl JsonSecretManager {
@@ -91,6 +107,7 @@ impl SecretManager for JsonSecretManager {
                 secrets: Default::default(),
             }
         };
+
         secrets.secrets.insert(name.to_string(), value.to_string());
         self.write_file(secrets).await?;
         Ok(())

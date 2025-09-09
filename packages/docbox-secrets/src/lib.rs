@@ -1,14 +1,15 @@
-use aws::AwsSecretManager;
+//! # Secret manager
+//!
+//! Secret management abstraction
+//!
+//! ## Environment Variables
+//!
+//! * `DOCBOX_SECRET_MANAGER` - Which secret manager to use ("aws", "json", "memory")
+//!
+//! See individual secret manager module documentation for individual environment variables
+
 use aws_config::SdkConfig;
-use memory::MemorySecretManager;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-
-use crate::{
-    json::{JsonSecretManager, JsonSecretManagerConfig},
-    memory::MemorySecretManagerConfig,
-};
-
-pub type SecretsManagerClient = aws_sdk_secretsmanager::Client;
 
 pub mod aws;
 pub mod json;
@@ -18,10 +19,10 @@ pub mod memory;
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SecretsManagerConfig {
     /// In-memory secret manager
-    Memory(MemorySecretManagerConfig),
+    Memory(memory::MemorySecretManagerConfig),
 
     /// Encrypted JSON file secret manager
-    Json(JsonSecretManagerConfig),
+    Json(json::JsonSecretManagerConfig),
 
     /// AWS secret manager
     Aws,
@@ -31,17 +32,17 @@ impl SecretsManagerConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         let variant = std::env::var("DOCBOX_SECRET_MANAGER").unwrap_or_else(|_| "aws".to_string());
         match variant.as_str() {
-            "memory" => MemorySecretManagerConfig::from_env().map(Self::Memory),
-            "json" => JsonSecretManagerConfig::from_env().map(Self::Json),
+            "memory" => memory::MemorySecretManagerConfig::from_env().map(Self::Memory),
+            "json" => json::JsonSecretManagerConfig::from_env().map(Self::Json),
             _ => Ok(Self::Aws),
         }
     }
 }
 
 pub enum AppSecretManager {
-    Aws(AwsSecretManager),
-    Memory(MemorySecretManager),
-    Json(JsonSecretManager),
+    Aws(aws::AwsSecretManager),
+    Memory(memory::MemorySecretManager),
+    Json(json::JsonSecretManager),
 }
 
 impl AppSecretManager {
@@ -50,7 +51,7 @@ impl AppSecretManager {
         match config {
             SecretsManagerConfig::Memory(config) => {
                 tracing::debug!("using in memory secret manager");
-                AppSecretManager::Memory(MemorySecretManager::new(
+                AppSecretManager::Memory(memory::MemorySecretManager::new(
                     config
                         .secrets
                         .into_iter()
@@ -62,12 +63,11 @@ impl AppSecretManager {
 
             SecretsManagerConfig::Json(config) => {
                 tracing::debug!("using json secret manager");
-                AppSecretManager::Json(JsonSecretManager::from_config(config))
+                AppSecretManager::Json(json::JsonSecretManager::from_config(config))
             }
             SecretsManagerConfig::Aws => {
                 tracing::debug!("using aws secret manager");
-                let client = SecretsManagerClient::new(aws_config);
-                AppSecretManager::Aws(AwsSecretManager::new(client))
+                AppSecretManager::Aws(aws::AwsSecretManager::from_sdk_config(aws_config))
             }
         }
     }

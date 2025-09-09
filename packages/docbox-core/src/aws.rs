@@ -2,7 +2,6 @@ use aws_config::{BehaviorVersion, SdkConfig, meta::region::RegionProviderChain};
 
 pub type SqsClient = aws_sdk_sqs::Client;
 pub type S3Client = aws_sdk_s3::Client;
-pub type SecretsManagerClient = aws_sdk_secretsmanager::Client;
 
 /// Create the AWS production configuration
 pub async fn aws_config() -> SdkConfig {

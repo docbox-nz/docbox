@@ -1,9 +1,18 @@
+//! # Memory secret manager
+//!
+//! In-memory secret manager for use within tests and local development
+//! environments where a full secret manager is not needed
+//!
+//! ## Environment Variables
+//!
+//! * `DOCBOX_SECRET_MANAGER_MEMORY_DEFAULT` - Optional default secret value to provide when missing the secret
+//! * `DOCBOX_SECRET_MANAGER_MEMORY_SECRETS` - JSON encoded hashmap of available secrets
+
+use crate::{Secret, SecretManager};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
-
-use super::{Secret, SecretManager};
 use std::{collections::HashMap, fmt::Debug};
+use tokio::sync::Mutex;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct MemorySecretManagerConfig {

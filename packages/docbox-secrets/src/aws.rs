@@ -1,3 +1,12 @@
+//! # AWS secret manager
+//!
+//! Secret manager backed by [AWS secrets manager](https://docs.aws.amazon.com/secretsmanager/).
+//! Inherits the loaded [SdkConfig] and all configuration provided to it.
+//!
+//! Intended for AWS hosted environments
+
+use crate::{Secret, SecretManager};
+use aws_config::SdkConfig;
 use aws_sdk_secretsmanager::{
     error::SdkError,
     operation::{
@@ -8,15 +17,18 @@ use aws_sdk_secretsmanager::{
 use std::fmt::Debug;
 use thiserror::Error;
 
-use crate::SecretsManagerClient;
-
-use super::{Secret, SecretManager};
+pub type SecretsManagerClient = aws_sdk_secretsmanager::Client;
 
 pub struct AwsSecretManager {
     client: SecretsManagerClient,
 }
 
 impl AwsSecretManager {
+    pub fn from_sdk_config(aws_config: &SdkConfig) -> Self {
+        let client = SecretsManagerClient::new(aws_config);
+        Self::new(client)
+    }
+
     pub fn new(client: SecretsManagerClient) -> Self {
         Self { client }
     }
