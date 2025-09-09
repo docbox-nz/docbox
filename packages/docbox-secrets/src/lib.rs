@@ -1,6 +1,6 @@
 //! # Secret manager
 //!
-//! Secret management abstraction
+//! Secret management abstraction with multiple supported backends
 //!
 //! ## Environment Variables
 //!
@@ -29,6 +29,7 @@ pub enum SecretsManagerConfig {
 }
 
 impl SecretsManagerConfig {
+    /// Get the current secret manager config from environment variables
     pub fn from_env() -> anyhow::Result<Self> {
         let variant = std::env::var("DOCBOX_SECRET_MANAGER").unwrap_or_else(|_| "aws".to_string());
         match variant.as_str() {
@@ -39,6 +40,8 @@ impl SecretsManagerConfig {
     }
 }
 
+/// App blanket secret manager backed by some underlying
+/// secret manager implementation
 pub enum AppSecretManager {
     Aws(aws::AwsSecretManager),
     Memory(memory::MemorySecretManager),
@@ -46,7 +49,10 @@ pub enum AppSecretManager {
 }
 
 impl AppSecretManager {
-    /// Create the secret manager from the provided config
+    /// Create the secret manager from the provided `config`
+    ///
+    /// The `aws_config` is required to provide aws specific settings when the AWS secret
+    /// manager is used
     pub fn from_config(aws_config: &SdkConfig, config: SecretsManagerConfig) -> Self {
         match config {
             SecretsManagerConfig::Memory(config) => {
@@ -72,6 +78,7 @@ impl AppSecretManager {
         }
     }
 
+    /// Get a secret by `name`
     pub async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>> {
         tracing::debug!(?name, "reading secret");
         match self {
@@ -81,6 +88,9 @@ impl AppSecretManager {
         }
     }
 
+    /// Set the value of `name` secret to `value`
+    ///
+    /// Will create a new secret if the secret does not already exist
     pub async fn set_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
         tracing::debug!(?name, "writing secret");
         match self {
@@ -90,6 +100,7 @@ impl AppSecretManager {
         }
     }
 
+    /// Delete a secret by `name`
     pub async fn delete_secret(&self, name: &str) -> anyhow::Result<()> {
         tracing::debug!(?name, "deleting secret");
         match self {
@@ -99,7 +110,7 @@ impl AppSecretManager {
         }
     }
 
-    /// Obtains a secret parsing it as JSON of type [D]
+    /// Get a secret by `name` parsed as type [D] from JSON
     pub async fn parsed_secret<D: DeserializeOwned>(
         &self,
         name: &str,
@@ -118,10 +129,14 @@ impl AppSecretManager {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Secret {
+    /// Secret stored as a [String]
     String(String),
+
+    /// Secret stored as bytes
     Binary(Vec<u8>),
 }
 
+/// Internal trait defining required async implementations for a secret manager
 pub(crate) trait SecretManager: Send + Sync {
     async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>>;
 
