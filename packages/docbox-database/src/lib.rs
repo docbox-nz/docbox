@@ -1,3 +1,4 @@
+use docbox_secrets::AppSecretManager;
 use models::tenant::Tenant;
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,7 @@ pub use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
 };
 
+use std::sync::Arc;
 use std::{error::Error, time::Duration};
 use thiserror::Error;
 use tracing::debug;
@@ -81,7 +83,7 @@ impl DatabasePoolCacheConfig {
 }
 
 /// Cache for database pools
-pub struct DatabasePoolCache<S: DbSecretManager> {
+pub struct DatabasePoolCache {
     /// Database host
     host: String,
 
@@ -100,7 +102,7 @@ pub struct DatabasePoolCache<S: DbSecretManager> {
     connect_info_cache: Cache<String, DbSecrets>,
 
     /// Secrets manager access to load credentials
-    secrets_manager: S,
+    secrets_manager: Arc<AppSecretManager>,
 }
 
 /// Username and password for a specific database
@@ -122,26 +124,11 @@ pub enum DbConnectErr {
     Db(#[from] DbErr),
 }
 
-pub trait DbSecretManager: Send + Sync {
-    fn get_secret(
-        &self,
-        name: &str,
-    ) -> impl Future<Output = Result<Option<DbSecrets>, DbConnectErr>> + Send;
-}
-
-impl DbSecretManager for docbox_secrets::AppSecretManager {
-    async fn get_secret(&self, name: &str) -> Result<Option<DbSecrets>, DbConnectErr> {
-        self.parsed_secret(name)
-            .await
-            .map_err(|err| DbConnectErr::SecretsManager(err.into()))
-    }
-}
-
-impl<S> DatabasePoolCache<S>
-where
-    S: DbSecretManager,
-{
-    pub fn from_config(config: DatabasePoolCacheConfig, secrets_manager: S) -> Self {
+impl DatabasePoolCache {
+    pub fn from_config(
+        config: DatabasePoolCacheConfig,
+        secrets_manager: Arc<AppSecretManager>,
+    ) -> Self {
         Self::new(
             config.host,
             config.port,
@@ -150,7 +137,12 @@ where
         )
     }
 
-    pub fn new(host: String, port: u16, root_secret_name: String, secrets_manager: S) -> Self {
+    pub fn new(
+        host: String,
+        port: u16,
+        root_secret_name: String,
+        secrets_manager: Arc<AppSecretManager>,
+    ) -> Self {
         let cache = Cache::builder()
             .time_to_idle(DB_CACHE_DURATION)
             .max_capacity(50)
@@ -214,7 +206,7 @@ where
         // Load new credentials
         let credentials = self
             .secrets_manager
-            .get_secret(secret_name)
+            .parsed_secret::<DbSecrets>(secret_name)
             .await
             .map_err(|err| DbConnectErr::SecretsManager(err.into()))?
             .ok_or(DbConnectErr::MissingCredentials)?;
@@ -243,7 +235,7 @@ where
             // Success case
             Ok(value) => Ok(value),
             Err(err) => {
-                // Drop the connect info cache incase the credentials were wrong
+                // Drop the connect info cache in case the credentials were wrong
                 self.connect_info_cache.remove(secret_name).await;
                 Err(DbConnectErr::Db(err))
             }

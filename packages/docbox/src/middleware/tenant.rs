@@ -17,7 +17,6 @@ use docbox_core::{
 };
 use docbox_database::{DatabasePoolCache, DbPool, models::tenant::Tenant};
 use docbox_search::{SearchIndexFactory, TenantSearchIndex};
-use docbox_secrets::AppSecretManager;
 use thiserror::Error;
 use tracing::Instrument;
 use utoipa::IntoParams;
@@ -45,7 +44,7 @@ pub struct TenantParams {
 /// on the request extensions so it can be extracted by handlers
 pub async fn tenant_auth_middleware(
     headers: HeaderMap,
-    db_cache: Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
+    db_cache: Extension<Arc<DatabasePoolCache>>,
     tenant_cache: Extension<Arc<TenantCache>>,
     mut request: Request,
     next: Next,
@@ -103,7 +102,7 @@ impl HttpError for ExtractTenantError {
 /// Extracts the target tenant for the provided request
 pub async fn extract_tenant(
     headers: &HeaderMap,
-    db_cache: &DatabasePoolCache<AppSecretManager>,
+    db_cache: &DatabasePoolCache,
     tenant_cache: &TenantCache,
 ) -> Result<Tenant, DynHttpError> {
     #[cfg(feature = "mock-browser")]
@@ -164,11 +163,10 @@ where
         })?;
 
         // Extract database cache
-        let db_cache: &Arc<DatabasePoolCache<AppSecretManager>> =
-            parts.extensions.get().ok_or_else(|| {
-                tracing::error!("database pool caching is missing");
-                HttpCommonError::ServerError
-            })?;
+        let db_cache: &Arc<DatabasePoolCache> = parts.extensions.get().ok_or_else(|| {
+            tracing::error!("database pool caching is missing");
+            HttpCommonError::ServerError
+        })?;
 
         // Create the database connection pool
         let db = db_cache.get_tenant_pool(tenant).await.map_err(|cause| {

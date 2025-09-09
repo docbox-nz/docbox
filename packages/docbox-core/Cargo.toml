@@ -1,6 +1,6 @@
 [package]
 name = "docbox-core"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 description = "Docbox core business logic and functionality"
 
@@ -11,8 +11,8 @@ readme.workspace = true
 
 [dependencies]
 # Database access
-docbox-database = { version = "0.3.0", path = "../docbox-database" }
-docbox-search = { version = "0.3.0", default-features = false, path = "../docbox-search" }
+docbox-database = { version = "0.4.0", path = "../docbox-database" }
+docbox-search = { version = "0.4.0", default-features = false, path = "../docbox-search" }
 
 # Secret management
 docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }
@@ -101,6 +101,6 @@ tokio = { workspace = true, features = ["full"] }
 
 
 # Enable typesense search backend for testing
-docbox-search = { version = "0.3.0", default-features = false, path = "../docbox-search", features = [
+docbox-search = { version = "0.4.0", default-features = false, path = "../docbox-search", features = [
     "typesense",
 ] }

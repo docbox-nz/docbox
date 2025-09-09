@@ -94,6 +94,7 @@ async fn server() -> anyhow::Result<()> {
     // Create secrets manager
     let secrets_config = SecretsManagerConfig::from_env()?;
     let secrets = AppSecretManager::from_config(&aws_config, secrets_config);
+    let secrets = Arc::new(secrets);
 
     // Load database credentials
     let db_pool_config = DatabasePoolCacheConfig::from_env()?;
@@ -102,7 +103,10 @@ async fn server() -> anyhow::Result<()> {
     let api_key = std::env::var("DOCBOX_API_KEY").ok();
 
     // Setup database cache / connector
-    let db_cache = Arc::new(DatabasePoolCache::from_config(db_pool_config, secrets));
+    let db_cache = Arc::new(DatabasePoolCache::from_config(
+        db_pool_config,
+        secrets.clone(),
+    ));
 
     // Create the SQS client
     // Warning: Will panic if the configuration provided is invalid
@@ -114,7 +118,8 @@ async fn server() -> anyhow::Result<()> {
 
     // Setup search index factory
     let search_config = SearchIndexFactoryConfig::from_env()?;
-    let search_index_factory = SearchIndexFactory::from_config(&aws_config, search_config)?;
+    let search_index_factory =
+        SearchIndexFactory::from_config(&aws_config, secrets, search_config)?;
 
     // Setup storage factory
     let storage_factory_config = StorageLayerFactoryConfig::from_env()?;

@@ -3,7 +3,6 @@ use crate::{
     storage::StorageLayerFactory,
 };
 use docbox_database::DatabasePoolCache;
-use docbox_secrets::AppSecretManager;
 use futures::StreamExt;
 use scheduler::{SchedulerEventStream, SchedulerQueueEvent};
 use std::sync::Arc;
@@ -17,7 +16,7 @@ pub enum BackgroundEvent {
 }
 
 pub struct BackgroundTaskData {
-    pub db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
+    pub db_cache: Arc<DatabasePoolCache>,
     pub storage: StorageLayerFactory,
 }
 

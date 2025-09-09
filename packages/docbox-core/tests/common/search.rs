@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
 use docbox_core::aws::aws_config;
 use docbox_database::models::tenant::Tenant;
 use docbox_search::{
-    SearchIndexFactory, SearchIndexFactoryConfig, TenantSearchIndex, TypesenseSearchConfig,
+    SearchIndexFactory, SearchIndexFactoryConfig, TenantSearchIndex, TypesenseApiKey,
+    TypesenseSearchConfig,
 };
+use docbox_secrets::{AppSecretManager, memory::MemorySecretManager};
 use testcontainers::{
     GenericImage, ImageExt,
     core::{IntoContainerPort, WaitFor, wait::HttpWaitStrategy},
@@ -43,11 +47,14 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
 
     let config = SearchIndexFactoryConfig::Typesense(TypesenseSearchConfig {
         url,
-        api_key: api_key.to_string(),
+        api_key: Some(TypesenseApiKey::new(api_key.to_string())),
+        api_key_secret_name: None,
     });
 
     let aws_config = aws_config().await;
-    let index = SearchIndexFactory::from_config(&aws_config, config).unwrap();
+    let secrets = AppSecretManager::Memory(MemorySecretManager::default());
+
+    let index = SearchIndexFactory::from_config(&aws_config, Arc::new(secrets), config).unwrap();
     let index = index.create_search_index(&Tenant {
         id: Uuid::new_v4(),
         name: "test".to_string(),

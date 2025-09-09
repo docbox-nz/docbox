@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use aws_config::SdkConfig;
 use docbox_database::models::{
     document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, tenant::Tenant,
 };
+use docbox_secrets::AppSecretManager;
 use models::{
     FileSearchRequest, FileSearchResults, SearchIndexData, SearchRequest, SearchResults,
     UpdateSearchIndexData,
@@ -14,7 +17,9 @@ pub mod models;
 #[cfg(feature = "opensearch")]
 pub use opensearch::OpenSearchConfig;
 #[cfg(feature = "typesense")]
-pub use typesense::TypesenseSearchConfig;
+pub use typesense::{
+    TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseSearchConfig,
+};
 
 #[cfg(feature = "opensearch")]
 mod opensearch;
@@ -65,6 +70,7 @@ pub enum SearchIndexFactory {
 impl SearchIndexFactory {
     pub fn from_config(
         aws_config: &SdkConfig,
+        secrets: Arc<AppSecretManager>,
         config: SearchIndexFactoryConfig,
     ) -> anyhow::Result<Self> {
         #[cfg(not(feature = "opensearch"))]
@@ -74,7 +80,7 @@ impl SearchIndexFactory {
             #[cfg(feature = "typesense")]
             SearchIndexFactoryConfig::Typesense(config) => {
                 tracing::debug!("using typesense search index");
-                typesense::TypesenseIndexFactory::from_config(config)
+                typesense::TypesenseIndexFactory::from_config(secrets, config)
                     .map(SearchIndexFactory::Typesense)
             }
             #[cfg(feature = "opensearch")]

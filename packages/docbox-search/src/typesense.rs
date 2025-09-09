@@ -1,3 +1,5 @@
+use std::{fmt::Debug, sync::Arc};
+
 use super::{
     SearchIndex,
     models::{
@@ -7,59 +9,186 @@ use super::{
 };
 use anyhow::Context;
 use docbox_database::models::{document_box::DocumentBoxScopeRaw, folder::FolderId, user::UserId};
+use docbox_secrets::{AppSecretManager, Secret};
 use itertools::Itertools;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::skip_serializing_none;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TypesenseSearchConfig {
     pub url: String,
-    pub api_key: String,
+
+    /// Config provides the API key directly
+    pub api_key: Option<TypesenseApiKey>,
+
+    /// Config provides a secret manager key pointing to the API key
+    pub api_key_secret_name: Option<String>,
 }
 
 impl TypesenseSearchConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         let url = std::env::var("TYPESENSE_URL").context("missing TYPESENSE_URL env")?;
-        let api_key =
-            std::env::var("TYPESENSE_API_KEY").context("missing TYPESENSE_API_KEY env")?;
-        Ok(Self { url, api_key })
+
+        let api_key = std::env::var("TYPESENSE_API_KEY")
+            .map(TypesenseApiKey::new)
+            .ok();
+        let api_key_secret_name = std::env::var("TYPESENSE_API_KEY_SECRET_NAME").ok();
+
+        Ok(Self {
+            url,
+            api_key,
+            api_key_secret_name,
+        })
     }
+}
+
+pub enum TypesenseApiKeyProvider {
+    ApiKey(TypesenseApiKey),
+    Secret(TypesenseApiKeySecret),
+}
+
+impl TypesenseApiKeyProviderImpl for TypesenseApiKeyProvider {
+    async fn get_api_key(&self) -> anyhow::Result<String> {
+        match self {
+            TypesenseApiKeyProvider::ApiKey(value) => value.get_api_key().await,
+            TypesenseApiKeyProvider::Secret(value) => value.get_api_key().await,
+        }
+    }
+}
+
+/// Trait for something that can provide an API key for typesense
+trait TypesenseApiKeyProviderImpl {
+    async fn get_api_key(&self) -> anyhow::Result<String>;
+}
+
+pub struct TypesenseApiKeySecret {
+    /// Secret manager access
+    secrets: Arc<AppSecretManager>,
+
+    /// Name of the secret the API key is within
+    secret_name: String,
+
+    /// Current loaded value of the secret
+    secret_value: Mutex<Option<String>>,
+}
+
+impl TypesenseApiKeySecret {
+    pub fn new(secrets: Arc<AppSecretManager>, secret_name: String) -> Self {
+        Self {
+            secrets,
+            secret_name,
+            secret_value: Default::default(),
+        }
+    }
+}
+
+impl TypesenseApiKeyProviderImpl for TypesenseApiKeySecret {
+    async fn get_api_key(&self) -> anyhow::Result<String> {
+        let secret_value = &mut *self.secret_value.lock().await;
+        if let Some(value) = secret_value.as_ref() {
+            return Ok(value.clone());
+        }
+
+        let value = self
+            .secrets
+            .get_secret(&self.secret_name)
+            .await?
+            .with_context(|| format!("secret with name '{}' not found", self.secret_name))?;
+
+        let value = match value {
+            Secret::String(value) => value,
+            Secret::Binary(_) => {
+                return Err(anyhow::anyhow!(
+                    "expected string for api key secret but got binary"
+                ));
+            }
+        };
+
+        Ok(value)
+    }
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct TypesenseApiKey(String);
+
+impl TypesenseApiKey {
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl Debug for TypesenseApiKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("< API KEY >")
+    }
+}
+
+impl TypesenseApiKeyProviderImpl for TypesenseApiKey {
+    async fn get_api_key(&self) -> anyhow::Result<String> {
+        Ok(self.0.clone())
+    }
+}
+pub struct TypesenseClientData {
+    base_url: String,
+    api_key_provider: TypesenseApiKeyProvider,
 }
 
 #[derive(Clone)]
 pub struct TypesenseIndexFactory {
     client: reqwest::Client,
-    base_url: String,
+
+    /// Shared client data (Base URL, API Key provider, ..etc)
+    client_data: Arc<TypesenseClientData>,
 }
 
 impl TypesenseIndexFactory {
-    pub fn from_config(config: TypesenseSearchConfig) -> anyhow::Result<Self> {
-        Self::new(config.url, config.api_key)
+    pub fn from_config(
+        secrets: Arc<AppSecretManager>,
+        config: TypesenseSearchConfig,
+    ) -> anyhow::Result<Self> {
+        let api_key_provider = match (config.api_key, config.api_key_secret_name) {
+            (Some(api_key), _) => {
+                tracing::debug!("using typesense api key");
+                TypesenseApiKeyProvider::ApiKey(api_key)
+            }
+            (_, Some(secret_name)) => {
+                tracing::debug!("using secret manager controller typesense api key");
+                TypesenseApiKeyProvider::Secret(TypesenseApiKeySecret::new(secrets, secret_name))
+            }
+            _ => anyhow::bail!(
+                "must provide either api_key or api_key_secret_name for search config"
+            ),
+        };
+
+        Self::new(config.url, api_key_provider)
     }
 
-    pub fn new(base_url: String, api_key: String) -> anyhow::Result<Self> {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            HeaderName::from_static("x-typesense-api-key"),
-            HeaderValue::from_str(&api_key)?,
-        );
-
+    pub fn new(
+        base_url: String,
+        api_key_provider: TypesenseApiKeyProvider,
+    ) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder()
-            .default_headers(headers)
             // Don't try and proxy through the proxy
             .no_proxy()
             .build()?;
 
-        Ok(Self { client, base_url })
+        Ok(Self {
+            client,
+            client_data: Arc::new(TypesenseClientData {
+                base_url,
+                api_key_provider,
+            }),
+        })
     }
 
     pub fn create_search_index(&self, index: String) -> TypesenseIndex {
         TypesenseIndex {
             client: self.client.clone(),
-            base_url: self.base_url.clone(),
+            client_data: self.client_data.clone(),
             index,
         }
     }
@@ -68,7 +197,7 @@ impl TypesenseIndexFactory {
 #[derive(Clone)]
 pub struct TypesenseIndex {
     client: reqwest::Client,
-    base_url: String,
+    client_data: Arc<TypesenseClientData>,
     index: String,
 }
 
@@ -220,8 +349,11 @@ impl SearchIndex for TypesenseIndex {
           ]
         });
 
+        let api_key = self.api_key().await?;
+
         self.client
-            .post(format!("{}/collections", self.base_url))
+            .post(format!("{}/collections", self.client_data.base_url))
+            .header("x-typesense-api-key", api_key)
             .json(&schema)
             .send()
             .await?
@@ -231,8 +363,14 @@ impl SearchIndex for TypesenseIndex {
     }
 
     async fn delete_index(&self) -> anyhow::Result<()> {
+        let api_key = self.api_key().await?;
+
         self.client
-            .delete(format!("{}/collections/{}", self.base_url, self.index))
+            .delete(format!(
+                "{}/collections/{}",
+                self.client_data.base_url, self.index
+            ))
+            .header("x-typesense-api-key", api_key)
             .send()
             .await?
             .error_for_status()?;
@@ -274,9 +412,12 @@ impl SearchIndex for TypesenseIndex {
             ]
         });
 
+        let api_key = self.api_key().await?;
+
         let response = self
             .client
-            .post(format!("{}/multi_search", self.base_url,))
+            .post(format!("{}/multi_search", self.client_data.base_url))
+            .header("x-typesense-api-key", api_key)
             .json(&query_json)
             .send()
             .await
@@ -348,7 +489,7 @@ impl SearchIndex for TypesenseIndex {
 
         // Must query at least one field
         if query_by.is_empty() {
-            // When specifing a query atleast one field must be specified
+            // When specifying a query at least one field must be specified
             if !search_query.is_empty() && !filter_by.is_empty() {
                 return Err(anyhow::anyhow!(
                     "must provide either include_name or include_content"
@@ -396,9 +537,13 @@ impl SearchIndex for TypesenseIndex {
         });
 
         tracing::debug!(?query_json);
+
+        let api_key = self.api_key().await?;
+
         let response = self
             .client
-            .post(format!("{}/multi_search", self.base_url,))
+            .post(format!("{}/multi_search", self.client_data.base_url))
+            .header("x-typesense-api-key", api_key)
             .json(&query_json)
             .send()
             .await
@@ -610,11 +755,14 @@ impl SearchIndex for TypesenseIndex {
     }
 
     async fn delete_data(&self, id: uuid::Uuid) -> anyhow::Result<()> {
+        let api_key = self.api_key().await?;
+
         self.client
             .delete(format!(
                 "{}/collections/{}/documents",
-                self.base_url, self.index
+                self.client_data.base_url, self.index
             ))
+            .header("x-typesense-api-key", api_key)
             .query(&[("filter_by", format!(r#"item_id:="{id}""#))])
             .send()
             .await?
@@ -626,11 +774,14 @@ impl SearchIndex for TypesenseIndex {
         &self,
         scope: docbox_database::models::document_box::DocumentBoxScopeRaw,
     ) -> anyhow::Result<()> {
+        let api_key = self.api_key().await?;
+
         self.client
             .delete(format!(
                 "{}/collections/{}/documents",
-                self.base_url, self.index
+                self.client_data.base_url, self.index
             ))
+            .header("x-typesense-api-key", api_key)
             .query(&[("filter_by", format!(r#"document_box:="{scope}""#))])
             .send()
             .await?
@@ -661,11 +812,14 @@ impl TypesenseIndex {
             bulk_data.push('\n');
         }
 
+        let api_key = self.api_key().await?;
+
         self.client
             .post(format!(
                 "{}/collections/{}/documents/import",
-                self.base_url, self.index
+                self.client_data.base_url, self.index
             ))
+            .header("x-typesense-api-key", api_key)
             .body(bulk_data)
             .send()
             .await
@@ -678,13 +832,24 @@ impl TypesenseIndex {
         Ok(())
     }
 
+    async fn api_key(&self) -> anyhow::Result<String> {
+        self.client_data
+            .api_key_provider
+            .get_api_key()
+            .await
+            .context("failed to get api key")
+    }
+
     /// Deletes all "Page" item types for a specific `item_id`
     async fn delete_item_pages(&self, item_id: Uuid) -> anyhow::Result<()> {
+        let api_key = self.api_key().await?;
+
         self.client
             .delete(format!(
                 "{}/collections/{}/documents",
-                self.base_url, self.index
+                self.client_data.base_url, self.index
             ))
+            .header("x-typesense-api-key", api_key)
             .query(&[(
                 "filter_by",
                 format!(r#"item_id:="{item_id}"&&entry_type="Page""#),
@@ -721,12 +886,15 @@ impl TypesenseIndex {
             "value": update.content,
         });
 
+        let api_key = self.api_key().await?;
+
         // Update all the existing items so they have the current root data
         self.client
             .patch(format!(
                 "{}/collections/{}/documents",
-                self.base_url, self.index
+                self.client_data.base_url, self.index
             ))
+            .header("x-typesense-api-key", api_key)
             .query(&[("filter_by", format!(r#"item_id:="{item_id}""#))])
             .json(&request)
             .send()
@@ -743,12 +911,15 @@ impl TypesenseIndex {
         &self,
         item_id: Uuid,
     ) -> anyhow::Result<Option<TypesenseDataEntryRootV1>> {
+        let api_key = self.api_key().await?;
+
         let response: GenericSearchResponse = self
             .client
             .get(format!(
                 "{}/collections/{}/documents/search",
-                self.base_url, self.index
+                self.client_data.base_url, self.index
             ))
+            .header("x-typesense-api-key", api_key)
             .query(&[(
                 "filter_by",
                 format!(r#"item_id:="{item_id}"&&entry_type=Root"#),

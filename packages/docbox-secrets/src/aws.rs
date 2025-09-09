@@ -1,5 +1,3 @@
-use std::{collections::HashMap, fmt::Debug};
-
 use aws_sdk_secretsmanager::{
     error::SdkError,
     operation::{
@@ -7,39 +5,12 @@ use aws_sdk_secretsmanager::{
         update_secret::UpdateSecretError,
     },
 };
-use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::SecretsManagerClient;
 
 use super::{Secret, SecretManager};
-
-#[derive(Clone, Deserialize, Serialize)]
-pub struct AwsSecretManagerConfig {
-    /// Collection of secrets to include
-    #[serde(default)]
-    pub secrets: HashMap<String, String>,
-    /// Optional default secret
-    #[serde(default)]
-    pub default: Option<String>,
-}
-
-impl AwsSecretManagerConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
-        let default = std::env::var("DOCBOX_SECRET_MANAGER_DEFAULT").ok();
-
-        Ok(Self {
-            default,
-            secrets: Default::default(),
-        })
-    }
-}
-
-impl Debug for AwsSecretManagerConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AwsSecretManagerConfig").finish()
-    }
-}
 
 pub struct AwsSecretManager {
     client: SecretsManagerClient,

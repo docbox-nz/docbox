@@ -1,6 +1,6 @@
 [package]
 name = "docbox-management"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Management core library for managing docbox used by the cli and other tools"
 
@@ -11,13 +11,13 @@ readme.workspace = true
 
 [dependencies]
 # Core business logic
-docbox-core = { version = "0.3.0", path = "../docbox-core" }
+docbox-core = { version = "0.4.0", path = "../docbox-core" }
 
 # Database access
-docbox-database = { version = "0.3.0", path = "../docbox-database" }
+docbox-database = { version = "0.4.0", path = "../docbox-database" }
 
 # Search access
-docbox-search = { version = "0.3.0", path = "../docbox-search" }
+docbox-search = { version = "0.4.0", path = "../docbox-search" }
 
 # Secret management
 docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }

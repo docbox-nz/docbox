@@ -7,11 +7,10 @@ use docbox_database::{
         tenant::Tenant,
     },
 };
-use docbox_secrets::AppSecretManager;
 use std::sync::Arc;
 
 pub async fn safe_purge_expired_presigned_tasks(
-    db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
+    db_cache: Arc<DatabasePoolCache>,
     storage: StorageLayerFactory,
 ) {
     if let Err(cause) = purge_expired_presigned_tasks(db_cache, storage).await {
@@ -20,7 +19,7 @@ pub async fn safe_purge_expired_presigned_tasks(
 }
 
 pub async fn purge_expired_presigned_tasks(
-    db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
+    db_cache: Arc<DatabasePoolCache>,
     storage: StorageLayerFactory,
 ) -> anyhow::Result<()> {
     let db = db_cache.get_root_pool().await?;

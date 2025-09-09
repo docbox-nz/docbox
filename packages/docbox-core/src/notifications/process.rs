@@ -14,13 +14,12 @@ use docbox_database::{
     models::{folder::Folder, presigned_upload_task::PresignedUploadTask, tenant::Tenant},
 };
 use docbox_search::SearchIndexFactory;
-use docbox_secrets::AppSecretManager;
 use std::sync::Arc;
 use tracing::Instrument;
 
 #[derive(Clone)]
 pub struct NotificationQueueData {
-    pub db_cache: Arc<DatabasePoolCache<AppSecretManager>>,
+    pub db_cache: Arc<DatabasePoolCache>,
     pub search: SearchIndexFactory,
     pub storage: StorageLayerFactory,
     pub events: EventPublisherFactory,

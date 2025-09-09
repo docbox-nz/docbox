@@ -19,7 +19,6 @@ use docbox_database::{
     models::document_box::{DocumentBox, WithScope},
 };
 use docbox_search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem};
-use docbox_secrets::AppSecretManager;
 use std::sync::Arc;
 
 pub const ADMIN_TAG: &str = "Admin";
@@ -208,7 +207,7 @@ pub async fn rebuild_search_index_tenant(
     )
 )]
 pub async fn flush_database_pool_cache(
-    Extension(db_cache): Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
+    Extension(db_cache): Extension<Arc<DatabasePoolCache>>,
 ) -> HttpStatusResult {
     db_cache.flush().await;
     Ok(StatusCode::NO_CONTENT)
@@ -249,7 +248,7 @@ pub async fn flush_tenant_cache(
     )
 )]
 pub async fn http_purge_expired_presigned_tasks(
-    Extension(db_cache): Extension<Arc<DatabasePoolCache<AppSecretManager>>>,
+    Extension(db_cache): Extension<Arc<DatabasePoolCache>>,
     Extension(storage_factory): Extension<StorageLayerFactory>,
 ) -> HttpStatusResult {
     purge_expired_presigned_tasks(db_cache, storage_factory)

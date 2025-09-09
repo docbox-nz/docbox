@@ -1,6 +1,6 @@
 [package]
 name = "docbox"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2024"
 
 license.workspace = true
@@ -17,13 +17,13 @@ mock-browser = []
 dotenvy = "=0.15.7"
 
 # Core business logic
-docbox-core = { version = "0.3.0", path = "../docbox-core" }
+docbox-core = { version = "0.4.0", path = "../docbox-core" }
 
 # Database access
-docbox-database = { version = "0.3.0", path = "../docbox-database" }
+docbox-database = { version = "0.4.0", path = "../docbox-database" }
 
 # Search access
-docbox-search = { version = "0.3.0", default-features = false, path = "../docbox-search", features = [
+docbox-search = { version = "0.4.0", default-features = false, path = "../docbox-search", features = [
     "typesense",
     "opensearch",
 ] }

@@ -4,8 +4,8 @@ use memory::MemorySecretManager;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::{
-    aws::AwsSecretManagerConfig,
     json::{JsonSecretManager, JsonSecretManagerConfig},
+    memory::MemorySecretManagerConfig,
 };
 
 pub type SecretsManagerClient = aws_sdk_secretsmanager::Client;
@@ -18,7 +18,7 @@ pub mod memory;
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SecretsManagerConfig {
     /// In-memory secret manager
-    Memory(AwsSecretManagerConfig),
+    Memory(MemorySecretManagerConfig),
 
     /// Encrypted JSON file secret manager
     Json(JsonSecretManagerConfig),
@@ -31,7 +31,7 @@ impl SecretsManagerConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         let variant = std::env::var("DOCBOX_SECRET_MANAGER").unwrap_or_else(|_| "aws".to_string());
         match variant.as_str() {
-            "memory" => AwsSecretManagerConfig::from_env().map(Self::Memory),
+            "memory" => MemorySecretManagerConfig::from_env().map(Self::Memory),
             "json" => JsonSecretManagerConfig::from_env().map(Self::Json),
             _ => Ok(Self::Aws),
         }

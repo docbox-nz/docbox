@@ -1,6 +1,6 @@
 [package]
 name = "docbox-search"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "Docbox multi-backend search abstraction"
 
@@ -15,7 +15,11 @@ opensearch = ["dep:opensearch"]
 typesense = []
 
 [dependencies]
-docbox-database = { version = "0.3.0", path = "../docbox-database" }
+docbox-database = { version = "0.4.0", path = "../docbox-database" }
+
+docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }
+
+tokio.workspace = true
 
 reqwest.workspace = true
 
