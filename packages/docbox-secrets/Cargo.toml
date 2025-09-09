@@ -11,11 +11,7 @@ readme.workspace = true
 
 [dependencies]
 # Asynchronous runtime & Helpers
-tokio = { workspace = true, features = ["full"] }
-futures.workspace = true
-
-# HTTP client
-reqwest.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 
 # Error handling
 anyhow.workspace = true
@@ -34,6 +30,3 @@ aws-sdk-secretsmanager = "=1.80.0"
 
 # File encryption for JSON file secrets manager
 age = "=0.11.1"
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["full"] }

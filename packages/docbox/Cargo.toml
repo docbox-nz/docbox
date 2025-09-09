@@ -17,25 +17,25 @@ mock-browser = []
 dotenvy = "=0.15.7"
 
 # Core business logic
-docbox-core = { version = "0.4.0", path = "../docbox-core" }
+docbox-core.workspace = true
 
 # Database access
-docbox-database = { version = "0.4.0", path = "../docbox-database" }
+docbox-database.workspace = true
 
 # Search access
-docbox-search = { version = "0.4.0", default-features = false, path = "../docbox-search", features = [
+docbox-search = { workspace = true, features = [
     "typesense",
     "opensearch",
 ] }
 
 # Web scraping
-docbox-web-scraper = { version = "0.2.0", path = "../docbox-web-scraper" }
+docbox-web-scraper.workspace = true
 
 # Secret management
-docbox-secrets = { version = "0.1.0", path = "../docbox-secrets" }
+docbox-secrets.workspace = true
 
 # Storage access
-docbox-storage = { version = "0.1.0", path = "../docbox-storage" }
+docbox-storage.workspace = true
 
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }

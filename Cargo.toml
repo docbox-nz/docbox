@@ -17,6 +17,24 @@ readme = "./README.md"
 license = "MIT"
 
 [workspace.dependencies]
+# Core business logic
+docbox-core = { version = "0.4.0", path = "packages/docbox-core" }
+
+# Database access
+docbox-database = { version = "0.4.0", path = "packages/docbox-database" }
+
+# Search access
+docbox-search = { version = "0.4.0", path = "packages/docbox-search", default-features = false }
+
+# Secret management
+docbox-secrets = { version = "0.1.0", path = "packages/docbox-secrets" }
+
+# Storage access
+docbox-storage = { version = "0.1.0", path = "packages/docbox-storage" }
+
+# Web scraping
+docbox-web-scraper = { version = "0.2.0", path = "packages/docbox-web-scraper" }
+
 # Async runtime
 tokio = "=1.46.1"
 

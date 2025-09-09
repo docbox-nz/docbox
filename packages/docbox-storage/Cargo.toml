@@ -10,10 +10,10 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
-docbox-database = { version = "0.4.0", path = "../docbox-database" }
+# Database access
+docbox-database.workspace = true
 
-# Asynchronous runtime & Helpers
-tokio = { workspace = true, features = ["full"] }
+# Futures streams
 futures.workspace = true
 
 # Error handling
@@ -25,15 +25,15 @@ serde.workspace = true
 # Logging
 tracing.workspace = true
 
+# AWS Config
 aws-config.workspace = true
 
 # S3 SDK
 aws-sdk-s3 = "=1.98.0"
 
+# Bytes
 bytes.workspace = true
 bytes-utils.workspace = true
 
+# Date time
 chrono.workspace = true
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["full"] }
