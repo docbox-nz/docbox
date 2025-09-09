@@ -26,7 +26,7 @@ pub struct MemorySecretManagerConfig {
 
 impl MemorySecretManagerConfig {
     pub fn from_env() -> anyhow::Result<Self> {
-        let default = std::env::var("DOCBOX_SECRET_MANAGER_DEFAULT").ok();
+        let default = std::env::var("DOCBOX_SECRET_MANAGER_MEMORY_DEFAULT").ok();
         let secrets = match std::env::var("DOCBOX_SECRET_MANAGER_MEMORY_SECRETS") {
             Ok(secrets) => serde_json::from_str(&secrets)
                 .context("failed to parse DOCBOX_SECRET_MANAGER_MEMORY_SECRETS")?,
