@@ -195,7 +195,7 @@ pub async fn initialize_tenant_db_secret(
     .map_err(CreateTenantError::SerializeSecret)?;
 
     secrets
-        .create_secret(secret_name, &secret_value)
+        .set_secret(secret_name, &secret_value)
         .await
         .map_err(CreateTenantError::CreateTenantSecret)?;
 

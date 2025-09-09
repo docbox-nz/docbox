@@ -99,7 +99,7 @@ impl SecretManager for JsonSecretManager {
         Ok(secret.map(|value| Secret::String(value.clone())))
     }
 
-    async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
+    async fn set_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
         let mut secrets = if self.path.exists() {
             self.read_file().await?
         } else {
@@ -109,6 +109,20 @@ impl SecretManager for JsonSecretManager {
         };
 
         secrets.secrets.insert(name.to_string(), value.to_string());
+        self.write_file(secrets).await?;
+        Ok(())
+    }
+
+    async fn delete_secret(&self, name: &str) -> anyhow::Result<()> {
+        let mut secrets = if self.path.exists() {
+            self.read_file().await?
+        } else {
+            SecretFile {
+                secrets: Default::default(),
+            }
+        };
+
+        secrets.secrets.remove(name);
         self.write_file(secrets).await?;
         Ok(())
     }

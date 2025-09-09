@@ -10,8 +10,8 @@ use aws_config::SdkConfig;
 use aws_sdk_secretsmanager::{
     error::SdkError,
     operation::{
-        create_secret::CreateSecretError, get_secret_value::GetSecretValueError,
-        update_secret::UpdateSecretError,
+        create_secret::CreateSecretError, delete_secret::DeleteSecretError,
+        get_secret_value::GetSecretValueError, update_secret::UpdateSecretError,
     },
 };
 use std::fmt::Debug;
@@ -40,6 +40,8 @@ pub enum AwsSecretError {
     GetSecretValue(SdkError<GetSecretValueError>),
     #[error("failed to create secret: {0}")]
     CreateSecret(SdkError<CreateSecretError>),
+    #[error("failed to delete secret: {0}")]
+    DeleteSecret(SdkError<DeleteSecretError>),
     #[error("failed to update secret: {0}")]
     UpdateSecret(SdkError<UpdateSecretError>),
 }
@@ -65,7 +67,7 @@ impl SecretManager for AwsSecretManager {
         Ok(None)
     }
 
-    async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
+    async fn set_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
         let err = match self
             .client
             .create_secret()
@@ -95,5 +97,22 @@ impl SecretManager for AwsSecretManager {
         }
 
         Err(AwsSecretError::CreateSecret(err).into())
+    }
+
+    async fn delete_secret(&self, name: &str) -> anyhow::Result<()> {
+        let err = match self.client.delete_secret().secret_id(name).send().await {
+            Ok(_) => return Ok(()),
+            Err(err) => err,
+        };
+
+        // Handle secret doesn't exist
+        if err
+            .as_service_error()
+            .is_some_and(|value| value.is_resource_not_found_exception())
+        {
+            return Ok(());
+        }
+
+        Err(AwsSecretError::DeleteSecret(err).into())
     }
 }

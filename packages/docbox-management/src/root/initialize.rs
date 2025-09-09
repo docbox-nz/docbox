@@ -158,7 +158,7 @@ pub async fn initialize_root_secret(
     .map_err(InitializeError::SerializeSecret)?;
 
     secrets
-        .create_secret(root_secret_name, &secret_value)
+        .set_secret(root_secret_name, &secret_value)
         .await
         .map_err(InitializeError::CreateRootSecret)?;
 

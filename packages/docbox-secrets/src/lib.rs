@@ -81,12 +81,21 @@ impl AppSecretManager {
         }
     }
 
-    pub async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
+    pub async fn set_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
         tracing::debug!(?name, "writing secret");
         match self {
-            AppSecretManager::Aws(inner) => inner.create_secret(name, value).await,
-            AppSecretManager::Memory(inner) => inner.create_secret(name, value).await,
-            AppSecretManager::Json(inner) => inner.create_secret(name, value).await,
+            AppSecretManager::Aws(inner) => inner.set_secret(name, value).await,
+            AppSecretManager::Memory(inner) => inner.set_secret(name, value).await,
+            AppSecretManager::Json(inner) => inner.set_secret(name, value).await,
+        }
+    }
+
+    pub async fn delete_secret(&self, name: &str) -> anyhow::Result<()> {
+        tracing::debug!(?name, "deleting secret");
+        match self {
+            AppSecretManager::Aws(inner) => inner.delete_secret(name).await,
+            AppSecretManager::Memory(inner) => inner.delete_secret(name).await,
+            AppSecretManager::Json(inner) => inner.delete_secret(name).await,
         }
     }
 
@@ -116,5 +125,7 @@ pub enum Secret {
 pub(crate) trait SecretManager: Send + Sync {
     async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>>;
 
-    async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()>;
+    async fn set_secret(&self, name: &str, value: &str) -> anyhow::Result<()>;
+
+    async fn delete_secret(&self, name: &str) -> anyhow::Result<()>;
 }

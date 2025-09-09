@@ -72,11 +72,16 @@ impl SecretManager for MemorySecretManager {
         Ok(None)
     }
 
-    async fn create_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
+    async fn set_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
         self.data
             .lock()
             .await
             .insert(name.to_string(), Secret::String(value.to_string()));
+        Ok(())
+    }
+
+    async fn delete_secret(&self, name: &str) -> anyhow::Result<()> {
+        self.data.lock().await.remove(name);
         Ok(())
     }
 }
