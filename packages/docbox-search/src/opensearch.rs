@@ -10,6 +10,7 @@ use super::{
 };
 use anyhow::Context;
 use aws_config::SdkConfig;
+use docbox_database::DbTransaction;
 use docbox_database::models::file::FileId;
 use docbox_database::models::{
     document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant, user::UserId,
@@ -564,7 +565,13 @@ impl SearchIndex for OpenSearchIndex {
         Ok(Vec::new())
     }
 
-    async fn apply_migration(&self, _name: &str) -> anyhow::Result<()> {
+    async fn apply_migration(
+        &self,
+        _tenant: &Tenant,
+        _root_t: &mut DbTransaction<'_>,
+        _t: &mut DbTransaction<'_>,
+        _name: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }

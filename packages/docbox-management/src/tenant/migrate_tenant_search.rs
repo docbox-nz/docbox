@@ -1,20 +1,10 @@
-use docbox_database::{
-    DbErr, ROOT_DATABASE_NAME,
-    models::{
-        tenant::Tenant,
-        tenant_migration::{CreateTenantMigration, TenantMigration},
-    },
-    sqlx::types::chrono::Utc,
-};
-use docbox_search::SearchIndexFactory;
-use thiserror::Error;
-
 use crate::{
     database::DatabaseProvider,
-    tenant::get_pending_tenant_search_migrations::{
-        GetPendingTenantMigrationsError, get_pending_tenant_search_migrations,
-    },
+    tenant::get_pending_tenant_search_migrations::GetPendingTenantMigrationsError,
 };
+use docbox_database::{DbErr, ROOT_DATABASE_NAME, models::tenant::Tenant};
+use docbox_search::SearchIndexFactory;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MigrateTenantSearchError {
@@ -29,6 +19,15 @@ pub enum MigrateTenantSearchError {
 
     #[error("failed to apply migration: {0}")]
     ApplyMigration(anyhow::Error),
+
+    #[error("error connecting to tenant database: {0}")]
+    ConnectTenantDatabase(DbErr),
+
+    #[error(transparent)]
+    StartTransaction(DbErr),
+
+    #[error(transparent)]
+    CommitTransaction(DbErr),
 }
 
 pub async fn migrate_tenant_search(
@@ -43,36 +42,38 @@ pub async fn migrate_tenant_search(
         .await
         .map_err(MigrateTenantSearchError::ConnectRootDatabase)?;
 
-    let search = search_factory.create_search_index(tenant);
-    let pending_migrations =
-        get_pending_tenant_search_migrations(db_provider, search_factory, tenant).await?;
-
-    for migration_name in pending_migrations {
-        // If targeting a specific migration only apply the target one
-        if target_migration_name
-            .is_some_and(|target_migration_name| target_migration_name.ne(&migration_name))
-        {
-            continue;
-        }
-
-        search
-            .apply_migration(&migration_name)
-            .await
-            .map_err(MigrateTenantSearchError::ApplyMigration)?;
-
-        // Store the applied migration
-        TenantMigration::create(
-            &root_db,
-            CreateTenantMigration {
-                tenant_id: tenant.id,
-                env: tenant.env.clone(),
-                name: migration_name,
-                applied_at: Utc::now(),
-            },
-        )
+    // Connect to the tenant database
+    let tenant_db = db_provider
+        .connect(&tenant.db_name)
         .await
-        .map_err(MigrateTenantSearchError::StoreMigration)?;
-    }
+        .map_err(MigrateTenantSearchError::ConnectTenantDatabase)?;
+
+    let search = search_factory.create_search_index(tenant);
+
+    // Start transactions
+    let mut root_t = root_db
+        .begin()
+        .await
+        .map_err(MigrateTenantSearchError::StartTransaction)?;
+    let mut tenant_t = tenant_db
+        .begin()
+        .await
+        .map_err(MigrateTenantSearchError::StartTransaction)?;
+
+    search
+        .apply_migrations(tenant, &mut root_t, &mut tenant_t, target_migration_name)
+        .await
+        .map_err(MigrateTenantSearchError::ApplyMigration)?;
+
+    // Commit database transactions
+    tenant_t
+        .commit()
+        .await
+        .map_err(MigrateTenantSearchError::CommitTransaction)?;
+    root_t
+        .commit()
+        .await
+        .map_err(MigrateTenantSearchError::CommitTransaction)?;
 
     Ok(())
 }

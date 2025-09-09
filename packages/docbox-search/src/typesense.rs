@@ -8,7 +8,10 @@ use super::{
     },
 };
 use anyhow::Context;
-use docbox_database::models::{document_box::DocumentBoxScopeRaw, folder::FolderId, user::UserId};
+use docbox_database::{
+    DbTransaction,
+    models::{document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant, user::UserId},
+};
 use docbox_secrets::{AppSecretManager, Secret};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -796,7 +799,13 @@ impl SearchIndex for TypesenseIndex {
         Ok(Vec::new())
     }
 
-    async fn apply_migration(&self, _name: &str) -> anyhow::Result<()> {
+    async fn apply_migration(
+        &self,
+        _tenant: &Tenant,
+        _root_t: &mut DbTransaction<'_>,
+        _t: &mut DbTransaction<'_>,
+        _name: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }

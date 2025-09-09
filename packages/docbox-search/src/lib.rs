@@ -1,8 +1,16 @@
-use std::sync::Arc;
+use std::{ops::DerefMut, sync::Arc};
 
 use aws_config::SdkConfig;
-use docbox_database::models::{
-    document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, tenant::Tenant,
+use chrono::Utc;
+use docbox_database::{
+    DbTransaction,
+    models::{
+        document_box::DocumentBoxScopeRaw,
+        file::FileId,
+        folder::FolderId,
+        tenant::Tenant,
+        tenant_migration::{CreateTenantMigration, TenantMigration},
+    },
 };
 use docbox_secrets::AppSecretManager;
 use models::{
@@ -282,17 +290,90 @@ impl TenantSearchIndex {
         }
     }
 
-    pub async fn apply_migration(&self, name: &str) -> anyhow::Result<()> {
+    /// Apply a specific migration for a `tenant` by `name`
+    pub async fn apply_migration(
+        &self,
+        tenant: &Tenant,
+        root_t: &mut DbTransaction<'_>,
+        tenant_t: &mut DbTransaction<'_>,
+        name: &str,
+    ) -> anyhow::Result<()> {
+        // Apply migration logic
         match self {
             #[cfg(feature = "typesense")]
-            TenantSearchIndex::Typesense(index) => index.apply_migration(name).await,
+            TenantSearchIndex::Typesense(index) => {
+                index
+                    .apply_migration(tenant, root_t, tenant_t, name)
+                    .await?
+            }
             #[cfg(feature = "opensearch")]
-            TenantSearchIndex::OpenSearch(index) => index.apply_migration(name).await,
+            TenantSearchIndex::OpenSearch(index) => {
+                index
+                    .apply_migration(tenant, root_t, tenant_t, name)
+                    .await?
+            }
 
             // Fallback error when no features are available
             #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
             _ => panic!("no matching search index is available"),
         }
+
+        // Store the applied migration
+        TenantMigration::create(
+            root_t.deref_mut(),
+            CreateTenantMigration {
+                tenant_id: tenant.id,
+                env: tenant.env.clone(),
+                name: name.to_string(),
+                applied_at: Utc::now(),
+            },
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    /// Apply all pending migrations for a `tenant`
+    ///
+    /// When `target_migration_name` is specified only that target migration will
+    /// be run
+    pub async fn apply_migrations(
+        &self,
+        tenant: &Tenant,
+        root_t: &mut DbTransaction<'_>,
+        tenant_t: &mut DbTransaction<'_>,
+        target_migration_name: Option<&str>,
+    ) -> anyhow::Result<()> {
+        let applied_migrations =
+            TenantMigration::find_by_tenant(root_t.deref_mut(), tenant.id, &tenant.env).await?;
+        let pending_migrations = self
+            .get_pending_migrations(
+                applied_migrations
+                    .into_iter()
+                    .map(|value| value.name)
+                    .collect(),
+            )
+            .await?;
+
+        for migration_name in pending_migrations {
+            // If targeting a specific migration only apply the target one
+            if target_migration_name
+                .is_some_and(|target_migration_name| target_migration_name.ne(&migration_name))
+            {
+                continue;
+            }
+
+            // Apply the migration
+            if let Err(error) = self
+                .apply_migration(tenant, root_t, tenant_t, &migration_name)
+                .await
+            {
+                tracing::error!(%migration_name, ?error, "failed to apply migration");
+                return Err(error);
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -341,5 +422,11 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
     ) -> anyhow::Result<Vec<String>>;
 
     /// Apply a migration by name
-    async fn apply_migration(&self, name: &str) -> anyhow::Result<()>;
+    async fn apply_migration(
+        &self,
+        tenant: &Tenant,
+        root_t: &mut DbTransaction<'_>,
+        t: &mut DbTransaction<'_>,
+        name: &str,
+    ) -> anyhow::Result<()>;
 }

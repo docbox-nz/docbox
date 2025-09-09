@@ -3,7 +3,7 @@ use docbox_database::migrations::apply_tenant_migrations;
 use docbox_database::models::tenant::TenantId;
 use docbox_database::{DbConnectErr, DbPool};
 use docbox_database::{DbErr, models::tenant::Tenant};
-use docbox_search::SearchIndexFactory;
+use docbox_search::{SearchIndexFactory, TenantSearchIndex};
 use docbox_storage::StorageLayerFactory;
 use std::ops::DerefMut;
 use thiserror::Error;
@@ -71,6 +71,10 @@ pub enum InitTenantError {
     /// Failed to create the search index
     #[error("failed to create tenant search index: {0}")]
     CreateSearchIndex(anyhow::Error),
+
+    /// Failed to migrate the search index
+    #[error("failed to migrate tenant search index: {0}")]
+    MigrateSearchIndex(anyhow::Error),
 }
 
 /// Attempts to initialize a new tenant
@@ -138,7 +142,18 @@ pub async fn create_tenant(
 
     // Setup the tenant search index
     tracing::debug!("creating tenant search index");
-    let search = create_tenant_search(&tenant, search).await?;
+    let (search, search_rollback) = create_tenant_search(&tenant, search).await?;
+
+    // Apply migrations to search
+    search
+        .apply_migrations(
+            &tenant,
+            &mut root_transaction,
+            &mut tenant_transaction,
+            None,
+        )
+        .await
+        .map_err(InitTenantError::MigrateSearchIndex)?;
 
     // Commit database changes
     tenant_transaction
@@ -152,7 +167,7 @@ pub async fn create_tenant(
 
     // Commit search and storage
     storage.commit();
-    search.commit();
+    search_rollback.commit();
 
     Ok(tenant)
 }
@@ -209,7 +224,7 @@ async fn create_tenant_storage(
 async fn create_tenant_search(
     tenant: &Tenant,
     search: &SearchIndexFactory,
-) -> Result<RollbackGuard<impl FnOnce()>, InitTenantError> {
+) -> Result<(TenantSearchIndex, RollbackGuard<impl FnOnce()>), InitTenantError> {
     // Setup the tenant search index
     let search = search.create_search_index(tenant);
     search
@@ -218,14 +233,17 @@ async fn create_tenant_search(
         .map_err(InitTenantError::CreateSearchIndex)
         .inspect_err(|error| tracing::error!(?error, "failed to create search index"))?;
 
-    let rollback = RollbackGuard::new(move || {
-        // Search was not committed, roll back
-        tokio::spawn(async move {
-            if let Err(error) = search.delete_index().await {
-                tracing::error!(?error, "failed to rollback created tenant search index");
-            }
-        });
+    let rollback = RollbackGuard::new({
+        let search = search.clone();
+        move || {
+            // Search was not committed, roll back
+            tokio::spawn(async move {
+                if let Err(error) = search.delete_index().await {
+                    tracing::error!(?error, "failed to rollback created tenant search index");
+                }
+            });
+        }
     });
 
-    Ok(rollback)
+    Ok((search, rollback))
 }
