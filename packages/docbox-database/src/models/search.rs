@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
@@ -72,4 +72,52 @@ pub async fn search_file_pages(
     .bind(offset)
     .fetch_all(db)
     .await
+}
+
+pub async fn delete_file_pages_by_scope(db: &DbPool, scope: &DocumentBoxScopeRaw) -> DbResult<()> {
+    sqlx::query(
+        r#"
+        DELETE FROM "docbox_files_pages" AS "page"
+        USING "docbox_files" AS "file"
+        JOIN "docbox_folders" AS "folder" ON "file"."folder_id" = "folder"."id"
+        WHERE "page"."file_id" = "file"."id" AND "folder"."document_box" = $1;
+    "#,
+    )
+    .bind(scope)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_file_pages_by_file_id(db: &DbPool, file_id: Uuid) -> DbResult<()> {
+    sqlx::query(
+        r#"
+        DELETE FROM "docbox_files_pages" AS "page"
+        WHERE "page"."file_id" = $1;
+    "#,
+    )
+    .bind(file_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DbSearchPageResult {
+    pub page: i64,
+    pub matched: String,
+}
+
+#[derive(Debug, FromRow)]
+pub struct DbSearchResult {
+    pub item_type: String,
+    pub item_id: Uuid,
+    pub document_box: DocumentBoxScopeRaw,
+    pub name_match_tsv: bool,
+    pub name_match: bool,
+    pub content_match: bool,
+    pub total_hits: i64,
+    #[sqlx(json)]
+    pub page_matches: Vec<DbSearchPageResult>,
+    pub total_count: i64,
 }

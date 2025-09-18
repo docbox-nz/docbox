@@ -47,6 +47,8 @@ pub struct DatabasePoolCacheConfig {
     pub host: String,
     pub port: u16,
     pub root_secret_name: String,
+    /// Max number of active connections per database pool (Default: 100)
+    pub max_connections: Option<u32>,
 }
 
 #[derive(Debug, Error)]
@@ -73,11 +75,14 @@ impl DatabasePoolCacheConfig {
             .map_err(|_| DatabasePoolCacheConfigError::InvalidDatabasePort)?;
         let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
             .map_err(|_| DatabasePoolCacheConfigError::MissingDatabaseSecretName)?;
-
+        let max_connections: Option<u32> = std::env::var("DOCBOX_DB_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|value| value.parse().ok());
         Ok(DatabasePoolCacheConfig {
             host: db_host,
             port: db_port,
             root_secret_name: db_root_secret_name,
+            max_connections,
         })
     }
 }
@@ -103,6 +108,9 @@ pub struct DatabasePoolCache {
 
     /// Secrets manager access to load credentials
     secrets_manager: Arc<AppSecretManager>,
+
+    /// Max connections per database pool
+    max_connections: u32,
 }
 
 /// Username and password for a specific database
@@ -134,6 +142,7 @@ impl DatabasePoolCache {
             config.port,
             config.root_secret_name,
             secrets_manager,
+            config.max_connections,
         )
     }
 
@@ -142,6 +151,7 @@ impl DatabasePoolCache {
         port: u16,
         root_secret_name: String,
         secrets_manager: Arc<AppSecretManager>,
+        max_connections: Option<u32>,
     ) -> Self {
         let cache = Cache::builder()
             .time_to_idle(DB_CACHE_DURATION)
@@ -162,6 +172,7 @@ impl DatabasePoolCache {
             cache,
             connect_info_cache,
             secrets_manager,
+            max_connections: max_connections.unwrap_or(100),
         }
     }
 
@@ -231,7 +242,13 @@ impl DatabasePoolCache {
             .password(&credentials.password)
             .database(db_name);
 
-        match PgPoolOptions::new().connect_with(options).await {
+        match PgPoolOptions::new()
+            .max_connections(self.max_connections)
+            // Slightly larger acquire timeout for times when lots of files are being processed
+            .acquire_timeout(Duration::from_secs(60))
+            .connect_with(options)
+            .await
+        {
             // Success case
             Ok(value) => Ok(value),
             Err(err) => {

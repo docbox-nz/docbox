@@ -10,7 +10,7 @@ repository.workspace = true
 readme.workspace = true
 
 [features]
-default = ["opensearch", "typesense"]
+default = ["opensearch", "typesense", "database"]
 opensearch = ["dep:opensearch"]
 typesense = []
 database = []
