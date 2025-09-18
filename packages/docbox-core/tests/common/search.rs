@@ -61,6 +61,7 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
         0,
         "test/test".to_string(),
         secrets.clone(),
+        None
     );
 
     let index =
