@@ -121,12 +121,13 @@ pub async fn upload(
         }
     }
 
-    let content_type = req
-        .mime
-        .or(req.file.metadata.content_type)
-        .ok_or(HttpFileError::MissingMimeType)?;
+    let content_type = req.mime.or(req.file.metadata.content_type);
 
-    let mut mime = Mime::from_str(&content_type).map_err(|_| HttpFileError::InvalidMimeType)?;
+    let mut mime = match content_type {
+        Some(value) => Mime::from_str(&value).map_err(|_| HttpFileError::InvalidMimeType)?,
+        // Fallback to default mime type when none is provided
+        None => mime::APPLICATION_OCTET_STREAM,
+    };
 
     // Attempt to guess the file mime type when application/octet-stream is specified
     // (Likely from old browsers)

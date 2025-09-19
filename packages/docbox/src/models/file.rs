@@ -226,9 +226,6 @@ pub enum HttpFileError {
     #[error("fixed file id already in use")]
     FileIdInUse,
 
-    #[error("request file missing mime content type")]
-    MissingMimeType,
-
     #[error("request file mime content type is invalid")]
     InvalidMimeType,
 
@@ -248,9 +245,9 @@ impl HttpError for HttpFileError {
             HttpFileError::UnknownFile
             | HttpFileError::NoMatchingGenerated
             | HttpFileError::UnknownTask => StatusCode::NOT_FOUND,
-            HttpFileError::UnsupportedFileType
-            | HttpFileError::MissingMimeType
-            | HttpFileError::InvalidMimeType => StatusCode::BAD_REQUEST,
+            HttpFileError::UnsupportedFileType | HttpFileError::InvalidMimeType => {
+                StatusCode::BAD_REQUEST
+            }
         }
     }
 }
