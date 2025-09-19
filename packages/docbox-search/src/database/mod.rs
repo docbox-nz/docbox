@@ -1,9 +1,22 @@
 //! # Database
 //!
-//! Database backed search
+//! Database backed search, uses the postgres backend directly as a search index.
+//!
+//! When using this search type additional tables and indexes are added in order to store the
+//! page text contents for files in the database, it also adds additional columns to
+//! other tables to provide tsvector variants to allow fast full text search.
+//!
+//! This is a good backend to choose if you don't wish to have a dedicated search service
+//! running to manage a copy of your data, you can instead store it along side the metadata
+//! inside your postgres database.
 
-use std::{sync::Arc, vec};
-
+use crate::{
+    SearchIndex,
+    models::{
+        FileSearchRequest, FileSearchResults, FlattenedItemResult, PageResult, SearchIndexData,
+        SearchIndexType, SearchRequest, SearchResults, SearchScore,
+    },
+};
 use anyhow::{Context, Ok};
 use docbox_database::{
     DatabasePoolCache,
@@ -22,14 +35,7 @@ use docbox_database::{
 };
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    SearchIndex,
-    models::{
-        FileSearchRequest, FileSearchResults, FlattenedItemResult, PageResult, SearchIndexData,
-        SearchIndexType, SearchRequest, SearchResults, SearchScore,
-    },
-};
+use std::{sync::Arc, vec};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DatabaseSearchConfig {}
@@ -282,7 +288,7 @@ WITH
                     "File" => SearchIndexType::File,
                     "Folder" => SearchIndexType::Folder,
                     "Link" => SearchIndexType::Link,
-                    // Unknown type error
+                    // Unknown type error, should never occur but must be handled
                     _ => return None,
                 };
 
@@ -394,7 +400,8 @@ WITH
         _item_id: uuid::Uuid,
         _data: crate::models::UpdateSearchIndexData,
     ) -> anyhow::Result<()> {
-        // Currently no-op, we only care about page data in this backend and currently no system ever updates that here
+        // No-op: Currently page data is never updated, and since this search implementation sources all other
+        // data directly from the database it already has a copy of everything it needs so no changes need to be made
         Ok(())
     }
 
