@@ -1,9 +1,10 @@
-use std::future::Future;
+use std::{future::Future, time::Duration};
 
 use crate::{DbExecutor, DbPool, DbResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Database, Decode, error::BoxDynError, prelude::FromRow};
+use tokio::time::sleep;
 use tracing::Instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -71,7 +72,7 @@ where
     Fut: Future<Output = (TaskStatus, serde_json::Value)> + Send + 'static,
 {
     // Create task for progression
-    let task = Task::create(&db, scope).await?;
+    let mut task = Task::create(&db, scope).await?;
 
     let task_id = task.id;
     let created_at = task.created_at;
@@ -83,9 +84,19 @@ where
         async move {
             let (status, output) = future.await;
 
-            // Update task completion
-            if let Err(cause) = task.complete_task(&db, status, Some(output)).await {
-                tracing::error!(?cause, "failed to mark task as complete");
+            // Multiple retry attempts:
+            // We retry multiple times because things like database connection exhaustion could
+            // prevent a connection from being acquired to commit the state. But we need to make
+            // sure that this state is committed
+            for i in 1..5 {
+                // Update task completion
+                match task.complete_task(&db, status, Some(output.clone())).await {
+                    Ok(_) => break,
+                    Err(error) => {
+                        tracing::error!(?error, "failed to mark task as complete");
+                        sleep(Duration::from_secs(60 * (i * i))).await;
+                    }
+                }
             }
         }
         .instrument(span),
@@ -106,7 +117,7 @@ impl Task {
 
         sqlx::query(
             r#"
-            INSERT INTO "docbox_tasks" ("id", "document_box", "status", "created_at") 
+            INSERT INTO "docbox_tasks" ("id", "document_box", "status", "created_at")
             VALUES ($1, $2, $3, $4)
         "#,
         )
@@ -141,17 +152,17 @@ impl Task {
 
     /// Mark the task as completed and set its output data
     pub async fn complete_task(
-        mut self,
+        &mut self,
         db: impl DbExecutor<'_>,
         status: TaskStatus,
         output_data: Option<serde_json::Value>,
-    ) -> DbResult<Task> {
+    ) -> DbResult<()> {
         let completed_at = Utc::now();
 
         sqlx::query(
-            r#"UPDATE "docbox_tasks" SET 
-            "status" = $1, 
-            "output_data" = $2, 
+            r#"UPDATE "docbox_tasks" SET
+            "status" = $1,
+            "output_data" = $2,
             "completed_at" = $3
             WHERE "id" = $4"#,
         )
@@ -166,6 +177,6 @@ impl Task {
         self.output_data = output_data.clone();
         self.completed_at = Some(completed_at);
 
-        Ok(self)
+        Ok(())
     }
 }
