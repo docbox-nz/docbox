@@ -120,4 +120,5 @@ pub struct DbSearchResult {
     #[sqlx(json)]
     pub page_matches: Vec<DbSearchPageResult>,
     pub total_count: i64,
+    pub rank: f64,
 }

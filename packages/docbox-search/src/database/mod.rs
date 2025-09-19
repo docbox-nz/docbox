@@ -121,10 +121,13 @@ WITH
             "link"."id" AS "item_id",
             "folder"."document_box" AS "document_box",
             ($3::BOOLEAN AND "link"."name_tsv" @@ "query_data"."ts_query") AS "name_match_tsv",
+            ts_rank("link"."name_tsv", "query_data"."ts_query") AS "name_match_tsv_rank",
             ($3::BOOLEAN AND "link"."name" ILIKE '%' || $1 || '%') AS "name_match",
             ($4::BOOLEAN AND "link"."value" ILIKE '%' || $1 || '%') AS "content_match",
+            0::FLOAT8 as "content_rank",
             0::INT AS "total_hits",
-            '[]'::json AS "page_matches"
+            '[]'::json AS "page_matches",
+            "link"."created_at" AS "created_at"
         FROM "docbox_links" "link"
         CROSS JOIN "query_data"
         LEFT JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
@@ -142,10 +145,13 @@ WITH
             "folder"."id" AS "item_id",
             "folder"."document_box" AS "document_box",
             ($3::BOOLEAN AND "folder"."name_tsv" @@ "query_data"."ts_query") AS "name_match_tsv",
+            ts_rank("folder"."name_tsv", "query_data"."ts_query") AS "name_match_tsv_rank",
             ($3::BOOLEAN AND "folder"."name" ILIKE '%' || $1 || '%') AS "name_match",
             FALSE as "content_match",
+            0::FLOAT8 as "content_rank",
             0::INT AS "total_hits",
-            '[]'::json AS "page_matches"
+            '[]'::json AS "page_matches",
+            "folder"."created_at" AS "created_at"
         FROM "docbox_folders" "folder"
         CROSS JOIN "query_data"
         WHERE "folder"."document_box" = ANY($2)
@@ -162,33 +168,44 @@ WITH
             "file"."id" AS "item_id",
             "folder"."document_box" AS "document_box",
             ($3::BOOLEAN AND "file"."name_tsv" @@ "query_data"."ts_query") AS "name_match_tsv",
+            ts_rank("file"."name_tsv", "query_data"."ts_query") AS "name_match_tsv_rank",
             ($3::BOOLEAN AND "file"."name" ILIKE '%' || $1 || '%') AS "name_match",
             ($4::BOOLEAN AND COUNT("pages"."page") > 0) AS "content_match",
-            MAX("pages"."total_hits") AS "total_hits",
-            (coalesce(
+            COALESCE(AVG("pages"."content_match_rank"), 0) as "content_rank",
+            COALESCE(MAX("pages"."total_hits"), 0) AS "total_hits",
+            (COALESCE(
                 json_agg(
                     json_build_object(
                         'page', "pages"."page",
                         'matched', ts_headline('english', "pages"."content", "query_data"."ts_query", 'StartSel=<em>, StopSel=</em>')
                     )
-                    ORDER BY "pages"."page"
+                    ORDER BY "pages"."content_match_rank" DESC, "pages"."page" ASC
                 )  FILTER (WHERE "pages"."page" IS NOT NULL),
                 '[]'::json
-            )) AS "page_matches"
+            )) AS "page_matches",
+            "file"."created_at" AS "created_at"
         FROM "docbox_files" "file"
         CROSS JOIN "query_data"
         LEFT JOIN "docbox_folders" "folder"
             ON "file"."folder_id" = "folder"."id" AND "folder"."document_box" = ANY($2)
         LEFT JOIN LATERAL (
-            SELECT
-                "p".*,
-                "p"."content_tsv" @@ "query_data"."ts_query" AS "content_match_tsv",
-                "p"."content" ILIKE '%' || $1 || '%' AS "content_match",
-                COUNT(*) OVER () AS "total_hits"
-            FROM "docbox_files_pages" "p"
-            WHERE "p"."file_id" = "file"."id"
-                AND ("p"."content_tsv" @@ "query_data"."ts_query" OR "p"."content" ILIKE '%' || $1 || '%')
-            ORDER BY "p"."page"
+            -- Match the page content
+            WITH "page_data" AS (
+                SELECT
+                    "p".*,
+                    "p"."content_tsv" @@ "query_data"."ts_query" AS "content_match_tsv",
+                    "p"."content" ILIKE '%' || $1 || '%' AS "content_match",
+                    COUNT(*) OVER () AS "total_hits",
+                    (ts_rank("p"."content_tsv", "query_data"."ts_query")
+                     + CASE WHEN "p"."content" ILIKE '%' || $1 || '%' THEN 1.0 ELSE 0 END -- Boost result for ILIKE content matches
+                    ) AS "content_match_rank"
+                FROM "docbox_files_pages" "p"
+                WHERE "p"."file_id" = "file"."id"
+            )
+            SELECT *
+            FROM "page_data"
+            WHERE "content_match" OR "content_match_tsv"
+            ORDER BY "content_match_rank" DESC, "page" ASC
             LIMIT $10::INT
             OFFSET $11::INT
         ) "pages" ON $4::BOOLEAN
@@ -221,10 +238,17 @@ WITH
     )
 
     (
-        SELECT *, COUNT("item_id") OVER() as "total_count"
+        SELECT *,
+        ("name_match_tsv_rank"
+         + "content_rank"
+         + CASE WHEN "name_match" THEN 1.0 ELSE 0 END -- Boost result for ILIKE name matches
+         + CASE WHEN "item_type" = 'Link' AND "content_match" THEN 1.0 ELSE 0 END -- Boost link content matches
+        ) AS "rank",
+        COUNT("item_id") OVER() as "total_count"
         FROM "results"
         WHERE "name_match" OR "name_match_tsv" OR "content_match"
     )
+    ORDER BY "rank" DESC, "created_at" DESC
     LIMIT $12
     OFFSET $13"#,
         )
@@ -262,8 +286,6 @@ WITH
                     _ => return None,
                 };
 
-                // TODO: Compute score
-
                 Some(FlattenedItemResult {
                     item_ty,
                     item_id: result.item_id,
@@ -277,7 +299,7 @@ WITH
                         })
                         .collect(),
                     total_hits: result.total_hits as u64,
-                    score: SearchScore::Integer(0),
+                    score: SearchScore::Float(result.rank as f32),
                     name_match: result.name_match,
                     content_match: result.content_match,
                 })

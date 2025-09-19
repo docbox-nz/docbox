@@ -117,7 +117,7 @@ pub struct FlattenedItemResult {
 pub enum SearchScore {
     /// Typesense uses integer scoring
     Integer(u64),
-    /// OpenSearch uses float scoring
+    /// OpenSearch and database use float scoring
     Float(f32),
 }
 
