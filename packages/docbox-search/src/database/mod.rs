@@ -18,12 +18,10 @@ use docbox_database::{
         },
         tenant::Tenant,
     },
-    sqlx::{self, prelude::FromRow},
+    sqlx,
 };
 use itertools::Itertools;
-use opensearch::http::request;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{
     SearchIndex,
@@ -103,26 +101,17 @@ impl SearchIndex for DatabaseSearchIndex {
         &self,
         scopes: &[DocumentBoxScopeRaw],
         query: SearchRequest,
-        _folder_children: Option<Vec<FolderId>>,
+        folder_children: Option<Vec<FolderId>>,
     ) -> anyhow::Result<crate::models::SearchResults> {
         let db = self.db.get_tenant_pool(&self.tenant).await?;
 
         let query_text = query.query.unwrap_or_default();
 
-        // TODO: - Support folder_id through _folder_children
-        //       - Mime filtering
-        //       - Created At filter
-        //       - Created by
-
         let results: Vec<DbSearchResult> = sqlx::query_as(
             r#"
 WITH
     "query_data" AS (
-        SELECT
-            plainto_tsquery('english', $1) AS "ts_query",
-            $2 AS "document_box",
-            $5::INT AS max_pages,
-            $6::INT AS pages_offset
+        SELECT plainto_tsquery('english', $1) AS "ts_query"
     ),
 
     -- Search links
@@ -139,7 +128,11 @@ WITH
         FROM "docbox_links" "link"
         CROSS JOIN "query_data"
         LEFT JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
-        WHERE "folder"."document_box" = ANY("query_data"."document_box")
+        WHERE "folder"."document_box" = ANY($2)
+            AND ($6 IS NULL OR "link"."created_at" >= $6)
+            AND ($7 IS NULL OR "link"."created_at" <= $7)
+            AND ($8 IS NULL OR "link"."created_by" = $8)
+            AND ($9 IS NULL OR "link"."folder_id" = ANY($9))
     ),
 
     -- Search folders
@@ -155,7 +148,11 @@ WITH
             '[]'::json AS "page_matches"
         FROM "docbox_folders" "folder"
         CROSS JOIN "query_data"
-        WHERE "folder"."document_box" = ANY("query_data"."document_box")
+        WHERE "folder"."document_box" = ANY($2)
+            AND ($6 IS NULL OR "folder"."created_at" >= $6)
+            AND ($7 IS NULL OR "folder"."created_at" <= $7)
+            AND ($8 IS NULL OR "folder"."created_by" = $8)
+            AND ($9 IS NULL OR "folder"."folder_id" = ANY($9))
     ),
 
     -- Search files
@@ -180,7 +177,8 @@ WITH
             )) AS "page_matches"
         FROM "docbox_files" "file"
         CROSS JOIN "query_data"
-        LEFT JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id" AND "folder"."document_box" = ANY("query_data"."document_box")
+        LEFT JOIN "docbox_folders" "folder"
+            ON "file"."folder_id" = "folder"."id" AND "folder"."document_box" = ANY($2)
         LEFT JOIN LATERAL (
             SELECT
                 "p".*,
@@ -188,13 +186,19 @@ WITH
                 "p"."content" ILIKE '%' || $1 || '%' AS "content_match",
                 COUNT(*) OVER () AS "total_hits"
             FROM "docbox_files_pages" "p"
-            WHERE $4::BOOLEAN AND "p"."file_id" = "file"."id"
+            WHERE "p"."file_id" = "file"."id"
                 AND ("p"."content_tsv" @@ "query_data"."ts_query" OR "p"."content" ILIKE '%' || $1 || '%')
             ORDER BY "p"."page"
-            LIMIT "query_data"."max_pages"
-            OFFSET "query_data"."pages_offset"
-        ) "pages" ON TRUE
-        WHERE "folder"."document_box" = ANY("query_data"."document_box")
+            LIMIT $10::INT
+            OFFSET $11::INT
+        ) "pages" ON $4::BOOLEAN
+        WHERE "folder"."document_box" = ANY($2)
+            AND ($5 IS NULL OR "file"."mime" = $5)
+            AND ($6 IS NULL OR "file"."created_at" >= $6)
+            AND ($7 IS NULL OR "file"."created_at" <= $7)
+            AND ($8 IS NULL OR "file"."created_by" = $8)
+            AND ($9 IS NULL OR "file"."folder_id" = ANY($9))
+
         GROUP BY "file"."id", "folder"."document_box", "query_data"."ts_query"
     ),
 
@@ -221,13 +225,18 @@ WITH
         FROM "results"
         WHERE "name_match" OR "name_match_tsv" OR "content_match"
     )
-    LIMIT $7
-    OFFSET $8"#,
+    LIMIT $12
+    OFFSET $13"#,
         )
         .bind(query_text)
         .bind(scopes)
         .bind(query.include_name)
         .bind(query.include_content)
+        .bind(query.mime.map(|value| value.0.to_string()))
+        .bind(query.created_at.as_ref().map(|created_at| created_at.start))
+        .bind(query.created_at.as_ref().map(|created_at| created_at.end))
+        .bind(query.created_by)
+        .bind(folder_children)
         .bind(query.max_pages.unwrap_or(3) as i32)
         .bind(query.pages_offset.unwrap_or_default() as i32)
         .bind(query.size.unwrap_or(50) as i32)
