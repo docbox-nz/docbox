@@ -11,15 +11,14 @@
 //! inside your postgres database.
 
 use crate::{
-    SearchIndex,
+    SearchError, SearchIndex,
     models::{
         FileSearchRequest, FileSearchResults, FlattenedItemResult, PageResult, SearchIndexData,
         SearchIndexType, SearchRequest, SearchResults, SearchScore,
     },
 };
-use anyhow::{Context, Ok};
 use docbox_database::{
-    DatabasePoolCache,
+    DatabasePoolCache, DbPool,
     migrations::apply_tenant_migration,
     models::{
         document_box::DocumentBoxScopeRaw,
@@ -36,12 +35,13 @@ use docbox_database::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, vec};
+use thiserror::Error;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DatabaseSearchConfig {}
 
 impl DatabaseSearchConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub fn from_env() -> Result<Self, DatabaseSearchIndexFactoryError> {
         Ok(Self {})
     }
 }
@@ -51,11 +51,14 @@ pub struct DatabaseSearchIndexFactory {
     db: Arc<DatabasePoolCache>,
 }
 
+#[derive(Debug, Error)]
+pub enum DatabaseSearchIndexFactoryError {}
+
 impl DatabaseSearchIndexFactory {
     pub fn from_config(
         db: Arc<DatabasePoolCache>,
         _config: DatabaseSearchConfig,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, DatabaseSearchIndexFactoryError> {
         Ok(Self { db })
     }
 
@@ -77,6 +80,33 @@ pub struct DatabaseSearchIndex {
     tenant: Arc<Tenant>,
 }
 
+#[derive(Debug, Error)]
+pub enum DatabaseSearchError {
+    #[error("failed to connect")]
+    AcquireDatabase,
+
+    #[error("migration not found")]
+    MigrationNotFound,
+
+    #[error("failed to search index")]
+    SearchIndex,
+
+    #[error("failed to count page matches")]
+    CountFilePages,
+
+    #[error("failed to search file pages")]
+    SearchFilePages,
+
+    #[error("failed to delete search data")]
+    DeleteData,
+
+    #[error("failed to apply migration")]
+    ApplyMigration,
+
+    #[error("failed to add search data")]
+    AddData,
+}
+
 const TENANT_MIGRATIONS: &[(&str, &str)] = &[
     (
         "m1_create_additional_indexes",
@@ -92,13 +122,27 @@ const TENANT_MIGRATIONS: &[(&str, &str)] = &[
     ),
 ];
 
+impl DatabaseSearchIndex {
+    pub async fn acquire_db(&self) -> Result<DbPool, SearchError> {
+        let db = self
+            .db
+            .get_tenant_pool(&self.tenant)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to acquire database for searching");
+                DatabaseSearchError::AcquireDatabase
+            })?;
+        Ok(db)
+    }
+}
+
 impl SearchIndex for DatabaseSearchIndex {
-    async fn create_index(&self) -> anyhow::Result<()> {
+    async fn create_index(&self) -> Result<(), SearchError> {
         // No-op, creation is handled in the migration running phase
         Ok(())
     }
 
-    async fn delete_index(&self) -> anyhow::Result<()> {
+    async fn delete_index(&self) -> Result<(), SearchError> {
         // No-op
         Ok(())
     }
@@ -108,8 +152,8 @@ impl SearchIndex for DatabaseSearchIndex {
         scopes: &[DocumentBoxScopeRaw],
         query: SearchRequest,
         folder_children: Option<Vec<FolderId>>,
-    ) -> anyhow::Result<crate::models::SearchResults> {
-        let db = self.db.get_tenant_pool(&self.tenant).await?;
+    ) -> Result<crate::models::SearchResults, SearchError> {
+        let db = self.acquire_db().await?;
 
         let query_text = query.query.unwrap_or_default();
 
@@ -272,9 +316,11 @@ WITH
         .bind(query.size.unwrap_or(50) as i32)
         .bind(query.offset.unwrap_or(0) as i32)
         .fetch_all(&db)
-        .await?;
-
-        tracing::debug!(?results, "search results from db");
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "failed to search index");
+            DatabaseSearchError::SearchIndex
+        })?;
 
         let total_hits = results
             .first()
@@ -323,10 +369,15 @@ WITH
         scope: &DocumentBoxScopeRaw,
         file_id: FileId,
         query: FileSearchRequest,
-    ) -> anyhow::Result<crate::models::FileSearchResults> {
-        let db = self.db.get_tenant_pool(&self.tenant).await?;
+    ) -> Result<crate::models::FileSearchResults, SearchError> {
+        let db = self.acquire_db().await?;
         let query_text = query.query.unwrap_or_default();
-        let total_pages = count_search_file_pages(&db, scope, file_id, &query_text).await?;
+        let total_pages = count_search_file_pages(&db, scope, file_id, &query_text)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to count search file pages");
+                DatabaseSearchError::CountFilePages
+            })?;
         let pages = search_file_pages(
             &db,
             scope,
@@ -335,7 +386,11 @@ WITH
             query.limit.unwrap_or(50) as i64,
             query.offset.unwrap_or(0) as i64,
         )
-        .await?;
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "failed to search file pages");
+            DatabaseSearchError::SearchFilePages
+        })?;
 
         Ok(FileSearchResults {
             total_hits: total_pages.count as u64,
@@ -349,12 +404,12 @@ WITH
         })
     }
 
-    async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()> {
+    async fn add_data(&self, data: SearchIndexData) -> Result<(), SearchError> {
         self.bulk_add_data(vec![data]).await
     }
 
-    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> anyhow::Result<()> {
-        let db = self.db.get_tenant_pool(&self.tenant).await?;
+    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
+        let db = self.acquire_db().await?;
 
         for item in data {
             let pages = match item.pages {
@@ -381,15 +436,14 @@ WITH
                 // Shared amongst all values
                 .bind(item.item_id);
 
-            tracing::debug!(?pages);
-
             for page in pages {
                 query = query.bind(page.page as i32).bind(page.content);
             }
 
-            _ = query.execute(&db).await?;
-
-            tracing::debug!("inserted pages");
+            if let Err(error) = query.execute(&db).await {
+                tracing::error!(?error, "failed to add search data");
+                return Err(DatabaseSearchError::AddData.into());
+            }
         }
 
         Ok(())
@@ -399,28 +453,38 @@ WITH
         &self,
         _item_id: uuid::Uuid,
         _data: crate::models::UpdateSearchIndexData,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         // No-op: Currently page data is never updated, and since this search implementation sources all other
         // data directly from the database it already has a copy of everything it needs so no changes need to be made
         Ok(())
     }
 
-    async fn delete_data(&self, id: uuid::Uuid) -> anyhow::Result<()> {
-        let db = self.db.get_tenant_pool(&self.tenant).await?;
-        delete_file_pages_by_file_id(&db, id).await?;
+    async fn delete_data(&self, id: uuid::Uuid) -> Result<(), SearchError> {
+        let db = self.acquire_db().await?;
+        delete_file_pages_by_file_id(&db, id)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete search data by id");
+                DatabaseSearchError::DeleteData
+            })?;
         Ok(())
     }
 
-    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()> {
-        let db = self.db.get_tenant_pool(&self.tenant).await?;
-        delete_file_pages_by_scope(&db, &scope).await?;
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
+        let db = self.acquire_db().await?;
+        delete_file_pages_by_scope(&db, &scope)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete search data by scope");
+                DatabaseSearchError::DeleteData
+            })?;
         Ok(())
     }
 
     async fn get_pending_migrations(
         &self,
         applied_names: Vec<String>,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> Result<Vec<String>, SearchError> {
         let pending = TENANT_MIGRATIONS
             .iter()
             .filter(|(migration_name, _migration)| {
@@ -441,14 +505,19 @@ WITH
         _root_t: &mut docbox_database::DbTransaction<'_>,
         t: &mut docbox_database::DbTransaction<'_>,
         name: &str,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         let (_, migration) = TENANT_MIGRATIONS
             .iter()
             .find(|(migration_name, _)| name.eq(*migration_name))
-            .context("migration not found")?;
+            .ok_or(DatabaseSearchError::MigrationNotFound)?;
 
         // Apply the migration
-        apply_tenant_migration(t, name, migration).await?;
+        apply_tenant_migration(t, name, migration)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to apply migration");
+                DatabaseSearchError::ApplyMigration
+            })?;
 
         Ok(())
     }

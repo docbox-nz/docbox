@@ -18,77 +18,65 @@ use models::{
     UpdateSearchIndexData,
 };
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use uuid::Uuid;
 
 pub mod models;
 
-#[cfg(feature = "opensearch")]
 pub use opensearch::OpenSearchConfig;
-#[cfg(feature = "typesense")]
 pub use typesense::{
     TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseSearchConfig,
 };
 
-#[cfg(feature = "database")]
 mod database;
-#[cfg(feature = "opensearch")]
 mod opensearch;
-#[cfg(feature = "typesense")]
 mod typesense;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SearchIndexFactoryConfig {
-    #[cfg(feature = "typesense")]
     Typesense(typesense::TypesenseSearchConfig),
-    #[cfg(feature = "opensearch")]
     OpenSearch(opensearch::OpenSearchConfig),
-    #[cfg(feature = "database")]
     Database(database::DatabaseSearchConfig),
 }
 
+#[derive(Debug, Error)]
+pub enum SearchIndexFactoryError {
+    #[error(transparent)]
+    Typesense(#[from] typesense::TypesenseIndexFactoryError),
+    #[error(transparent)]
+    OpenSearch(#[from] opensearch::OpenSearchIndexFactoryError),
+    #[error(transparent)]
+    Database(#[from] database::DatabaseSearchIndexFactoryError),
+}
+
 impl SearchIndexFactoryConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub fn from_env() -> Result<Self, SearchIndexFactoryError> {
         let variant = std::env::var("DOCBOX_SEARCH_INDEX_FACTORY")
             .unwrap_or_else(|_| "typesense".to_string());
         match variant.as_str() {
-            #[cfg(feature = "opensearch")]
-            "open_search" => opensearch::OpenSearchConfig::from_env().map(Self::OpenSearch),
-            #[cfg(feature = "typesense")]
-            "typesense" => typesense::TypesenseSearchConfig::from_env().map(Self::Typesense),
-            #[cfg(feature = "database")]
-            "database" => database::DatabaseSearchConfig::from_env().map(Self::Database),
+            "open_search" => opensearch::OpenSearchConfig::from_env()
+                .map(Self::OpenSearch)
+                .map_err(SearchIndexFactoryError::OpenSearch),
+            "typesense" => typesense::TypesenseSearchConfig::from_env()
+                .map(Self::Typesense)
+                .map_err(SearchIndexFactoryError::Typesense),
+            "database" => database::DatabaseSearchConfig::from_env()
+                .map(Self::Database)
+                .map_err(SearchIndexFactoryError::Database),
 
-            // Default when database is enabled
-            #[cfg(feature = "database")]
-            _ => database::DatabaseSearchConfig::from_env().map(Self::Database),
-
-            // Default when typesense is enabled
-            #[cfg(all(not(feature = "database"), feature = "typesense"))]
-            _ => typesense::TypesenseSearchConfig::from_env().map(Self::Typesense),
-
-            // Default when typesense is disabled
-            #[cfg(all(
-                not(feature = "database"),
-                not(feature = "typesense"),
-                feature = "opensearch"
-            ))]
-            _ => opensearch::OpenSearchConfig::from_env().map(Self::OpenSearch),
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index factory is available"),
+            // Default when nothing is chosen
+            _ => database::DatabaseSearchConfig::from_env()
+                .map(Self::Database)
+                .map_err(SearchIndexFactoryError::Database),
         }
     }
 }
 
 #[derive(Clone)]
 pub enum SearchIndexFactory {
-    #[cfg(feature = "typesense")]
     Typesense(typesense::TypesenseIndexFactory),
-    #[cfg(feature = "opensearch")]
     OpenSearch(opensearch::OpenSearchIndexFactory),
-    #[cfg(feature = "database")]
     Database(database::DatabaseSearchIndexFactory),
 }
 
@@ -98,28 +86,25 @@ impl SearchIndexFactory {
         secrets: Arc<AppSecretManager>,
         #[allow(unused)] db: Arc<DatabasePoolCache>,
         config: SearchIndexFactoryConfig,
-    ) -> anyhow::Result<Self> {
-        #[cfg(not(feature = "opensearch"))]
-        let _ = aws_config;
-
+    ) -> Result<Self, SearchIndexFactoryError> {
         match config {
-            #[cfg(feature = "typesense")]
             SearchIndexFactoryConfig::Typesense(config) => {
                 tracing::debug!("using typesense search index");
                 typesense::TypesenseIndexFactory::from_config(secrets, config)
                     .map(SearchIndexFactory::Typesense)
+                    .map_err(SearchIndexFactoryError::Typesense)
             }
-            #[cfg(feature = "opensearch")]
             SearchIndexFactoryConfig::OpenSearch(config) => {
                 tracing::debug!("using opensearch search index");
                 opensearch::OpenSearchIndexFactory::from_config(aws_config, config)
                     .map(SearchIndexFactory::OpenSearch)
+                    .map_err(SearchIndexFactoryError::OpenSearch)
             }
-            #[cfg(feature = "database")]
             SearchIndexFactoryConfig::Database(config) => {
                 tracing::debug!("using opensearch search index");
                 database::DatabaseSearchIndexFactory::from_config(db, config)
                     .map(SearchIndexFactory::Database)
+                    .map_err(SearchIndexFactoryError::Database)
             }
         }
     }
@@ -127,273 +112,198 @@ impl SearchIndexFactory {
     /// Create a new "OpenSearch" search index for the tenant
     pub fn create_search_index(&self, tenant: &Tenant) -> TenantSearchIndex {
         match self {
-            #[cfg(feature = "typesense")]
             SearchIndexFactory::Typesense(factory) => {
                 let search_index = tenant.os_index_name.clone();
                 TenantSearchIndex::Typesense(factory.create_search_index(search_index))
             }
-            #[cfg(feature = "opensearch")]
             SearchIndexFactory::OpenSearch(factory) => {
                 let search_index = opensearch::TenantSearchIndexName::from_tenant(tenant);
                 TenantSearchIndex::OpenSearch(factory.create_search_index(search_index))
             }
 
-            #[cfg(feature = "database")]
             SearchIndexFactory::Database(factory) => {
                 TenantSearchIndex::Database(factory.create_search_index(tenant))
             }
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 }
 
 #[derive(Clone)]
 pub enum TenantSearchIndex {
-    #[cfg(feature = "typesense")]
     Typesense(typesense::TypesenseIndex),
-    #[cfg(feature = "opensearch")]
     OpenSearch(opensearch::OpenSearchIndex),
-    #[cfg(feature = "database")]
     Database(database::DatabaseSearchIndex),
 }
 
+#[derive(Debug, Error)]
+pub enum SearchError {
+    #[error(transparent)]
+    Typesense(#[from] typesense::TypesenseSearchError),
+    #[error(transparent)]
+    OpenSearch(#[from] opensearch::OpenSearchSearchError),
+    #[error(transparent)]
+    Database(#[from] database::DatabaseSearchError),
+
+    #[error("failed to perform migration")]
+    Migration,
+}
+
 impl TenantSearchIndex {
-    pub async fn create_index(&self) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn create_index(&self) -> Result<(), SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.create_index().await,
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.create_index().await,
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => index.create_index().await,
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
-    pub async fn delete_index(&self) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn delete_index(&self) -> Result<(), SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.delete_index().await,
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.delete_index().await,
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => index.delete_index().await,
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn search_index(
         &self,
         scope: &[DocumentBoxScopeRaw],
         query: SearchRequest,
         folder_children: Option<Vec<FolderId>>,
-    ) -> anyhow::Result<SearchResults> {
+    ) -> Result<SearchResults, SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => {
                 index.search_index(scope, query, folder_children).await
             }
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => {
                 index.search_index(scope, query, folder_children).await
             }
 
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => {
                 index.search_index(scope, query, folder_children).await
             }
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
     /// Searches the index for matches scoped to a specific file
+    #[tracing::instrument(skip(self))]
     pub async fn search_index_file(
         &self,
         scope: &DocumentBoxScopeRaw,
         file_id: FileId,
         query: FileSearchRequest,
-    ) -> anyhow::Result<FileSearchResults> {
+    ) -> Result<FileSearchResults, SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
 
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
 
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
-    pub async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn add_data(&self, data: SearchIndexData) -> Result<(), SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.add_data(data).await,
-
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.add_data(data).await,
-
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => index.add_data(data).await,
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
-    pub async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.bulk_add_data(data).await,
-
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.bulk_add_data(data).await,
-
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => index.bulk_add_data(data).await,
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_data(
         &self,
         item_id: Uuid,
         data: UpdateSearchIndexData,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.update_data(item_id, data).await,
-
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.update_data(item_id, data).await,
-
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => index.update_data(item_id, data).await,
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
-    pub async fn delete_data(&self, id: Uuid) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn delete_data(&self, id: Uuid) -> Result<(), SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.delete_data(id).await,
-
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.delete_data(id).await,
-
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => index.delete_data(id).await,
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
-    pub async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => index.delete_by_scope(scope).await,
-
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => index.delete_by_scope(scope).await,
-
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => index.delete_by_scope(scope).await,
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_pending_migrations(
         &self,
         applied_names: Vec<String>,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> Result<Vec<String>, SearchError> {
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => {
                 index.get_pending_migrations(applied_names).await
             }
-
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => {
                 index.get_pending_migrations(applied_names).await
             }
-
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => index.get_pending_migrations(applied_names).await,
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
     }
 
     /// Apply a specific migration for a `tenant` by `name`
+    #[tracing::instrument(skip(self))]
     pub async fn apply_migration(
         &self,
         tenant: &Tenant,
         root_t: &mut DbTransaction<'_>,
         tenant_t: &mut DbTransaction<'_>,
         name: &str,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         // Apply migration logic
         match self {
-            #[cfg(feature = "typesense")]
             TenantSearchIndex::Typesense(index) => {
                 index
                     .apply_migration(tenant, root_t, tenant_t, name)
                     .await?
             }
 
-            #[cfg(feature = "opensearch")]
             TenantSearchIndex::OpenSearch(index) => {
                 index
                     .apply_migration(tenant, root_t, tenant_t, name)
                     .await?
             }
 
-            #[cfg(feature = "database")]
             TenantSearchIndex::Database(index) => {
                 index
                     .apply_migration(tenant, root_t, tenant_t, name)
                     .await?
             }
-
-            // Fallback error when no features are available
-            #[cfg(not(any(feature = "database", feature = "typesense", feature = "opensearch")))]
-            _ => panic!("no matching search index is available"),
         }
 
         // Store the applied migration
@@ -406,7 +316,11 @@ impl TenantSearchIndex {
                 applied_at: Utc::now(),
             },
         )
-        .await?;
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "failed to create tenant migration");
+            SearchError::Migration
+        })?;
 
         Ok(())
     }
@@ -415,15 +329,21 @@ impl TenantSearchIndex {
     ///
     /// When `target_migration_name` is specified only that target migration will
     /// be run
+    #[tracing::instrument(skip_all, fields(?tenant, ?target_migration_name))]
     pub async fn apply_migrations(
         &self,
         tenant: &Tenant,
         root_t: &mut DbTransaction<'_>,
         tenant_t: &mut DbTransaction<'_>,
         target_migration_name: Option<&str>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         let applied_migrations =
-            TenantMigration::find_by_tenant(root_t.deref_mut(), tenant.id, &tenant.env).await?;
+            TenantMigration::find_by_tenant(root_t.deref_mut(), tenant.id, &tenant.env)
+                .await
+                .map_err(|error| {
+                    tracing::error!(?error, "failed to query tenant migrations");
+                    SearchError::Migration
+                })?;
         let pending_migrations = self
             .get_pending_migrations(
                 applied_migrations
@@ -457,10 +377,10 @@ impl TenantSearchIndex {
 
 pub(crate) trait SearchIndex: Send + Sync + 'static {
     /// Creates a search index for the tenant
-    async fn create_index(&self) -> anyhow::Result<()>;
+    async fn create_index(&self) -> Result<(), SearchError>;
 
     /// Deletes the search index for the tenant
-    async fn delete_index(&self) -> anyhow::Result<()>;
+    async fn delete_index(&self) -> Result<(), SearchError>;
 
     /// Searches the index for the provided query
     async fn search_index(
@@ -468,7 +388,7 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
         scope: &[DocumentBoxScopeRaw],
         query: SearchRequest,
         folder_children: Option<Vec<FolderId>>,
-    ) -> anyhow::Result<SearchResults>;
+    ) -> Result<SearchResults, SearchError>;
 
     /// Searches the index for matches scoped to a specific file
     async fn search_index_file(
@@ -476,28 +396,32 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
         scope: &DocumentBoxScopeRaw,
         file_id: FileId,
         query: FileSearchRequest,
-    ) -> anyhow::Result<FileSearchResults>;
+    ) -> Result<FileSearchResults, SearchError>;
 
     /// Adds the provided data to the search index
-    async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()>;
+    async fn add_data(&self, data: SearchIndexData) -> Result<(), SearchError>;
 
     /// Adds the provided data to the search index
-    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> anyhow::Result<()>;
+    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError>;
 
     /// Updates the provided data in the search index
-    async fn update_data(&self, item_id: Uuid, data: UpdateSearchIndexData) -> anyhow::Result<()>;
+    async fn update_data(
+        &self,
+        item_id: Uuid,
+        data: UpdateSearchIndexData,
+    ) -> Result<(), SearchError>;
 
     /// Deletes the provided data from the search index
-    async fn delete_data(&self, id: Uuid) -> anyhow::Result<()>;
+    async fn delete_data(&self, id: Uuid) -> Result<(), SearchError>;
 
     /// Deletes all data contained within the specified `scope`
-    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()>;
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError>;
 
     /// Get all pending migrations based on the `applied_names` list of applied migrations
     async fn get_pending_migrations(
         &self,
         applied_names: Vec<String>,
-    ) -> anyhow::Result<Vec<String>>;
+    ) -> Result<Vec<String>, SearchError>;
 
     /// Apply a migration by name
     async fn apply_migration(
@@ -506,5 +430,5 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
         root_t: &mut DbTransaction<'_>,
         t: &mut DbTransaction<'_>,
         name: &str,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), SearchError>;
 }

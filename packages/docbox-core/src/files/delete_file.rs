@@ -10,7 +10,7 @@ use docbox_database::{
         generated_file::GeneratedFile,
     },
 };
-use docbox_search::TenantSearchIndex;
+use docbox_search::{SearchError, TenantSearchIndex};
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
@@ -20,7 +20,7 @@ use tracing::error;
 pub enum DeleteFileError {
     /// Failed to delete the search index
     #[error("failed to delete tenant search index: {0}")]
-    DeleteIndex(anyhow::Error),
+    DeleteIndex(SearchError),
 
     /// Database error
     #[error(transparent)]

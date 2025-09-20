@@ -6,7 +6,7 @@ use docbox_database::{
         link::Link,
     },
 };
-use docbox_search::TenantSearchIndex;
+use docbox_search::{SearchError, TenantSearchIndex};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -14,7 +14,7 @@ pub enum DeleteLinkError {
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error(transparent)]
-    Search(anyhow::Error),
+    Search(SearchError),
 }
 
 #[tracing::instrument(skip_all, fields(%scope, link_id = %link.id))]

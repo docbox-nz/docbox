@@ -10,7 +10,7 @@ use docbox_database::{
         user::UserId,
     },
 };
-use docbox_search::TenantSearchIndex;
+use docbox_search::{SearchError, TenantSearchIndex};
 use std::ops::DerefMut;
 use thiserror::Error;
 use uuid::Uuid;
@@ -23,7 +23,7 @@ pub enum CreateFolderError {
 
     /// Failed to create the search index
     #[error("failed to create folder search index: {0}")]
-    CreateIndex(anyhow::Error),
+    CreateIndex(SearchError),
 }
 
 pub struct CreateFolderData {

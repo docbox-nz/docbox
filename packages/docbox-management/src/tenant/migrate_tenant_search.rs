@@ -3,7 +3,7 @@ use crate::{
     tenant::get_pending_tenant_search_migrations::GetPendingTenantMigrationsError,
 };
 use docbox_database::{DbErr, ROOT_DATABASE_NAME, models::tenant::Tenant};
-use docbox_search::SearchIndexFactory;
+use docbox_search::{SearchError, SearchIndexFactory};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -18,7 +18,7 @@ pub enum MigrateTenantSearchError {
     GetPendingTenantMigrationsError(#[from] GetPendingTenantMigrationsError),
 
     #[error("failed to apply migration: {0}")]
-    ApplyMigration(anyhow::Error),
+    ApplyMigration(SearchError),
 
     #[error("error connecting to tenant database: {0}")]
     ConnectTenantDatabase(DbErr),

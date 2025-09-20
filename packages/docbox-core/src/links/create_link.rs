@@ -11,7 +11,7 @@ use docbox_database::{
         user::UserId,
     },
 };
-use docbox_search::TenantSearchIndex;
+use docbox_search::{SearchError, TenantSearchIndex};
 use std::ops::DerefMut;
 use thiserror::Error;
 use tracing::error;
@@ -25,7 +25,7 @@ pub enum CreateLinkError {
 
     /// Failed to create the search index
     #[error("failed to create link search index: {0}")]
-    CreateIndex(anyhow::Error),
+    CreateIndex(SearchError),
 }
 
 /// State structure to keep track of resources created

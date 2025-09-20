@@ -6,7 +6,7 @@ use docbox_database::{
     DbErr, DbPool,
     models::{document_box::DocumentBox, folder::Folder},
 };
-use docbox_search::TenantSearchIndex;
+use docbox_search::{SearchError, TenantSearchIndex};
 use docbox_storage::TenantStorageLayer;
 use thiserror::Error;
 
@@ -20,7 +20,7 @@ pub enum DeleteDocumentBoxError {
     UnknownScope,
 
     #[error(transparent)]
-    DeleteSearchData(anyhow::Error),
+    DeleteSearchData(SearchError),
 
     #[error("failed to delete root folder")]
     FailedToDeleteRoot(anyhow::Error),

@@ -9,7 +9,7 @@ use docbox_database::{
         user::UserId,
     },
 };
-use docbox_search::{TenantSearchIndex, models::UpdateSearchIndexData};
+use docbox_search::{SearchError, TenantSearchIndex, models::UpdateSearchIndexData};
 use std::ops::DerefMut;
 use thiserror::Error;
 
@@ -33,7 +33,7 @@ pub enum UpdateFolderError {
 
     /// Failed to update the search index
     #[error(transparent)]
-    SearchIndex(anyhow::Error),
+    SearchIndex(SearchError),
 }
 
 pub struct UpdateFolder {

@@ -1,5 +1,7 @@
 use std::{fmt::Debug, sync::Arc};
 
+use crate::SearchError;
+
 use super::{
     SearchIndex,
     models::{
@@ -7,7 +9,6 @@ use super::{
         SearchRequest, SearchResults, SearchScore, UpdateSearchIndexData,
     },
 };
-use anyhow::Context;
 use docbox_database::{
     DbTransaction,
     models::{document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant, user::UserId},
@@ -17,6 +18,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::skip_serializing_none;
+use thiserror::Error;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -31,9 +33,56 @@ pub struct TypesenseSearchConfig {
     pub api_key_secret_name: Option<String>,
 }
 
+#[derive(Debug, Error)]
+pub enum TypesenseIndexFactoryError {
+    #[error("missing TYPESENSE_URL env")]
+    MissingUrl,
+
+    #[error("must provide either api_key or api_key_secret_name for search config")]
+    MissingApiKey,
+
+    #[error("failed to create http client")]
+    CreateClient,
+}
+
+#[derive(Debug, Error)]
+pub enum TypesenseSearchError {
+    #[error("missing search result")]
+    MissingSearchResult,
+    #[error("must provide either include_name or include_content")]
+    MissingQueryBy,
+    #[error("failed to create index")]
+    CreateIndex,
+    #[error("failed to delete index")]
+    DeleteIndex,
+    #[error("secret not found")]
+    SecretNotFound,
+    #[error("failed to get secret")]
+    GetSecret,
+    #[error("expected string for api key secret but got binary")]
+    ExpectedStringSecret,
+    #[error("failed to serialize document")]
+    SerializeDocument,
+    #[error("failed to deserialize document")]
+    DeserializeDocument,
+    #[error("failed to bulk add documents")]
+    BulkAddDocuments,
+    #[error("failed to delete search documents")]
+    DeleteDocuments,
+    #[error("failed to update document")]
+    UpdateDocument,
+    #[error("failed to get document")]
+    GetDocument,
+    #[error("missing root entry to update")]
+    MissingRootEntry,
+    #[error("failed to search index")]
+    SearchIndex,
+}
+
 impl TypesenseSearchConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
-        let url = std::env::var("TYPESENSE_URL").context("missing TYPESENSE_URL env")?;
+    pub fn from_env() -> Result<Self, TypesenseIndexFactoryError> {
+        let url =
+            std::env::var("TYPESENSE_URL").map_err(|_| TypesenseIndexFactoryError::MissingUrl)?;
 
         let api_key = std::env::var("TYPESENSE_API_KEY")
             .map(TypesenseApiKey::new)
@@ -54,7 +103,7 @@ pub enum TypesenseApiKeyProvider {
 }
 
 impl TypesenseApiKeyProviderImpl for TypesenseApiKeyProvider {
-    async fn get_api_key(&self) -> anyhow::Result<String> {
+    async fn get_api_key(&self) -> Result<String, TypesenseSearchError> {
         match self {
             TypesenseApiKeyProvider::ApiKey(value) => value.get_api_key().await,
             TypesenseApiKeyProvider::Secret(value) => value.get_api_key().await,
@@ -64,7 +113,7 @@ impl TypesenseApiKeyProviderImpl for TypesenseApiKeyProvider {
 
 /// Trait for something that can provide an API key for typesense
 trait TypesenseApiKeyProviderImpl {
-    async fn get_api_key(&self) -> anyhow::Result<String>;
+    async fn get_api_key(&self) -> Result<String, TypesenseSearchError>;
 }
 
 pub struct TypesenseApiKeySecret {
@@ -89,7 +138,7 @@ impl TypesenseApiKeySecret {
 }
 
 impl TypesenseApiKeyProviderImpl for TypesenseApiKeySecret {
-    async fn get_api_key(&self) -> anyhow::Result<String> {
+    async fn get_api_key(&self) -> Result<String, TypesenseSearchError> {
         let secret_value = &mut *self.secret_value.lock().await;
         if let Some(value) = secret_value.as_ref() {
             return Ok(value.clone());
@@ -98,15 +147,20 @@ impl TypesenseApiKeyProviderImpl for TypesenseApiKeySecret {
         let value = self
             .secrets
             .get_secret(&self.secret_name)
-            .await?
-            .with_context(|| format!("secret with name '{}' not found", self.secret_name))?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to get api key secret");
+                TypesenseSearchError::GetSecret
+            })?
+            .ok_or_else(|| {
+                tracing::error!(secret_name = ?self.secret_name, "secret not found");
+                TypesenseSearchError::SecretNotFound
+            })?;
 
         let value = match value {
             Secret::String(value) => value,
             Secret::Binary(_) => {
-                return Err(anyhow::anyhow!(
-                    "expected string for api key secret but got binary"
-                ));
+                return Err(TypesenseSearchError::ExpectedStringSecret);
             }
         };
 
@@ -131,7 +185,7 @@ impl Debug for TypesenseApiKey {
 }
 
 impl TypesenseApiKeyProviderImpl for TypesenseApiKey {
-    async fn get_api_key(&self) -> anyhow::Result<String> {
+    async fn get_api_key(&self) -> Result<String, TypesenseSearchError> {
         Ok(self.0.clone())
     }
 }
@@ -152,7 +206,7 @@ impl TypesenseIndexFactory {
     pub fn from_config(
         secrets: Arc<AppSecretManager>,
         config: TypesenseSearchConfig,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, TypesenseIndexFactoryError> {
         let api_key_provider = match (config.api_key, config.api_key_secret_name) {
             (Some(api_key), _) => {
                 tracing::debug!("using typesense api key");
@@ -162,9 +216,7 @@ impl TypesenseIndexFactory {
                 tracing::debug!("using secret manager controller typesense api key");
                 TypesenseApiKeyProvider::Secret(TypesenseApiKeySecret::new(secrets, secret_name))
             }
-            _ => anyhow::bail!(
-                "must provide either api_key or api_key_secret_name for search config"
-            ),
+            _ => return Err(TypesenseIndexFactoryError::MissingApiKey),
         };
 
         Self::new(config.url, api_key_provider)
@@ -173,11 +225,15 @@ impl TypesenseIndexFactory {
     pub fn new(
         base_url: String,
         api_key_provider: TypesenseApiKeyProvider,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, TypesenseIndexFactoryError> {
         let client = reqwest::Client::builder()
             // Don't try and proxy through the proxy
             .no_proxy()
-            .build()?;
+            .build()
+            .map_err(|error| {
+                tracing::error!(?error, " failed to create typesense http client");
+                TypesenseIndexFactoryError::CreateClient
+            })?;
 
         Ok(Self {
             client,
@@ -325,7 +381,7 @@ fn escape_typesense_value(input: &str) -> String {
 }
 
 impl SearchIndex for TypesenseIndex {
-    async fn create_index(&self) -> anyhow::Result<()> {
+    async fn create_index(&self) -> Result<(), SearchError> {
         let schema = json!({
           "name": self.index,
           "fields": [
@@ -359,13 +415,21 @@ impl SearchIndex for TypesenseIndex {
             .header("x-typesense-api-key", api_key)
             .json(&schema)
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to create search index (io)");
+                TypesenseSearchError::CreateIndex
+            })?
+            .error_for_status()
+            .map_err(|error| {
+                tracing::error!(?error, "failed to create search index (response)");
+                TypesenseSearchError::CreateIndex
+            })?;
 
         Ok(())
     }
 
-    async fn delete_index(&self) -> anyhow::Result<()> {
+    async fn delete_index(&self) -> Result<(), SearchError> {
         let api_key = self.api_key().await?;
 
         self.client
@@ -375,8 +439,16 @@ impl SearchIndex for TypesenseIndex {
             ))
             .header("x-typesense-api-key", api_key)
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete search index (io)");
+                TypesenseSearchError::DeleteIndex
+            })?
+            .error_for_status()
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete search index (response)");
+                TypesenseSearchError::DeleteIndex
+            })?;
 
         Ok(())
     }
@@ -386,7 +458,7 @@ impl SearchIndex for TypesenseIndex {
         scope: &DocumentBoxScopeRaw,
         file_id: docbox_database::models::file::FileId,
         query: super::models::FileSearchRequest,
-    ) -> anyhow::Result<FileSearchResults> {
+    ) -> Result<FileSearchResults, SearchError> {
         let offset = query.offset.unwrap_or(0);
         let limit = query.limit.unwrap_or(50);
         let query = query.query.unwrap_or_default();
@@ -424,22 +496,27 @@ impl SearchIndex for TypesenseIndex {
             .json(&query_json)
             .send()
             .await
-            .inspect_err(|error| {
-                tracing::error!(?error, "failed to query typesense multi_search")
+            .map_err(|error| {
+                tracing::error!(?error, "failed to query typesense multi_search");
+                TypesenseSearchError::SearchIndex
             })?;
 
         if let Err(error) = response.error_for_status_ref() {
             let body = response.text().await;
             tracing::error!(?error, ?body, "failed to get search results");
-            return Err(error.into());
+            return Err(TypesenseSearchError::SearchIndex.into());
         }
 
-        let search: SearchResponse<GenericSearchResponse> = response.json().await?;
+        let search: SearchResponse<GenericSearchResponse> =
+            response.json().await.map_err(|error| {
+                tracing::error!(?error, "failed to parse search response JSON");
+                TypesenseSearchError::SearchIndex
+            })?;
         let search = search
             .results
             .into_iter()
             .next()
-            .context("missing search result")?;
+            .ok_or(TypesenseSearchError::MissingSearchResult)?;
 
         let total_hits = search.found;
         let results: Vec<PageResult> = search
@@ -473,7 +550,7 @@ impl SearchIndex for TypesenseIndex {
         scopes: &[docbox_database::models::document_box::DocumentBoxScopeRaw],
         query: super::models::SearchRequest,
         folder_children: Option<Vec<docbox_database::models::folder::FolderId>>,
-    ) -> anyhow::Result<super::models::SearchResults> {
+    ) -> Result<super::models::SearchResults, SearchError> {
         let mut query_by = Vec::new();
 
         // Query file name
@@ -494,9 +571,7 @@ impl SearchIndex for TypesenseIndex {
         if query_by.is_empty() {
             // When specifying a query at least one field must be specified
             if !search_query.is_empty() && !filter_by.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "must provide either include_name or include_content"
-                ));
+                return Err(TypesenseSearchError::MissingQueryBy.into());
             }
 
             // For facet only queries the name is used as a dummy value
@@ -539,7 +614,7 @@ impl SearchIndex for TypesenseIndex {
             ]
         });
 
-        tracing::debug!(?query_json);
+        tracing::debug!(?query_json, "performing search query");
 
         let api_key = self.api_key().await?;
 
@@ -550,26 +625,34 @@ impl SearchIndex for TypesenseIndex {
             .json(&query_json)
             .send()
             .await
-            .inspect_err(|error| {
-                tracing::error!(?error, "failed to query typesense multi_search")
+            .map_err(|error| {
+                tracing::error!(?error, "failed to query typesense multi_search");
+                TypesenseSearchError::SearchIndex
             })?;
 
         if let Err(error) = response.error_for_status_ref() {
             let body = response.text().await;
             let query = serde_json::to_string(&query_json);
             tracing::error!(?error, ?body, ?query, "failed to get search results");
-            return Err(error.into());
+            return Err(TypesenseSearchError::SearchIndex.into());
         }
 
-        let response: serde_json::Value = response.json().await?;
+        let response: serde_json::Value = response.json().await.map_err(|error| {
+            tracing::error!(?error, "failed to parse search response JSON");
+            TypesenseSearchError::SearchIndex
+        })?;
         tracing::debug!(?response);
 
-        let search: SearchResponse<GroupedSearchResponse> = serde_json::from_value(response)?;
+        let search: SearchResponse<GroupedSearchResponse> = serde_json::from_value(response)
+            .map_err(|error| {
+                tracing::error!(?error, "failed to parse search response JSON");
+                TypesenseSearchError::SearchIndex
+            })?;
         let search = search
             .results
             .into_iter()
             .next()
-            .context("missing search result")?;
+            .ok_or(TypesenseSearchError::MissingSearchResult)?;
 
         let total_hits = search.found;
 
@@ -646,7 +729,10 @@ impl SearchIndex for TypesenseIndex {
         })
     }
 
-    async fn bulk_add_data(&self, data: Vec<super::models::SearchIndexData>) -> anyhow::Result<()> {
+    async fn bulk_add_data(
+        &self,
+        data: Vec<super::models::SearchIndexData>,
+    ) -> Result<(), SearchError> {
         let mut documents = Vec::new();
 
         for data in data {
@@ -682,7 +768,7 @@ impl SearchIndex for TypesenseIndex {
         Ok(())
     }
 
-    async fn add_data(&self, data: super::models::SearchIndexData) -> anyhow::Result<()> {
+    async fn add_data(&self, data: super::models::SearchIndexData) -> Result<(), SearchError> {
         let mut documents = Vec::new();
         let root = TypesenseDataEntryRootV1 {
             document_box: data.document_box,
@@ -716,7 +802,7 @@ impl SearchIndex for TypesenseIndex {
         &self,
         item_id: uuid::Uuid,
         data: super::models::UpdateSearchIndexData,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         // Update all the existing items so they have the current root data
         self.update_item_roots(item_id, &data).await?;
 
@@ -728,7 +814,7 @@ impl SearchIndex for TypesenseIndex {
             let root = self
                 .get_item_root(item_id)
                 .await?
-                .context("missing root entry to update")?;
+                .ok_or(TypesenseSearchError::MissingRootEntry)?;
 
             // Create an updated version of the root document to
             // use on the added pages
@@ -757,7 +843,7 @@ impl SearchIndex for TypesenseIndex {
         Ok(())
     }
 
-    async fn delete_data(&self, id: uuid::Uuid) -> anyhow::Result<()> {
+    async fn delete_data(&self, id: uuid::Uuid) -> Result<(), SearchError> {
         let api_key = self.api_key().await?;
 
         self.client
@@ -768,15 +854,23 @@ impl SearchIndex for TypesenseIndex {
             .header("x-typesense-api-key", api_key)
             .query(&[("filter_by", format!(r#"item_id:="{id}""#))])
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete data (request)");
+                TypesenseSearchError::DeleteDocuments
+            })?
+            .error_for_status()
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete data (response)");
+                TypesenseSearchError::DeleteDocuments
+            })?;
         Ok(())
     }
 
     async fn delete_by_scope(
         &self,
         scope: docbox_database::models::document_box::DocumentBoxScopeRaw,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         let api_key = self.api_key().await?;
 
         self.client
@@ -787,15 +881,23 @@ impl SearchIndex for TypesenseIndex {
             .header("x-typesense-api-key", api_key)
             .query(&[("filter_by", format!(r#"document_box:="{scope}""#))])
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete data by scope (request)");
+                TypesenseSearchError::DeleteDocuments
+            })?
+            .error_for_status()
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete data by scope (response)");
+                TypesenseSearchError::DeleteDocuments
+            })?;
         Ok(())
     }
 
     async fn get_pending_migrations(
         &self,
         _applied_names: Vec<String>,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> Result<Vec<String>, SearchError> {
         Ok(Vec::new())
     }
 
@@ -805,18 +907,24 @@ impl SearchIndex for TypesenseIndex {
         _root_t: &mut DbTransaction<'_>,
         _t: &mut DbTransaction<'_>,
         _name: &str,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         Ok(())
     }
 }
 
 impl TypesenseIndex {
     /// Bulk insert typesense documents
-    async fn bulk_add_documents(&self, entries: Vec<TypesenseEntry>) -> anyhow::Result<()> {
+    async fn bulk_add_documents(
+        &self,
+        entries: Vec<TypesenseEntry>,
+    ) -> Result<(), TypesenseSearchError> {
         // Encode entries into newline delimitated encoded JSON strings
         let mut bulk_data = String::new();
         for document in entries {
-            let value = serde_json::to_string(&document)?;
+            let value = serde_json::to_string(&document).map_err(|error| {
+                tracing::error!(?error, "failed to serialize a document");
+                TypesenseSearchError::SerializeDocument
+            })?;
             bulk_data.push_str(&value);
             bulk_data.push('\n');
         }
@@ -832,25 +940,25 @@ impl TypesenseIndex {
             .body(bulk_data)
             .send()
             .await
-            .inspect_err(|error| tracing::error!(?error, "failed to send import documents"))?
+            .map_err(|error| {
+                tracing::error!(?error, "failed to send import documents (request)");
+                TypesenseSearchError::BulkAddDocuments
+            })?
             .error_for_status()
-            .inspect_err(|error| {
-                tracing::error!(?error, "error status when importing documents")
+            .map_err(|error| {
+                tracing::error!(?error, "error status when importing documents (response)");
+                TypesenseSearchError::BulkAddDocuments
             })?;
 
         Ok(())
     }
 
-    async fn api_key(&self) -> anyhow::Result<String> {
-        self.client_data
-            .api_key_provider
-            .get_api_key()
-            .await
-            .context("failed to get api key")
+    async fn api_key(&self) -> Result<String, TypesenseSearchError> {
+        self.client_data.api_key_provider.get_api_key().await
     }
 
     /// Deletes all "Page" item types for a specific `item_id`
-    async fn delete_item_pages(&self, item_id: Uuid) -> anyhow::Result<()> {
+    async fn delete_item_pages(&self, item_id: Uuid) -> Result<(), TypesenseSearchError> {
         let api_key = self.api_key().await?;
 
         self.client
@@ -865,9 +973,15 @@ impl TypesenseIndex {
             )])
             .send()
             .await
-            .inspect_err(|error| tracing::error!(?error, "failed to send delete documents"))?
+            .map_err(|error| {
+                tracing::error!(?error, "failed to send delete documents (request)");
+                TypesenseSearchError::DeleteDocuments
+            })?
             .error_for_status()
-            .inspect_err(|error| tracing::error!(?error, "error status when deleting documents"))?;
+            .map_err(|error| {
+                tracing::error!(?error, "failed to send delete documents (response)");
+                TypesenseSearchError::DeleteDocuments
+            })?;
 
         Ok(())
     }
@@ -888,7 +1002,7 @@ impl TypesenseIndex {
         &self,
         item_id: Uuid,
         update: &UpdateSearchIndexData,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TypesenseSearchError> {
         let request = json!({
             "folder_id": update.folder_id,
             "name": update.name,
@@ -908,9 +1022,15 @@ impl TypesenseIndex {
             .json(&request)
             .send()
             .await
-            .inspect_err(|error| tracing::error!(?error, "failed to send update documents"))?
+            .map_err(|error| {
+                tracing::error!(?error, "failed to send update documents (request)");
+                TypesenseSearchError::UpdateDocument
+            })?
             .error_for_status()
-            .inspect_err(|error| tracing::error!(?error, "error status when updating documents"))?;
+            .map_err(|error| {
+                tracing::error!(?error, "failed to send update documents (response)");
+                TypesenseSearchError::UpdateDocument
+            })?;
 
         Ok(())
     }
@@ -919,7 +1039,7 @@ impl TypesenseIndex {
     async fn get_item_root(
         &self,
         item_id: Uuid,
-    ) -> anyhow::Result<Option<TypesenseDataEntryRootV1>> {
+    ) -> Result<Option<TypesenseDataEntryRootV1>, TypesenseSearchError> {
         let api_key = self.api_key().await?;
 
         let response: GenericSearchResponse = self
@@ -935,11 +1055,21 @@ impl TypesenseIndex {
             )])
             .send()
             .await
-            .inspect_err(|error| tracing::error!(?error, "failed to query documents search"))?
-            .error_for_status()?
+            .map_err(|error| {
+                tracing::error!(?error, "failed to query documents search (request)");
+                TypesenseSearchError::GetDocument
+            })?
+            .error_for_status()
+            .map_err(|error| {
+                tracing::error!(?error, "failed to query documents search (response)");
+                TypesenseSearchError::GetDocument
+            })?
             .json()
             .await
-            .inspect_err(|error| tracing::error!(?error, "error when deserializing response"))?;
+            .map_err(|error| {
+                tracing::error!(?error, "failed to query documents search (response json)");
+                TypesenseSearchError::GetDocument
+            })?;
 
         let item = response
             .hits

@@ -3,7 +3,7 @@ use docbox_database::migrations::apply_tenant_migrations;
 use docbox_database::models::tenant::TenantId;
 use docbox_database::{DbConnectErr, DbPool};
 use docbox_database::{DbErr, models::tenant::Tenant};
-use docbox_search::{SearchIndexFactory, TenantSearchIndex};
+use docbox_search::{SearchError, SearchIndexFactory, TenantSearchIndex};
 use docbox_storage::{StorageLayerError, StorageLayerFactory};
 use std::ops::DerefMut;
 use thiserror::Error;
@@ -70,11 +70,11 @@ pub enum InitTenantError {
 
     /// Failed to create the search index
     #[error("failed to create tenant search index: {0}")]
-    CreateSearchIndex(anyhow::Error),
+    CreateSearchIndex(SearchError),
 
     /// Failed to migrate the search index
     #[error("failed to migrate tenant search index: {0}")]
-    MigrateSearchIndex(anyhow::Error),
+    MigrateSearchIndex(SearchError),
 }
 
 /// Attempts to initialize a new tenant

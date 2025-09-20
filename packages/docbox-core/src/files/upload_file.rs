@@ -17,7 +17,7 @@ use docbox_database::{
         user::UserId,
     },
 };
-use docbox_search::TenantSearchIndex;
+use docbox_search::{SearchError, TenantSearchIndex};
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use mime::Mime;
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ use uuid::Uuid;
 pub enum UploadFileError {
     /// Failed to create the search index
     #[error("failed to create file search index: {0}")]
-    CreateIndex(anyhow::Error),
+    CreateIndex(SearchError),
 
     /// Failed to create the file database row
     #[error("failed to create file")]

@@ -1,3 +1,4 @@
+use crate::SearchError;
 use crate::models::FileSearchRequest;
 
 use super::models::{FlattenedItemResult, PageResult, SearchScore};
@@ -8,7 +9,6 @@ use super::{
         SearchResults, UpdateSearchIndexData,
     },
 };
-use anyhow::Context;
 use aws_config::SdkConfig;
 use docbox_database::DbTransaction;
 use docbox_database::models::file::FileId;
@@ -27,7 +27,36 @@ use opensearch::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::skip_serializing_none;
+use thiserror::Error;
 use uuid::Uuid;
+
+#[derive(Debug, Error)]
+pub enum OpenSearchIndexFactoryError {
+    #[error("missing OPENSEARCH_URL env")]
+    MissingUrl,
+    #[error("failed to parse opensearch url")]
+    InvalidUrl,
+    #[error("failed to create opensearch auth config")]
+    CreateAuthConfig,
+    #[error("failed to build search transport")]
+    BuildTransport,
+}
+
+#[derive(Debug, Error)]
+pub enum OpenSearchSearchError {
+    #[error("failed to create index")]
+    CreateIndex,
+    #[error("failed to delete index")]
+    DeleteIndex,
+    #[error("failed to search index")]
+    SearchIndex,
+    #[error("failed to add search data")]
+    AddData,
+    #[error("failed to update search data")]
+    UpdateData,
+    #[error("failed to delete search data")]
+    DeleteData,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OpenSearchConfig {
@@ -35,8 +64,9 @@ pub struct OpenSearchConfig {
 }
 
 impl OpenSearchConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
-        let url = std::env::var("OPENSEARCH_URL").context("missing OPENSEARCH_URL env")?;
+    pub fn from_env() -> Result<Self, OpenSearchIndexFactoryError> {
+        let url =
+            std::env::var("OPENSEARCH_URL").map_err(|_| OpenSearchIndexFactoryError::MissingUrl)?;
         Ok(Self { url })
     }
 }
@@ -47,10 +77,15 @@ pub struct OpenSearchIndexFactory {
 }
 
 impl OpenSearchIndexFactory {
-    pub fn from_config(aws_config: &SdkConfig, config: OpenSearchConfig) -> anyhow::Result<Self> {
-        let url = reqwest::Url::parse(&config.url).context("failed to parse opensearch url")?;
-        let opensearch =
-            create_open_search(aws_config, url).context("failed to create open search")?;
+    pub fn from_config(
+        aws_config: &SdkConfig,
+        config: OpenSearchConfig,
+    ) -> Result<Self, OpenSearchIndexFactoryError> {
+        let url = reqwest::Url::parse(&config.url).map_err(|error| {
+            tracing::error!(?error, "failed to parse opensearch url");
+            OpenSearchIndexFactoryError::InvalidUrl
+        })?;
+        let opensearch = create_open_search(aws_config, url)?;
         Ok(Self::new(opensearch))
     }
 
@@ -83,7 +118,10 @@ impl TenantSearchIndexName {
 }
 
 /// Create instance of [OpenSearch] from the environment
-pub fn create_open_search(aws_config: &SdkConfig, url: Url) -> anyhow::Result<OpenSearch> {
+pub fn create_open_search(
+    aws_config: &SdkConfig,
+    url: Url,
+) -> Result<OpenSearch, OpenSearchIndexFactoryError> {
     if cfg!(debug_assertions) {
         create_open_search_dev(url)
     } else {
@@ -92,7 +130,7 @@ pub fn create_open_search(aws_config: &SdkConfig, url: Url) -> anyhow::Result<Op
 }
 
 /// Create instance of [OpenSearch] from the environment
-pub fn create_open_search_dev(url: Url) -> anyhow::Result<OpenSearch> {
+pub fn create_open_search_dev(url: Url) -> Result<OpenSearch, OpenSearchIndexFactoryError> {
     let conn_pool = SingleNodeConnectionPool::new(url);
 
     let transport = TransportBuilder::new(conn_pool)
@@ -101,7 +139,10 @@ pub fn create_open_search_dev(url: Url) -> anyhow::Result<OpenSearch> {
         // Disable certificate validation for local development
         .cert_validation(opensearch::cert::CertificateValidation::None)
         .build()
-        .context("failed to build open search transport")?;
+        .map_err(|error| {
+            tracing::error!(?error, "failed to build opensearch transport");
+            OpenSearchIndexFactoryError::BuildTransport
+        })?;
 
     let open_search = OpenSearch::new(transport);
 
@@ -109,17 +150,26 @@ pub fn create_open_search_dev(url: Url) -> anyhow::Result<OpenSearch> {
 }
 
 /// Create instance of [OpenSearch] from the environment
-pub fn create_open_search_prod(aws_config: &SdkConfig, url: Url) -> anyhow::Result<OpenSearch> {
+pub fn create_open_search_prod(
+    aws_config: &SdkConfig,
+    url: Url,
+) -> Result<OpenSearch, OpenSearchIndexFactoryError> {
     // Setup opensearch connection pool
     let conn_pool = SingleNodeConnectionPool::new(url);
 
     let transport = TransportBuilder::new(conn_pool)
         // We don't want open search trying to access the index through our proxy. It has a direct route
         .disable_proxy()
-        .auth(aws_config.clone().try_into()?)
+        .auth(aws_config.clone().try_into().map_err(|error| {
+            tracing::error!(?error, "failed to create opensearch transport auth config");
+            OpenSearchIndexFactoryError::CreateAuthConfig
+        })?)
         .service_name("es")
         .build()
-        .context("failed to build open search transport")?;
+        .map_err(|error| {
+            tracing::error!(?error, "failed to build opensearch transport");
+            OpenSearchIndexFactoryError::BuildTransport
+        })?;
 
     let open_search = OpenSearch::new(transport);
 
@@ -171,7 +221,7 @@ pub struct OsUpdateSearchIndexData {
 }
 
 impl SearchIndex for OpenSearchIndex {
-    async fn create_index(&self) -> anyhow::Result<()> {
+    async fn create_index(&self) -> Result<(), SearchError> {
         // Create index for files
         let response = self
             .client
@@ -237,20 +287,28 @@ impl SearchIndex for OpenSearchIndex {
                 }
             }))
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to create index");
+                OpenSearchSearchError::CreateIndex
+            })?;
 
         tracing::debug!("open search response {response:?}");
 
         Ok(())
     }
 
-    async fn delete_index(&self) -> anyhow::Result<()> {
+    async fn delete_index(&self) -> Result<(), SearchError> {
         // Delete index for files
         self.client
             .indices()
             .delete(IndicesDeleteParts::Index(&[&self.search_index.0]))
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete index");
+                OpenSearchSearchError::DeleteIndex
+            })?;
 
         Ok(())
     }
@@ -260,7 +318,7 @@ impl SearchIndex for OpenSearchIndex {
         scope: &DocumentBoxScopeRaw,
         file_id: docbox_database::models::file::FileId,
         query: super::models::FileSearchRequest,
-    ) -> anyhow::Result<FileSearchResults> {
+    ) -> Result<FileSearchResults, SearchError> {
         let offset = query.offset;
         let query = create_opensearch_file_query(query, scope, file_id);
 
@@ -273,14 +331,23 @@ impl SearchIndex for OpenSearchIndex {
             .from(offset.unwrap_or(0) as i64)
             .body(query)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to search index file");
+                OpenSearchSearchError::SearchIndex
+            })?;
 
-        let response: serde_json::Value =
-            response.json().await.context("failed to parse response")?;
+        let response: serde_json::Value = response.json().await.map_err(|error| {
+            tracing::error!(?error, "failed to get file search response");
+            OpenSearchSearchError::SearchIndex
+        })?;
 
-        tracing::debug!(%response);
+        tracing::debug!(%response, "search response");
 
-        let response: SearchResponse = serde_json::from_value(response)?;
+        let response: SearchResponse = serde_json::from_value(response).map_err(|error| {
+            tracing::error!(?error, "failed to parse file search response");
+            OpenSearchSearchError::SearchIndex
+        })?;
 
         let (total_hits, results) = response
             .hits
@@ -315,7 +382,7 @@ impl SearchIndex for OpenSearchIndex {
         scope: &[DocumentBoxScopeRaw],
         query: SearchRequest,
         folder_children: Option<Vec<FolderId>>,
-    ) -> anyhow::Result<SearchResults> {
+    ) -> Result<SearchResults, SearchError> {
         let offset = query.offset;
         let query = create_opensearch_query(query, scope, folder_children);
 
@@ -328,14 +395,23 @@ impl SearchIndex for OpenSearchIndex {
             .from(offset.unwrap_or(0) as i64)
             .body(query)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to search index");
+                OpenSearchSearchError::SearchIndex
+            })?;
 
-        let response: serde_json::Value =
-            response.json().await.context("failed to parse response")?;
+        let response: serde_json::Value = response.json().await.map_err(|error| {
+            tracing::error!(?error, "failed to get search response");
+            OpenSearchSearchError::SearchIndex
+        })?;
 
         tracing::debug!(%response);
 
-        let response: SearchResponse = serde_json::from_value(response)?;
+        let response: SearchResponse = serde_json::from_value(response).map_err(|error| {
+            tracing::error!(?error, "failed to parse search response");
+            OpenSearchSearchError::SearchIndex
+        })?;
         let total_hits = response.hits.total.value;
 
         const NAME_MATCH_KEYS: [&str; 2] = ["name_match_exact", "name_match_wildcard"];
@@ -389,7 +465,7 @@ impl SearchIndex for OpenSearchIndex {
         })
     }
 
-    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> anyhow::Result<()> {
+    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
         let mapped_data: Vec<JsonBody<OsSearchIndexData>> = data
             .into_iter()
             .map(|data| {
@@ -415,19 +491,27 @@ impl SearchIndex for OpenSearchIndex {
             .bulk(opensearch::BulkParts::Index(&self.search_index.0))
             .body(mapped_data)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to bulk add data");
+                OpenSearchSearchError::AddData
+            })?;
 
         let status_code = result.status_code();
 
-        let response = result.text().await?;
+        let response = result.text().await.map_err(|error| {
+            tracing::error!(?error, "failed to get bulk add response");
+            OpenSearchSearchError::AddData
+        })?;
 
         if status_code.is_client_error() || status_code.is_server_error() {
-            return Err(anyhow::anyhow!("error response: {response}"));
+            tracing::error!(?response, "bulk add error response");
+            return Err(OpenSearchSearchError::AddData.into());
         }
         Ok(())
     }
 
-    async fn add_data(&self, data: SearchIndexData) -> anyhow::Result<()> {
+    async fn add_data(&self, data: SearchIndexData) -> Result<(), SearchError> {
         let data = OsSearchIndexData {
             ty: data.ty,
             folder_id: data.folder_id,
@@ -448,22 +532,34 @@ impl SearchIndex for OpenSearchIndex {
             .index(IndexParts::Index(&self.search_index.0))
             .body(&data)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to add search data (request)");
+                OpenSearchSearchError::AddData
+            })?;
 
         let status_code = result.status_code();
 
-        let response: serde_json::Value = result.json().await?;
+        let response: serde_json::Value = result.json().await.map_err(|error| {
+            tracing::error!(?error, "failed to add search data (response)");
+            OpenSearchSearchError::AddData
+        })?;
 
         tracing::debug!(?response, "search index add response");
 
         if status_code.is_client_error() || status_code.is_server_error() {
-            return Err(anyhow::anyhow!("error response: {response}"));
+            tracing::error!(?response, "bulk add error response");
+            return Err(OpenSearchSearchError::AddData.into());
         }
 
         Ok(())
     }
 
-    async fn update_data(&self, item_id: Uuid, data: UpdateSearchIndexData) -> anyhow::Result<()> {
+    async fn update_data(
+        &self,
+        item_id: Uuid,
+        data: UpdateSearchIndexData,
+    ) -> Result<(), SearchError> {
         let data = OsUpdateSearchIndexData {
             folder_id: data.folder_id,
             name: data.name,
@@ -471,10 +567,10 @@ impl SearchIndex for OpenSearchIndex {
             pages: data.pages,
         };
 
-        let items = self
-            .get_by_item_id(item_id)
-            .await
-            .context("failed to find items to update")?;
+        let items = self.get_by_item_id(item_id).await.map_err(|error| {
+            tracing::error!(?error, "failed to find items to update");
+            OpenSearchSearchError::UpdateData
+        })?;
 
         // Nothing to update
         if items.is_empty() {
@@ -516,21 +612,29 @@ impl SearchIndex for OpenSearchIndex {
             .bulk(opensearch::BulkParts::Index(&self.search_index.0))
             .body(updates)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to update data (request)");
+                OpenSearchSearchError::UpdateData
+            })?;
 
         let status_code = result.status_code();
-        let response: serde_json::Value = result.json().await?;
+        let response: serde_json::Value = result.json().await.map_err(|error| {
+            tracing::error!(?error, "failed to update data (response)");
+            OpenSearchSearchError::UpdateData
+        })?;
 
         tracing::debug!(?response, "search index update response");
 
         if status_code.is_client_error() || status_code.is_server_error() {
-            return Err(anyhow::anyhow!("error response: {response}"));
+            tracing::error!(?response, "update data error response");
+            return Err(OpenSearchSearchError::UpdateData.into());
         }
 
         Ok(())
     }
 
-    async fn delete_data(&self, item_id: Uuid) -> anyhow::Result<()> {
+    async fn delete_data(&self, item_id: Uuid) -> Result<(), SearchError> {
         self.client
             .delete_by_query(DeleteByQueryParts::Index(&[&self.search_index.0]))
             .body(json!({
@@ -539,12 +643,16 @@ impl SearchIndex for OpenSearchIndex {
                 }
             }))
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete data");
+                OpenSearchSearchError::DeleteData
+            })?;
 
         Ok(())
     }
 
-    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> anyhow::Result<()> {
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
         self.client
             .delete_by_query(DeleteByQueryParts::Index(&[&self.search_index.0]))
             .body(json!({
@@ -553,7 +661,11 @@ impl SearchIndex for OpenSearchIndex {
                 }
             }))
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete data by scope");
+                OpenSearchSearchError::DeleteData
+            })?;
 
         Ok(())
     }
@@ -561,7 +673,7 @@ impl SearchIndex for OpenSearchIndex {
     async fn get_pending_migrations(
         &self,
         _applied_names: Vec<String>,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> Result<Vec<String>, SearchError> {
         Ok(Vec::new())
     }
 
@@ -571,14 +683,14 @@ impl SearchIndex for OpenSearchIndex {
         _root_t: &mut DbTransaction<'_>,
         _t: &mut DbTransaction<'_>,
         _name: &str,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SearchError> {
         Ok(())
     }
 }
 
 impl OpenSearchIndex {
     /// Collect all records for the provided `item_id`
-    async fn get_by_item_id(&self, item_id: Uuid) -> anyhow::Result<Vec<String>> {
+    async fn get_by_item_id(&self, item_id: Uuid) -> Result<Vec<String>, OpenSearchSearchError> {
         #[derive(Debug, Deserialize, Serialize)]
         struct Response {
             hits: Hits,
@@ -606,9 +718,16 @@ impl OpenSearchIndex {
                 },
             }))
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to get search item by id");
+                OpenSearchSearchError::SearchIndex
+            })?;
 
-        let response: Response = response.json().await.context("failed to parse response")?;
+        let response: Response = response.json().await.map_err(|error| {
+            tracing::error!(?error, "failed to parse search item by id response");
+            OpenSearchSearchError::SearchIndex
+        })?;
 
         Ok(response.hits.hits.into_iter().map(|hit| hit._id).collect())
     }

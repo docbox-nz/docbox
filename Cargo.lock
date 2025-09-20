@@ -1955,7 +1955,6 @@ dependencies = [
 name = "docbox-search"
 version = "0.4.0"
 dependencies = [
- "anyhow",
  "aws-config",
  "chrono",
  "docbox-database",
@@ -1968,6 +1967,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
  "utoipa",

@@ -8,7 +8,7 @@ use docbox_database::{
     },
 };
 use docbox_search::{
-    TenantSearchIndex,
+    SearchError, TenantSearchIndex,
     models::{
         AdminSearchRequest, FlattenedItemResult, SearchIndexType, SearchRequest, SearchResultData,
     },
@@ -25,7 +25,7 @@ pub enum SearchDocumentBoxError {
     MissingRoot,
 
     #[error(transparent)]
-    QueryIndex(anyhow::Error),
+    QueryIndex(SearchError),
 }
 
 pub struct ResolvedSearchResult {

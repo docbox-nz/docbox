@@ -3,7 +3,7 @@ use docbox_database::{
     DbErr, ROOT_DATABASE_NAME,
     models::{tenant::Tenant, tenant_migration::TenantMigration},
 };
-use docbox_search::SearchIndexFactory;
+use docbox_search::{SearchError, SearchIndexFactory};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -12,7 +12,7 @@ pub enum GetPendingTenantMigrationsError {
     Database(#[from] DbErr),
 
     #[error("failed to apply migration: {0}")]
-    GetPendingMigrations(anyhow::Error),
+    GetPendingMigrations(SearchError),
 }
 
 pub async fn get_pending_tenant_search_migrations(
