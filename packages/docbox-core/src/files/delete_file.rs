@@ -32,7 +32,7 @@ pub enum DeleteFileError {
 
     /// Failed to remove generated file from storage
     #[error("failed to remove generated file from storage: {0}")]
-    DeleteGeneratedFileStorage(anyhow::Error),
+    DeleteGeneratedFileStorage(StorageLayerError),
 }
 
 /// Deletes a file and all associated generated files.

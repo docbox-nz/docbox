@@ -33,7 +33,7 @@ pub enum GeneratedFileDeleteResult {
     Ok,
     /// Error path contains any files that were upload
     /// along with the error that occurred
-    Err(Vec<GeneratedFileId>, anyhow::Error),
+    Err(Vec<GeneratedFileId>, StorageLayerError),
 }
 
 pub async fn delete_generated_files(
@@ -53,13 +53,13 @@ pub async fn delete_generated_files(
                 debug!(%id, %file_id, %file_key, "uploading file to s3",);
 
                 // Delete file from S3
-                if let Err(cause) = storage.delete_file(&file_key).await {
-                    error!(%id, %file_id, %file_key, ?cause, "failed to delete generated file");
+                if let Err(error) = storage.delete_file(&file_key).await {
+                    error!(%id, %file_id, %file_key, ?error, "failed to delete generated file");
+                    return Err(error);
                 }
 
                 debug!("deleted file from s3");
-
-                anyhow::Ok(id)
+                Ok(id)
             }
         })
         .collect::<FuturesUnordered<_>>();
