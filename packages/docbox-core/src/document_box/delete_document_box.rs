@@ -1,6 +1,6 @@
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
-    folders::delete_folder::delete_folder,
+    folders::delete_folder::{DeleteFolderError, delete_folder},
 };
 use docbox_database::{
     DbErr, DbPool,
@@ -23,7 +23,7 @@ pub enum DeleteDocumentBoxError {
     DeleteSearchData(SearchError),
 
     #[error("failed to delete root folder")]
-    FailedToDeleteRoot(anyhow::Error),
+    FailedToDeleteRoot(DeleteFolderError),
 }
 
 pub async fn delete_document_box(

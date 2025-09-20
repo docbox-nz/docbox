@@ -28,7 +28,7 @@ const BLOCK_TAGS: &[&str] = &[
 
 /// Convert the provided `html` into a text representation maintaining
 /// the newlines that would be produced by block elements
-pub fn html_to_text(html: &str) -> anyhow::Result<String> {
+pub fn html_to_text(html: &str) -> Result<String, tl::ParseError> {
     let dom = tl::parse(html, tl::ParserOptions::default())?;
 
     let parser = dom.parser();

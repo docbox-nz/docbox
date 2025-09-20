@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use docbox_database::{
-    DbPool,
+    DbPool, DbResult,
     models::{
         document_box::DocumentBoxScopeRaw,
         file::{File, FileWithScope},
@@ -90,14 +90,18 @@ const DATABASE_PAGE_SIZE: u64 = 1000;
 const FILE_PROCESS_SIZE: usize = 500;
 
 /// Collects all stored links and creates the [SearchIndexData] for them
-pub async fn create_links_index_data(db: &DbPool) -> anyhow::Result<Vec<SearchIndexData>> {
+pub async fn create_links_index_data(db: &DbPool) -> DbResult<Vec<SearchIndexData>> {
     let mut page_index = 0;
     let mut data = Vec::new();
 
     loop {
-        let links = Link::all(db, page_index * DATABASE_PAGE_SIZE, DATABASE_PAGE_SIZE)
-            .await
-            .with_context(|| format!("failed to load files page: {page_index}"))?;
+        let links = match Link::all(db, page_index * DATABASE_PAGE_SIZE, DATABASE_PAGE_SIZE).await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::error!(?error, ?page_index, "failed to load links page");
+                return Err(error);
+            }
+        };
         let is_end = (links.len() as u64) < DATABASE_PAGE_SIZE;
 
         for LinkWithScope { link, scope } in links {
@@ -126,14 +130,21 @@ pub async fn create_links_index_data(db: &DbPool) -> anyhow::Result<Vec<SearchIn
 }
 
 /// Collects all stored non-root folders and creates the [SearchIndexData] for them
-pub async fn create_folders_index_data(db: &DbPool) -> anyhow::Result<Vec<SearchIndexData>> {
+pub async fn create_folders_index_data(db: &DbPool) -> DbResult<Vec<SearchIndexData>> {
     let mut page_index = 0;
     let mut data = Vec::new();
 
     loop {
-        let folders = Folder::all_non_root(db, page_index * DATABASE_PAGE_SIZE, DATABASE_PAGE_SIZE)
-            .await
-            .with_context(|| format!("failed to load folders page: {page_index}"))?;
+        let folders =
+            match Folder::all_non_root(db, page_index * DATABASE_PAGE_SIZE, DATABASE_PAGE_SIZE)
+                .await
+            {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::error!(?error, ?page_index, "failed to load folders page");
+                    return Err(error);
+                }
+            };
         let is_end = (folders.len() as u64) < DATABASE_PAGE_SIZE;
 
         for folder in folders {
@@ -170,20 +181,29 @@ pub async fn create_folders_index_data(db: &DbPool) -> anyhow::Result<Vec<Search
 pub async fn create_files_index_data(
     db: &DbPool,
     storage: &TenantStorageLayer,
-) -> anyhow::Result<Vec<SearchIndexData>> {
+) -> DbResult<Vec<SearchIndexData>> {
     let mut page_index = 0;
     let mut data = Vec::new();
     let mut files_for_processing = Vec::new();
 
     loop {
-        let files = File::all(db, page_index * DATABASE_PAGE_SIZE, DATABASE_PAGE_SIZE)
-            .await
-            .with_context(|| format!("failed to load files page: {page_index}"))?;
-
+        let files = match File::all(db, page_index * DATABASE_PAGE_SIZE, DATABASE_PAGE_SIZE).await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::error!(?error, ?page_index, "failed to load files page");
+                return Err(error);
+            }
+        };
         let is_end = (files.len() as u64) < DATABASE_PAGE_SIZE;
 
         for FileWithScope { file, scope } in files {
-            let mime = mime::Mime::from_str(&file.mime).context("invalid file mime type")?;
+            let mime = match mime::Mime::from_str(&file.mime) {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::error!(?error, ?file, "file has an invalid mime type");
+                    continue;
+                }
+            };
 
             if file.encrypted || !is_pdf_compatible(&mime) {
                 // These files don't require any processing

@@ -1,5 +1,4 @@
 use crate::{extensions::max_file_size::MaxFileSizeBytes, middleware::api_key::ApiKeyLayer};
-use anyhow::Context;
 use axum::{Extension, extract::DefaultBodyLimit, routing::post};
 use docbox_core::{
     aws::{SqsClient, aws_config},
@@ -23,6 +22,7 @@ use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
 use logging::{init_logging, init_logging_with_sentry};
 use routes::router;
 use std::{
+    error::Error,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
 };
@@ -41,18 +41,18 @@ pub mod routes;
 const DEFAULT_SERVER_ADDRESS: SocketAddr =
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8080));
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn Error>> {
     _ = dotenvy::dotenv();
 
     let _sentry_guard = match std::env::var("SENTRY_DSN") {
         // Initialize logging with sentry support
         Ok(dsn) => {
-            let sentry = init_logging_with_sentry(dsn)?;
+            let sentry = init_logging_with_sentry(dsn);
             Some(sentry)
         }
         // Initialize logging without sentry support
         Err(_) => {
-            init_logging()?;
+            init_logging();
             None
         }
     };
@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
         .block_on(server())
 }
 
-async fn server() -> anyhow::Result<()> {
+async fn server() -> Result<(), Box<dyn Error>> {
     let max_file_size_bytes = match std::env::var("DOCBOX_MAX_FILE_SIZE_BYTES") {
         Ok(value) => value.parse::<i32>()?,
         // Default max file size in bytes (100MB)
@@ -81,12 +81,10 @@ async fn server() -> anyhow::Result<()> {
     };
 
     // Create website scraping service
-    let website_meta_service_config =
-        WebsiteMetaServiceConfig::from_env().context("failed to derive web scraper config")?;
-    let website_meta_service = Arc::new(
-        WebsiteMetaService::from_config(website_meta_service_config)
-            .context("failed to build web scraper http client")?,
-    );
+    let website_meta_service_config = WebsiteMetaServiceConfig::from_env()?;
+    let website_meta_service = Arc::new(WebsiteMetaService::from_config(
+        website_meta_service_config,
+    )?);
 
     // Load AWS configuration
     let aws_config = aws_config().await;
@@ -137,9 +135,9 @@ async fn server() -> anyhow::Result<()> {
     let mut app = router();
 
     if let AppNotificationQueue::Mpsc(queue) = &mut notification_queue {
-        let sender = queue
-            .take_sender()
-            .context("missing sender for in memory notification queue")?;
+        let sender = queue.take_sender().ok_or_else(|| {
+            std::io::Error::other("missing sender for in memory notification queue")
+        })?;
 
         // Append the webhook handling endpoint and sender extension
         app = app

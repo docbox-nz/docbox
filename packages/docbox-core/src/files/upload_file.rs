@@ -1,6 +1,5 @@
 use crate::files::{create_file_key, index_file::store_file_index};
 use crate::processing::{ProcessingError, ProcessingIndexMetadata, ProcessingLayer, process_file};
-use crate::utils::error::CompositeError;
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
     files::generated::{QueuedUpload, upload_generated_files},
@@ -34,12 +33,8 @@ pub enum UploadFileError {
     CreateIndex(SearchError),
 
     /// Failed to create the file database row
-    #[error("failed to create file")]
+    #[error("failed to create file entry")]
     CreateFile(DbErr),
-
-    /// Failed to set file encryption state
-    #[error("failed to store file encryption state")]
-    SetEncryption(DbErr),
 
     /// Failed to process the file
     #[error("failed to process file: {0}")]
@@ -57,9 +52,9 @@ pub enum UploadFileError {
     #[error("failed to upload file to storage layer: {0}")]
     UploadFile(StorageLayerError),
 
-    /// Multiple error messages
-    #[error(transparent)]
-    Composite(#[from] CompositeError),
+    /// File uploads failed
+    #[error("failed to upload files")]
+    FailedFileUploads(Vec<UploadFileError>),
 
     /// Failed to begin the transaction
     #[error("failed to perform operation (start)")]
@@ -417,14 +412,12 @@ pub async fn store_generated_files(
     // Handle any errors in the upload process
     // (This must occur after so that we can ensure we capture all successful uploads to rollback)
     if !upload_errors.is_empty() {
-        tracing::warn!("error while uploading generated files, operation failed");
+        tracing::warn!(
+            ?upload_errors,
+            "error while uploading generated files, operation failed"
+        );
 
-        let error = upload_errors
-            .into_iter()
-            .map(anyhow::Error::from)
-            .collect::<CompositeError>();
-
-        return Err(UploadFileError::Composite(error));
+        return Err(UploadFileError::FailedFileUploads(upload_errors));
     }
 
     Ok(generated_files)

@@ -60,7 +60,6 @@ axum-valid = { version = "=0.24.0", default-features = false, features = [
 ] }
 
 # Error handling
-anyhow.workspace = true
 thiserror.workspace = true
 
 # Serialization and JSON

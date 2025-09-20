@@ -1,6 +1,6 @@
 use crate::events::{TenantEventMessage, TenantEventPublisher};
-use crate::files::delete_file::delete_file;
-use crate::links::delete_link::delete_link;
+use crate::files::delete_file::{DeleteFileError, delete_file};
+use crate::links::delete_link::{DeleteLinkError, delete_link};
 use docbox_database::{
     DbPool,
     models::{
@@ -10,9 +10,10 @@ use docbox_database::{
         link::Link,
     },
 };
-use docbox_search::TenantSearchIndex;
+use docbox_search::{SearchError, TenantSearchIndex};
 use docbox_storage::TenantStorageLayer;
 use std::collections::VecDeque;
+use thiserror::Error;
 
 /// Item to be removed
 pub enum RemoveStackItem {
@@ -27,13 +28,34 @@ pub enum RemoveStackItem {
     Link(Link),
 }
 
+#[derive(Debug, Error)]
+pub enum DeleteFolderError {
+    #[error("failed to resolve folder for deletion")]
+    ResolveFolder,
+    #[error(transparent)]
+    Folder(#[from] InternalDeleteFolderError),
+    #[error(transparent)]
+    File(#[from] DeleteFileError),
+    #[error(transparent)]
+    Link(#[from] DeleteLinkError),
+}
+
+#[derive(Debug, Error)]
+pub enum InternalDeleteFolderError {
+    #[error(transparent)]
+    Search(#[from] SearchError),
+
+    #[error("failed to delete folder metadata")]
+    Database,
+}
+
 pub async fn delete_folder(
     db: &DbPool,
     storage: &TenantStorageLayer,
     search: &TenantSearchIndex,
     events: &TenantEventPublisher,
     folder: Folder,
-) -> anyhow::Result<()> {
+) -> Result<(), DeleteFolderError> {
     // Stack to store the next item to delete
     let mut stack = VecDeque::new();
 
@@ -46,7 +68,12 @@ pub async fn delete_folder(
         match item {
             RemoveStackItem::Folder(folder) => {
                 // Resolve the folder children
-                let resolved = ResolvedFolder::resolve(db, &folder).await?;
+                let resolved = ResolvedFolder::resolve(db, &folder)
+                    .await
+                    .map_err(|error| {
+                        tracing::error!(?error, "failed to resolve folder for deletion");
+                        DeleteFolderError::ResolveFolder
+                    })?;
 
                 // Push the empty folder first (Will be taken out last)
                 stack.push_front(RemoveStackItem::EmptyFolder(folder));
@@ -86,14 +113,14 @@ async fn internal_delete_folder(
     search: &TenantSearchIndex,
     events: &TenantEventPublisher,
     folder: Folder,
-) -> anyhow::Result<()> {
+) -> Result<(), InternalDeleteFolderError> {
     // Delete the indexed file contents
     search.delete_data(folder.id).await?;
 
-    let result = folder
-        .delete(db)
-        .await
-        .inspect_err(|error| tracing::error!(?error, "failed to delete folder"))?;
+    let result = folder.delete(db).await.map_err(|error| {
+        tracing::error!(?error, "failed to delete folder");
+        InternalDeleteFolderError::Database
+    })?;
 
     let document_box = folder.document_box.clone();
 

@@ -1,7 +1,7 @@
 use tracing::Level;
 use tracing_subscriber::{EnvFilter, fmt::Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-pub fn init_logging_with_sentry(dsn: String) -> anyhow::Result<sentry::ClientInitGuard> {
+pub fn init_logging_with_sentry(dsn: String) -> sentry::ClientInitGuard {
     let options = sentry::ClientOptions {
         release: sentry::release_name!(),
         ..Default::default()
@@ -29,20 +29,19 @@ pub fn init_logging_with_sentry(dsn: String) -> anyhow::Result<sentry::ClientIni
         .enable_span_attributes();
 
     tracing_subscriber::registry()
-        .with(filter()?)
+        .with(filter())
         .with(fmt_layer())
         .with(sentry_layer)
         .init();
 
-    Ok(sentry)
+    sentry
 }
 
-pub fn init_logging() -> anyhow::Result<()> {
+pub fn init_logging() {
     tracing_subscriber::registry()
-        .with(filter()?)
+        .with(filter())
         .with(fmt_layer())
         .init();
-    Ok(())
 }
 
 pub fn fmt_layer<S>() -> Layer<S> {
@@ -55,15 +54,22 @@ pub fn fmt_layer<S>() -> Layer<S> {
         .with_target(false)
 }
 
-pub fn filter() -> anyhow::Result<EnvFilter> {
+pub fn filter() -> EnvFilter {
     // Use the logging options from env variables
-    let filter = EnvFilter::from_default_env()
+    EnvFilter::from_default_env()
         // Increase logging requirements for noisy dependencies
-        .add_directive("aws_sdk_secretsmanager=info".parse()?)
-        .add_directive("aws_runtime=info".parse()?)
-        .add_directive("aws_smithy_runtime=info".parse()?)
-        .add_directive("hyper_util=info".parse()?)
-        .add_directive("aws_sdk_sqs=info".parse()?)
-        .add_directive("h2=info".parse()?);
-    Ok(filter)
+        .add_directive(
+            "aws_sdk_secretsmanager=info"
+                .parse()
+                .expect("directive was invalid"),
+        )
+        .add_directive("aws_runtime=info".parse().expect("directive was invalid"))
+        .add_directive(
+            "aws_smithy_runtime=info"
+                .parse()
+                .expect("directive was invalid"),
+        )
+        .add_directive("hyper_util=info".parse().expect("directive was invalid"))
+        .add_directive("aws_sdk_sqs=info".parse().expect("directive was invalid"))
+        .add_directive("h2=info".parse().expect("directive was invalid"))
 }
