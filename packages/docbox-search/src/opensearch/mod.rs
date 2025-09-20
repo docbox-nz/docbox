@@ -1,22 +1,22 @@
 use crate::SearchError;
 use crate::models::FileSearchRequest;
+use crate::opensearch::models::{OsSearchIndexData, OsUpdateSearchIndexData, SearchResponse};
 
 use super::models::{FlattenedItemResult, PageResult, SearchScore};
 use super::{
     SearchIndex,
     models::{
-        DocumentPage, FileSearchResults, SearchIndexData, SearchIndexType, SearchRequest,
-        SearchResults, UpdateSearchIndexData,
+        FileSearchResults, SearchIndexData, SearchRequest, SearchResults, UpdateSearchIndexData,
     },
 };
 use aws_config::SdkConfig;
 use docbox_database::DbTransaction;
 use docbox_database::models::file::FileId;
 use docbox_database::models::{
-    document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant, user::UserId,
+    document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant,
 };
 use opensearch::{
-    DeleteByQueryParts, IndexParts, OpenSearch, SearchParts,
+    DeleteByQueryParts, OpenSearch, SearchParts,
     http::{
         Url,
         request::JsonBody,
@@ -27,36 +27,12 @@ use opensearch::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::skip_serializing_none;
-use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Debug, Error)]
-pub enum OpenSearchIndexFactoryError {
-    #[error("missing OPENSEARCH_URL env")]
-    MissingUrl,
-    #[error("failed to parse opensearch url")]
-    InvalidUrl,
-    #[error("failed to create opensearch auth config")]
-    CreateAuthConfig,
-    #[error("failed to build search transport")]
-    BuildTransport,
-}
+pub use error::{OpenSearchIndexFactoryError, OpenSearchSearchError};
 
-#[derive(Debug, Error)]
-pub enum OpenSearchSearchError {
-    #[error("failed to create index")]
-    CreateIndex,
-    #[error("failed to delete index")]
-    DeleteIndex,
-    #[error("failed to search index")]
-    SearchIndex,
-    #[error("failed to add search data")]
-    AddData,
-    #[error("failed to update search data")]
-    UpdateData,
-    #[error("failed to delete search data")]
-    DeleteData,
-}
+pub mod error;
+mod models;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OpenSearchConfig {
@@ -85,12 +61,8 @@ impl OpenSearchIndexFactory {
             tracing::error!(?error, "failed to parse opensearch url");
             OpenSearchIndexFactoryError::InvalidUrl
         })?;
-        let opensearch = create_open_search(aws_config, url)?;
-        Ok(Self::new(opensearch))
-    }
-
-    pub fn new(client: OpenSearch) -> Self {
-        Self { client }
+        let client = create_open_search(aws_config, url)?;
+        Ok(Self { client })
     }
 
     pub fn create_search_index(&self, search_index: TenantSearchIndexName) -> OpenSearchIndex {
@@ -174,50 +146,6 @@ pub fn create_open_search_prod(
     let open_search = OpenSearch::new(transport);
 
     Ok(open_search)
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OsSearchIndexData {
-    /// Type of item the search index data is representing
-    #[serde(rename = "item_type")]
-    pub ty: SearchIndexType,
-
-    /// ID of the folder the indexed item is within.
-    ///
-    /// (For searching only withing a specific folder path)
-    pub folder_id: FolderId,
-    /// Document box scope that this item is within
-    ///
-    /// (For restricting search scope)
-    pub document_box: DocumentBoxScopeRaw,
-
-    /// Unique ID for the actual document
-    ///
-    /// this is to allow multiple page documents to be stored as
-    /// separate search index items without overriding each other
-    pub item_id: Uuid,
-    /// Name of this item
-    pub name: String,
-    /// Mime type when working with file items (Otherwise none)
-    pub mime: Option<String>,
-    /// For files this is the file content (With an associated page number)
-    /// For links this is the link value
-    pub content: Option<String>,
-    /// Creation date for the item
-    pub created_at: String,
-    /// User who created the item
-    pub created_by: Option<UserId>,
-    /// Optional pages of document content
-    pub pages: Option<Vec<DocumentPage>>,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OsUpdateSearchIndexData {
-    pub folder_id: FolderId,
-    pub name: String,
-    pub content: Option<String>,
-    pub pages: Option<Vec<DocumentPage>>,
 }
 
 impl SearchIndex for OpenSearchIndex {
@@ -465,7 +393,7 @@ impl SearchIndex for OpenSearchIndex {
         })
     }
 
-    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
+    async fn add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
         let mapped_data: Vec<JsonBody<OsSearchIndexData>> = data
             .into_iter()
             .map(|data| {
@@ -508,50 +436,6 @@ impl SearchIndex for OpenSearchIndex {
             tracing::error!(?response, "bulk add error response");
             return Err(OpenSearchSearchError::AddData.into());
         }
-        Ok(())
-    }
-
-    async fn add_data(&self, data: SearchIndexData) -> Result<(), SearchError> {
-        let data = OsSearchIndexData {
-            ty: data.ty,
-            folder_id: data.folder_id,
-            document_box: data.document_box,
-            item_id: data.item_id,
-            name: data.name,
-            mime: data.mime,
-            content: data.content,
-            created_at: data.created_at.to_rfc3339(),
-            created_by: data.created_by,
-            pages: data.pages,
-        };
-
-        // Index a file
-        let result = self
-            .client
-            // Use file.id
-            .index(IndexParts::Index(&self.search_index.0))
-            .body(&data)
-            .send()
-            .await
-            .map_err(|error| {
-                tracing::error!(?error, "failed to add search data (request)");
-                OpenSearchSearchError::AddData
-            })?;
-
-        let status_code = result.status_code();
-
-        let response: serde_json::Value = result.json().await.map_err(|error| {
-            tracing::error!(?error, "failed to add search data (response)");
-            OpenSearchSearchError::AddData
-        })?;
-
-        tracing::debug!(?response, "search index add response");
-
-        if status_code.is_client_error() || status_code.is_server_error() {
-            tracing::error!(?response, "bulk add error response");
-            return Err(OpenSearchSearchError::AddData.into());
-        }
-
         Ok(())
     }
 
@@ -991,64 +875,4 @@ pub fn create_opensearch_file_query(
             }
         ]
     })
-}
-
-#[derive(Debug, Deserialize)]
-struct SearchResponse {
-    hits: Hits<SearchResponseHit>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Hits<H> {
-    total: HitsTotal,
-    hits: Vec<H>,
-}
-
-#[derive(Debug, Deserialize)]
-struct HitsTotal {
-    value: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct SearchResponseHit {
-    _id: String,
-    _score: f32,
-    _source: SearchResponseHitSource,
-    inner_hits: Option<InnerHits>,
-    matched_queries: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SearchResponseHitSource {
-    item_id: Uuid,
-    item_type: SearchIndexType,
-    document_box: DocumentBoxScopeRaw,
-}
-
-#[derive(Debug, Deserialize)]
-struct InnerHits {
-    pages: InnerHitsPages,
-}
-
-#[derive(Debug, Deserialize)]
-struct InnerHitsPages {
-    hits: Hits<PagesHit>,
-}
-
-#[derive(Debug, Deserialize)]
-struct PagesHit {
-    _score: f32,
-    _source: PagesHitSource,
-    highlight: PagesHighlight,
-}
-
-#[derive(Debug, Deserialize)]
-struct PagesHitSource {
-    page: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct PagesHighlight {
-    #[serde(rename = "pages.content")]
-    content: Vec<String>,
 }

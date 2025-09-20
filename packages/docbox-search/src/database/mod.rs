@@ -35,7 +35,10 @@ use docbox_database::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, vec};
-use thiserror::Error;
+
+pub use error::{DatabaseSearchError, DatabaseSearchIndexFactoryError};
+
+pub mod error;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DatabaseSearchConfig {}
@@ -51,19 +54,12 @@ pub struct DatabaseSearchIndexFactory {
     db: Arc<DatabasePoolCache>,
 }
 
-#[derive(Debug, Error)]
-pub enum DatabaseSearchIndexFactoryError {}
-
 impl DatabaseSearchIndexFactory {
     pub fn from_config(
         db: Arc<DatabasePoolCache>,
         _config: DatabaseSearchConfig,
     ) -> Result<Self, DatabaseSearchIndexFactoryError> {
         Ok(Self { db })
-    }
-
-    pub fn new(db: Arc<DatabasePoolCache>) -> Self {
-        Self { db }
     }
 
     pub fn create_search_index(&self, tenant: &Tenant) -> DatabaseSearchIndex {
@@ -78,33 +74,6 @@ impl DatabaseSearchIndexFactory {
 pub struct DatabaseSearchIndex {
     db: Arc<DatabasePoolCache>,
     tenant: Arc<Tenant>,
-}
-
-#[derive(Debug, Error)]
-pub enum DatabaseSearchError {
-    #[error("failed to connect")]
-    AcquireDatabase,
-
-    #[error("migration not found")]
-    MigrationNotFound,
-
-    #[error("failed to search index")]
-    SearchIndex,
-
-    #[error("failed to count page matches")]
-    CountFilePages,
-
-    #[error("failed to search file pages")]
-    SearchFilePages,
-
-    #[error("failed to delete search data")]
-    DeleteData,
-
-    #[error("failed to apply migration")]
-    ApplyMigration,
-
-    #[error("failed to add search data")]
-    AddData,
 }
 
 const TENANT_MIGRATIONS: &[(&str, &str)] = &[
@@ -404,11 +373,7 @@ WITH
         })
     }
 
-    async fn add_data(&self, data: SearchIndexData) -> Result<(), SearchError> {
-        self.bulk_add_data(vec![data]).await
-    }
-
-    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
+    async fn add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
         let db = self.acquire_db().await?;
 
         for item in data {

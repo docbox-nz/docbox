@@ -10,20 +10,22 @@ pub async fn store_folder_index(
     folder: &Folder,
     folder_id: FolderId,
 ) -> Result<(), CreateFolderError> {
+    let index = SearchIndexData {
+        ty: SearchIndexType::Folder,
+        item_id: folder.id,
+        folder_id,
+        name: folder.name.to_string(),
+        mime: None,
+        content: None,
+        pages: None,
+        created_at: folder.created_at,
+        created_by: folder.created_by.clone(),
+        document_box: folder.document_box.clone(),
+    };
+
     // Add folder to search index
     search
-        .add_data(SearchIndexData {
-            ty: SearchIndexType::Folder,
-            item_id: folder.id,
-            folder_id,
-            name: folder.name.to_string(),
-            mime: None,
-            content: None,
-            pages: None,
-            created_at: folder.created_at,
-            created_by: folder.created_by.clone(),
-            document_box: folder.document_box.clone(),
-        })
+        .add_data(vec![index])
         .await
         .map_err(CreateFolderError::CreateIndex)?;
 

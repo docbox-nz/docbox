@@ -27,7 +27,7 @@ pub async fn store_file_index(
     };
 
     search
-        .add_data(index)
+        .add_data(vec![index])
         .await
         .map_err(UploadFileError::CreateIndex)?;
 

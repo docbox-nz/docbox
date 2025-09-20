@@ -59,7 +59,7 @@ pub async fn apply_rebuilt_tenant_index(
 
     for data in index_data_chunks {
         let chunk = data.collect::<Vec<_>>();
-        search.bulk_add_data(chunk).await?;
+        search.add_data(chunk).await?;
     }
 
     Ok(())

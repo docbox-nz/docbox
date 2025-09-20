@@ -1,5 +1,3 @@
-use std::{ops::DerefMut, sync::Arc};
-
 use aws_config::SdkConfig;
 use chrono::Utc;
 use docbox_database::{
@@ -18,14 +16,17 @@ use models::{
     UpdateSearchIndexData,
 };
 use serde::{Deserialize, Serialize};
+use std::{ops::DerefMut, sync::Arc};
 use thiserror::Error;
 use uuid::Uuid;
 
 pub mod models;
 
-pub use opensearch::OpenSearchConfig;
+pub use database::{DatabaseSearchConfig, DatabaseSearchError, DatabaseSearchIndexFactoryError};
+pub use opensearch::{OpenSearchConfig, OpenSearchIndexFactoryError, OpenSearchSearchError};
 pub use typesense::{
-    TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseSearchConfig,
+    TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseIndexFactoryError,
+    TypesenseSearchConfig, TypesenseSearchError,
 };
 
 mod database;
@@ -48,27 +49,30 @@ pub enum SearchIndexFactoryError {
     OpenSearch(#[from] opensearch::OpenSearchIndexFactoryError),
     #[error(transparent)]
     Database(#[from] database::DatabaseSearchIndexFactoryError),
+    #[error("unknown search index factory type requested")]
+    UnknownIndexFactory,
 }
 
 impl SearchIndexFactoryConfig {
     pub fn from_env() -> Result<Self, SearchIndexFactoryError> {
         let variant = std::env::var("DOCBOX_SEARCH_INDEX_FACTORY")
-            .unwrap_or_else(|_| "typesense".to_string());
+            .unwrap_or_else(|_| "database".to_string())
+            .to_lowercase();
         match variant.as_str() {
-            "open_search" => opensearch::OpenSearchConfig::from_env()
+            "open_search" | "opensearch" => opensearch::OpenSearchConfig::from_env()
                 .map(Self::OpenSearch)
                 .map_err(SearchIndexFactoryError::OpenSearch),
+
             "typesense" => typesense::TypesenseSearchConfig::from_env()
                 .map(Self::Typesense)
                 .map_err(SearchIndexFactoryError::Typesense),
+
             "database" => database::DatabaseSearchConfig::from_env()
                 .map(Self::Database)
                 .map_err(SearchIndexFactoryError::Database),
 
-            // Default when nothing is chosen
-            _ => database::DatabaseSearchConfig::from_env()
-                .map(Self::Database)
-                .map_err(SearchIndexFactoryError::Database),
+            // Unknown type requested
+            _ => Err(SearchIndexFactoryError::UnknownIndexFactory),
         }
     }
 }
@@ -81,10 +85,11 @@ pub enum SearchIndexFactory {
 }
 
 impl SearchIndexFactory {
+    /// Create a search index factory from the provided `config`
     pub fn from_config(
         aws_config: &SdkConfig,
         secrets: Arc<AppSecretManager>,
-        #[allow(unused)] db: Arc<DatabasePoolCache>,
+        db: Arc<DatabasePoolCache>,
         config: SearchIndexFactoryConfig,
     ) -> Result<Self, SearchIndexFactoryError> {
         match config {
@@ -94,12 +99,14 @@ impl SearchIndexFactory {
                     .map(SearchIndexFactory::Typesense)
                     .map_err(SearchIndexFactoryError::Typesense)
             }
+
             SearchIndexFactoryConfig::OpenSearch(config) => {
                 tracing::debug!("using opensearch search index");
                 opensearch::OpenSearchIndexFactory::from_config(aws_config, config)
                     .map(SearchIndexFactory::OpenSearch)
                     .map_err(SearchIndexFactoryError::OpenSearch)
             }
+
             SearchIndexFactoryConfig::Database(config) => {
                 tracing::debug!("using opensearch search index");
                 database::DatabaseSearchIndexFactory::from_config(db, config)
@@ -116,6 +123,7 @@ impl SearchIndexFactory {
                 let search_index = tenant.os_index_name.clone();
                 TenantSearchIndex::Typesense(factory.create_search_index(search_index))
             }
+
             SearchIndexFactory::OpenSearch(factory) => {
                 let search_index = opensearch::TenantSearchIndexName::from_tenant(tenant);
                 TenantSearchIndex::OpenSearch(factory.create_search_index(search_index))
@@ -143,12 +151,12 @@ pub enum SearchError {
     OpenSearch(#[from] opensearch::OpenSearchSearchError),
     #[error(transparent)]
     Database(#[from] database::DatabaseSearchError),
-
     #[error("failed to perform migration")]
     Migration,
 }
 
 impl TenantSearchIndex {
+    /// Creates a search index for the tenant
     #[tracing::instrument(skip(self))]
     pub async fn create_index(&self) -> Result<(), SearchError> {
         match self {
@@ -158,6 +166,7 @@ impl TenantSearchIndex {
         }
     }
 
+    /// Deletes the search index for the tenant
     #[tracing::instrument(skip(self))]
     pub async fn delete_index(&self) -> Result<(), SearchError> {
         match self {
@@ -167,6 +176,7 @@ impl TenantSearchIndex {
         }
     }
 
+    /// Searches the search index with the provided query
     #[tracing::instrument(skip(self))]
     pub async fn search_index(
         &self,
@@ -181,7 +191,6 @@ impl TenantSearchIndex {
             TenantSearchIndex::OpenSearch(index) => {
                 index.search_index(scope, query, folder_children).await
             }
-
             TenantSearchIndex::Database(index) => {
                 index.search_index(scope, query, folder_children).await
             }
@@ -200,19 +209,18 @@ impl TenantSearchIndex {
             TenantSearchIndex::Typesense(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
-
             TenantSearchIndex::OpenSearch(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
-
             TenantSearchIndex::Database(index) => {
                 index.search_index_file(scope, file_id, query).await
             }
         }
     }
 
+    /// Adds the provided data to the search index
     #[tracing::instrument(skip(self))]
-    pub async fn add_data(&self, data: SearchIndexData) -> Result<(), SearchError> {
+    pub async fn add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
         match self {
             TenantSearchIndex::Typesense(index) => index.add_data(data).await,
             TenantSearchIndex::OpenSearch(index) => index.add_data(data).await,
@@ -220,15 +228,7 @@ impl TenantSearchIndex {
         }
     }
 
-    #[tracing::instrument(skip(self))]
-    pub async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
-        match self {
-            TenantSearchIndex::Typesense(index) => index.bulk_add_data(data).await,
-            TenantSearchIndex::OpenSearch(index) => index.bulk_add_data(data).await,
-            TenantSearchIndex::Database(index) => index.bulk_add_data(data).await,
-        }
-    }
-
+    /// Updates the provided data in the search index
     #[tracing::instrument(skip(self))]
     pub async fn update_data(
         &self,
@@ -242,6 +242,7 @@ impl TenantSearchIndex {
         }
     }
 
+    /// Deletes the provided data from the search index by `id`
     #[tracing::instrument(skip(self))]
     pub async fn delete_data(&self, id: Uuid) -> Result<(), SearchError> {
         match self {
@@ -251,6 +252,7 @@ impl TenantSearchIndex {
         }
     }
 
+    /// Deletes all data contained within the specified `scope`
     #[tracing::instrument(skip(self))]
     pub async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
         match self {
@@ -260,6 +262,7 @@ impl TenantSearchIndex {
         }
     }
 
+    /// Get all pending migrations based on the `applied_names` list of applied migrations
     #[tracing::instrument(skip(self))]
     pub async fn get_pending_migrations(
         &self,
@@ -376,13 +379,10 @@ impl TenantSearchIndex {
 }
 
 pub(crate) trait SearchIndex: Send + Sync + 'static {
-    /// Creates a search index for the tenant
     async fn create_index(&self) -> Result<(), SearchError>;
 
-    /// Deletes the search index for the tenant
     async fn delete_index(&self) -> Result<(), SearchError>;
 
-    /// Searches the index for the provided query
     async fn search_index(
         &self,
         scope: &[DocumentBoxScopeRaw],
@@ -390,7 +390,6 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
         folder_children: Option<Vec<FolderId>>,
     ) -> Result<SearchResults, SearchError>;
 
-    /// Searches the index for matches scoped to a specific file
     async fn search_index_file(
         &self,
         scope: &DocumentBoxScopeRaw,
@@ -398,32 +397,23 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
         query: FileSearchRequest,
     ) -> Result<FileSearchResults, SearchError>;
 
-    /// Adds the provided data to the search index
-    async fn add_data(&self, data: SearchIndexData) -> Result<(), SearchError>;
+    async fn add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError>;
 
-    /// Adds the provided data to the search index
-    async fn bulk_add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError>;
-
-    /// Updates the provided data in the search index
     async fn update_data(
         &self,
         item_id: Uuid,
         data: UpdateSearchIndexData,
     ) -> Result<(), SearchError>;
 
-    /// Deletes the provided data from the search index
     async fn delete_data(&self, id: Uuid) -> Result<(), SearchError>;
 
-    /// Deletes all data contained within the specified `scope`
     async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError>;
 
-    /// Get all pending migrations based on the `applied_names` list of applied migrations
     async fn get_pending_migrations(
         &self,
         applied_names: Vec<String>,
     ) -> Result<Vec<String>, SearchError>;
 
-    /// Apply a migration by name
     async fn apply_migration(
         &self,
         tenant: &Tenant,

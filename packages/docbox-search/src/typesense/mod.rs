@@ -1,26 +1,35 @@
-use std::{fmt::Debug, sync::Arc};
-
-use crate::SearchError;
-
-use super::{
-    SearchIndex,
+use crate::{
+    SearchError, SearchIndex,
     models::{
-        DocumentPage, FileSearchResults, FlattenedItemResult, PageResult, SearchIndexType,
-        SearchRequest, SearchResults, SearchScore, UpdateSearchIndexData,
+        DocumentPage, FileSearchRequest, FileSearchResults, FlattenedItemResult, PageResult,
+        SearchIndexData, SearchRequest, SearchResults, SearchScore, UpdateSearchIndexData,
+    },
+    typesense::{
+        api_key::ApiKeyProvider,
+        models::{
+            GenericSearchResponse, GroupedSearchResponse, SearchResponse, TypesenseDataEntry,
+            TypesenseDataEntryPageV1, TypesenseDataEntryRootV1, TypesenseDataEntryV1,
+            TypesenseEntry,
+        },
     },
 };
 use docbox_database::{
     DbTransaction,
-    models::{document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant, user::UserId},
+    models::{document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, tenant::Tenant},
 };
-use docbox_secrets::{AppSecretManager, Secret};
+use docbox_secrets::AppSecretManager;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use serde_with::skip_serializing_none;
-use thiserror::Error;
-use tokio::sync::Mutex;
+use std::{fmt::Debug, sync::Arc};
 use uuid::Uuid;
+
+pub use api_key::{TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret};
+pub use error::{TypesenseIndexFactoryError, TypesenseSearchError};
+
+pub mod api_key;
+pub mod error;
+mod models;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TypesenseSearchConfig {
@@ -31,52 +40,6 @@ pub struct TypesenseSearchConfig {
 
     /// Config provides a secret manager key pointing to the API key
     pub api_key_secret_name: Option<String>,
-}
-
-#[derive(Debug, Error)]
-pub enum TypesenseIndexFactoryError {
-    #[error("missing TYPESENSE_URL env")]
-    MissingUrl,
-
-    #[error("must provide either api_key or api_key_secret_name for search config")]
-    MissingApiKey,
-
-    #[error("failed to create http client")]
-    CreateClient,
-}
-
-#[derive(Debug, Error)]
-pub enum TypesenseSearchError {
-    #[error("missing search result")]
-    MissingSearchResult,
-    #[error("must provide either include_name or include_content")]
-    MissingQueryBy,
-    #[error("failed to create index")]
-    CreateIndex,
-    #[error("failed to delete index")]
-    DeleteIndex,
-    #[error("secret not found")]
-    SecretNotFound,
-    #[error("failed to get secret")]
-    GetSecret,
-    #[error("expected string for api key secret but got binary")]
-    ExpectedStringSecret,
-    #[error("failed to serialize document")]
-    SerializeDocument,
-    #[error("failed to deserialize document")]
-    DeserializeDocument,
-    #[error("failed to bulk add documents")]
-    BulkAddDocuments,
-    #[error("failed to delete search documents")]
-    DeleteDocuments,
-    #[error("failed to update document")]
-    UpdateDocument,
-    #[error("failed to get document")]
-    GetDocument,
-    #[error("missing root entry to update")]
-    MissingRootEntry,
-    #[error("failed to search index")]
-    SearchIndex,
 }
 
 impl TypesenseSearchConfig {
@@ -97,98 +60,7 @@ impl TypesenseSearchConfig {
     }
 }
 
-pub enum TypesenseApiKeyProvider {
-    ApiKey(TypesenseApiKey),
-    Secret(TypesenseApiKeySecret),
-}
-
-impl TypesenseApiKeyProviderImpl for TypesenseApiKeyProvider {
-    async fn get_api_key(&self) -> Result<String, TypesenseSearchError> {
-        match self {
-            TypesenseApiKeyProvider::ApiKey(value) => value.get_api_key().await,
-            TypesenseApiKeyProvider::Secret(value) => value.get_api_key().await,
-        }
-    }
-}
-
-/// Trait for something that can provide an API key for typesense
-trait TypesenseApiKeyProviderImpl {
-    async fn get_api_key(&self) -> Result<String, TypesenseSearchError>;
-}
-
-pub struct TypesenseApiKeySecret {
-    /// Secret manager access
-    secrets: Arc<AppSecretManager>,
-
-    /// Name of the secret the API key is within
-    secret_name: String,
-
-    /// Current loaded value of the secret
-    secret_value: Mutex<Option<String>>,
-}
-
-impl TypesenseApiKeySecret {
-    pub fn new(secrets: Arc<AppSecretManager>, secret_name: String) -> Self {
-        Self {
-            secrets,
-            secret_name,
-            secret_value: Default::default(),
-        }
-    }
-}
-
-impl TypesenseApiKeyProviderImpl for TypesenseApiKeySecret {
-    async fn get_api_key(&self) -> Result<String, TypesenseSearchError> {
-        let secret_value = &mut *self.secret_value.lock().await;
-        if let Some(value) = secret_value.as_ref() {
-            return Ok(value.clone());
-        }
-
-        let value = self
-            .secrets
-            .get_secret(&self.secret_name)
-            .await
-            .map_err(|error| {
-                tracing::error!(?error, "failed to get api key secret");
-                TypesenseSearchError::GetSecret
-            })?
-            .ok_or_else(|| {
-                tracing::error!(secret_name = ?self.secret_name, "secret not found");
-                TypesenseSearchError::SecretNotFound
-            })?;
-
-        let value = match value {
-            Secret::String(value) => value,
-            Secret::Binary(_) => {
-                return Err(TypesenseSearchError::ExpectedStringSecret);
-            }
-        };
-
-        Ok(value)
-    }
-}
-
-#[derive(Clone, Deserialize, Serialize)]
-#[serde(transparent)]
-pub struct TypesenseApiKey(String);
-
-impl TypesenseApiKey {
-    pub fn new(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl Debug for TypesenseApiKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("< API KEY >")
-    }
-}
-
-impl TypesenseApiKeyProviderImpl for TypesenseApiKey {
-    async fn get_api_key(&self) -> Result<String, TypesenseSearchError> {
-        Ok(self.0.clone())
-    }
-}
+/// Shared client data (Base URL, API Key provider, ..etc)
 pub struct TypesenseClientData {
     base_url: String,
     api_key_provider: TypesenseApiKeyProvider,
@@ -197,8 +69,6 @@ pub struct TypesenseClientData {
 #[derive(Clone)]
 pub struct TypesenseIndexFactory {
     client: reqwest::Client,
-
-    /// Shared client data (Base URL, API Key provider, ..etc)
     client_data: Arc<TypesenseClientData>,
 }
 
@@ -219,13 +89,6 @@ impl TypesenseIndexFactory {
             _ => return Err(TypesenseIndexFactoryError::MissingApiKey),
         };
 
-        Self::new(config.url, api_key_provider)
-    }
-
-    pub fn new(
-        base_url: String,
-        api_key_provider: TypesenseApiKeyProvider,
-    ) -> Result<Self, TypesenseIndexFactoryError> {
         let client = reqwest::Client::builder()
             // Don't try and proxy through the proxy
             .no_proxy()
@@ -235,12 +98,14 @@ impl TypesenseIndexFactory {
                 TypesenseIndexFactoryError::CreateClient
             })?;
 
+        let client_data = Arc::new(TypesenseClientData {
+            base_url: config.url,
+            api_key_provider,
+        });
+
         Ok(Self {
             client,
-            client_data: Arc::new(TypesenseClientData {
-                base_url,
-                api_key_provider,
-            }),
+            client_data,
         })
     }
 
@@ -260,118 +125,6 @@ pub struct TypesenseIndex {
     index: String,
 }
 
-/// Document entry within the typesense index
-#[derive(Serialize, Deserialize)]
-struct TypesenseEntry {
-    /// Unique ID for the entry
-    id: Uuid,
-
-    /// Entry data
-    #[serde(flatten)]
-    entry: TypesenseDataEntry,
-}
-
-/// Wrapper around the entry to support versioning for
-/// future changes in structure
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "version")]
-enum TypesenseDataEntry {
-    /// Current V1 entry format
-    V1(TypesenseDataEntryV1),
-}
-
-/// Type of document entries
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "entry_type")]
-enum TypesenseDataEntryV1 {
-    /// Root entry, all items will have one of these. This contains the base
-    /// information for the entry
-    Root(TypesenseDataEntryRootV1),
-    /// Page entry, document present for each page of text content indexed files
-    /// for full text content search
-    Page(TypesenseDataEntryPageV1),
-}
-
-/// Root entry data for the item itself
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[skip_serializing_none]
-struct TypesenseDataEntryRootV1 {
-    /// Scope the entry is within
-    document_box: DocumentBoxScopeRaw,
-    /// ID of the folder the entry is within
-    folder_id: FolderId,
-
-    /// Type of entry
-    #[serde(rename = "item_type")]
-    ty: SearchIndexType,
-    /// ID of the (Folder/File/Link) itself
-    item_id: Uuid,
-    /// Name of the item
-    name: String,
-
-    /// URL value if the item is a link
-    value: Option<String>,
-    /// Mime value if the item is a file
-    mime: Option<String>,
-
-    /// Creation date for the item (Unix timestamp)
-    created_at: i64,
-    /// User who created the item
-    created_by: Option<UserId>,
-}
-
-/// Page entry for an item page
-#[derive(Debug, Serialize, Deserialize)]
-struct TypesenseDataEntryPageV1 {
-    /// Every page includes a copy of the root
-    #[serde(flatten)]
-    root: TypesenseDataEntryRootV1,
-
-    /// Page number
-    page: u64,
-
-    /// Content contained within the page
-    /// (Ignored when loading results back)
-    page_content: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct SearchResponse<T> {
-    results: Vec<T>,
-}
-
-#[derive(Deserialize)]
-#[allow(unused)]
-struct GenericSearchResponse {
-    found: u64,
-    hits: Vec<Hit>,
-}
-
-#[derive(Deserialize)]
-struct GroupedSearchResponse {
-    found: u64,
-    grouped_hits: Vec<GroupedHits>,
-}
-
-#[derive(Deserialize)]
-struct GroupedHits {
-    found: u64,
-    hits: Vec<Hit>,
-}
-
-#[derive(Deserialize)]
-struct Hit {
-    document: TypesenseDataEntry,
-    highlights: Vec<Highlight>,
-    text_match: u64,
-}
-
-#[derive(Deserialize)]
-struct Highlight {
-    field: String,
-    snippet: String,
-}
-
 fn escape_typesense_value(input: &str) -> String {
     // Escape backticks within the text
     let escaped = input.replace('`', "\\`");
@@ -382,6 +135,8 @@ fn escape_typesense_value(input: &str) -> String {
 
 impl SearchIndex for TypesenseIndex {
     async fn create_index(&self) -> Result<(), SearchError> {
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
+
         let schema = json!({
           "name": self.index,
           "fields": [
@@ -408,8 +163,6 @@ impl SearchIndex for TypesenseIndex {
           ]
         });
 
-        let api_key = self.api_key().await?;
-
         self.client
             .post(format!("{}/collections", self.client_data.base_url))
             .header("x-typesense-api-key", api_key)
@@ -430,7 +183,7 @@ impl SearchIndex for TypesenseIndex {
     }
 
     async fn delete_index(&self) -> Result<(), SearchError> {
-        let api_key = self.api_key().await?;
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
         self.client
             .delete(format!(
@@ -456,9 +209,11 @@ impl SearchIndex for TypesenseIndex {
     async fn search_index_file(
         &self,
         scope: &DocumentBoxScopeRaw,
-        file_id: docbox_database::models::file::FileId,
-        query: super::models::FileSearchRequest,
+        file_id: FileId,
+        query: FileSearchRequest,
     ) -> Result<FileSearchResults, SearchError> {
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
+
         let offset = query.offset.unwrap_or(0);
         let limit = query.limit.unwrap_or(50);
         let query = query.query.unwrap_or_default();
@@ -487,8 +242,6 @@ impl SearchIndex for TypesenseIndex {
             ]
         });
 
-        let api_key = self.api_key().await?;
-
         let response = self
             .client
             .post(format!("{}/multi_search", self.client_data.base_url))
@@ -512,6 +265,7 @@ impl SearchIndex for TypesenseIndex {
                 tracing::error!(?error, "failed to parse search response JSON");
                 TypesenseSearchError::SearchIndex
             })?;
+
         let search = search
             .results
             .into_iter()
@@ -547,10 +301,10 @@ impl SearchIndex for TypesenseIndex {
 
     async fn search_index(
         &self,
-        scopes: &[docbox_database::models::document_box::DocumentBoxScopeRaw],
-        query: super::models::SearchRequest,
-        folder_children: Option<Vec<docbox_database::models::folder::FolderId>>,
-    ) -> Result<super::models::SearchResults, SearchError> {
+        scopes: &[DocumentBoxScopeRaw],
+        query: SearchRequest,
+        folder_children: Option<Vec<FolderId>>,
+    ) -> Result<SearchResults, SearchError> {
         let mut query_by = Vec::new();
 
         // Query file name
@@ -564,7 +318,7 @@ impl SearchIndex for TypesenseIndex {
             query_by.push("page_content");
         }
 
-        let filter_by = Self::create_search_filters(scopes, &query, folder_children);
+        let filter_by = create_search_filters(scopes, &query, folder_children);
         let search_query = query.query.unwrap_or_default();
 
         // Must query at least one field
@@ -616,7 +370,7 @@ impl SearchIndex for TypesenseIndex {
 
         tracing::debug!(?query_json, "performing search query");
 
-        let api_key = self.api_key().await?;
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
         let response = self
             .client
@@ -729,10 +483,7 @@ impl SearchIndex for TypesenseIndex {
         })
     }
 
-    async fn bulk_add_data(
-        &self,
-        data: Vec<super::models::SearchIndexData>,
-    ) -> Result<(), SearchError> {
+    async fn add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
         let mut documents = Vec::new();
 
         for data in data {
@@ -752,7 +503,7 @@ impl SearchIndex for TypesenseIndex {
             if let Some(pages) = data.pages {
                 // Add a new entry for each page
                 for page in pages {
-                    documents.push(Self::create_item_page(&root, page));
+                    documents.push(create_item_page(&root, page));
                 }
             }
 
@@ -768,40 +519,10 @@ impl SearchIndex for TypesenseIndex {
         Ok(())
     }
 
-    async fn add_data(&self, data: super::models::SearchIndexData) -> Result<(), SearchError> {
-        let mut documents = Vec::new();
-        let root = TypesenseDataEntryRootV1 {
-            document_box: data.document_box,
-            folder_id: data.folder_id,
-            ty: data.ty,
-            item_id: data.item_id,
-            created_at: data.created_at.timestamp(),
-            created_by: data.created_by,
-            value: data.content,
-            mime: data.mime,
-            name: data.name,
-        };
-
-        if let Some(pages) = data.pages {
-            for page in pages {
-                documents.push(Self::create_item_page(&root, page));
-            }
-        }
-
-        documents.push(TypesenseEntry {
-            id: Uuid::new_v4(),
-            entry: TypesenseDataEntry::V1(TypesenseDataEntryV1::Root(root)),
-        });
-
-        self.bulk_add_documents(documents).await?;
-
-        Ok(())
-    }
-
     async fn update_data(
         &self,
-        item_id: uuid::Uuid,
-        data: super::models::UpdateSearchIndexData,
+        item_id: Uuid,
+        data: UpdateSearchIndexData,
     ) -> Result<(), SearchError> {
         // Update all the existing items so they have the current root data
         self.update_item_roots(item_id, &data).await?;
@@ -833,7 +554,7 @@ impl SearchIndex for TypesenseIndex {
             // Create the documents for the pages
             let documents = pages
                 .into_iter()
-                .map(|page| Self::create_item_page(&updated_root, page))
+                .map(|page| create_item_page(&updated_root, page))
                 .collect();
 
             // Bulk insert the created documents
@@ -843,8 +564,8 @@ impl SearchIndex for TypesenseIndex {
         Ok(())
     }
 
-    async fn delete_data(&self, id: uuid::Uuid) -> Result<(), SearchError> {
-        let api_key = self.api_key().await?;
+    async fn delete_data(&self, id: Uuid) -> Result<(), SearchError> {
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
         self.client
             .delete(format!(
@@ -867,11 +588,8 @@ impl SearchIndex for TypesenseIndex {
         Ok(())
     }
 
-    async fn delete_by_scope(
-        &self,
-        scope: docbox_database::models::document_box::DocumentBoxScopeRaw,
-    ) -> Result<(), SearchError> {
-        let api_key = self.api_key().await?;
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
         self.client
             .delete(format!(
@@ -923,13 +641,13 @@ impl TypesenseIndex {
         for document in entries {
             let value = serde_json::to_string(&document).map_err(|error| {
                 tracing::error!(?error, "failed to serialize a document");
-                TypesenseSearchError::SerializeDocument
+                TypesenseSearchError::BulkAddDocuments
             })?;
             bulk_data.push_str(&value);
             bulk_data.push('\n');
         }
 
-        let api_key = self.api_key().await?;
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
         self.client
             .post(format!(
@@ -953,13 +671,9 @@ impl TypesenseIndex {
         Ok(())
     }
 
-    async fn api_key(&self) -> Result<String, TypesenseSearchError> {
-        self.client_data.api_key_provider.get_api_key().await
-    }
-
     /// Deletes all "Page" item types for a specific `item_id`
     async fn delete_item_pages(&self, item_id: Uuid) -> Result<(), TypesenseSearchError> {
-        let api_key = self.api_key().await?;
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
         self.client
             .delete(format!(
@@ -986,30 +700,19 @@ impl TypesenseIndex {
         Ok(())
     }
 
-    fn create_item_page(root: &TypesenseDataEntryRootV1, page: DocumentPage) -> TypesenseEntry {
-        TypesenseEntry {
-            id: Uuid::new_v4(),
-            entry: TypesenseDataEntry::V1(TypesenseDataEntryV1::Page(TypesenseDataEntryPageV1 {
-                root: root.clone(),
-                page: page.page,
-                page_content: Some(page.content),
-            })),
-        }
-    }
-
     /// Updates the root portion of all documents for the provided item
     async fn update_item_roots(
         &self,
         item_id: Uuid,
         update: &UpdateSearchIndexData,
     ) -> Result<(), TypesenseSearchError> {
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
+
         let request = json!({
             "folder_id": update.folder_id,
             "name": update.name,
             "value": update.content,
         });
-
-        let api_key = self.api_key().await?;
 
         // Update all the existing items so they have the current root data
         self.client
@@ -1040,7 +743,7 @@ impl TypesenseIndex {
         &self,
         item_id: Uuid,
     ) -> Result<Option<TypesenseDataEntryRootV1>, TypesenseSearchError> {
-        let api_key = self.api_key().await?;
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
         let response: GenericSearchResponse = self
             .client
@@ -1082,61 +785,73 @@ impl TypesenseIndex {
 
         Ok(item)
     }
+}
 
-    fn create_search_filters(
-        scopes: &[DocumentBoxScopeRaw],
-        query: &SearchRequest,
-        folder_children: Option<Vec<FolderId>>,
-    ) -> String {
-        let mut filter_parts = Vec::new();
+fn create_item_page(root: &TypesenseDataEntryRootV1, page: DocumentPage) -> TypesenseEntry {
+    TypesenseEntry {
+        id: Uuid::new_v4(),
+        entry: TypesenseDataEntry::V1(TypesenseDataEntryV1::Page(TypesenseDataEntryPageV1 {
+            root: root.clone(),
+            page: page.page,
+            page_content: Some(page.content),
+        })),
+    }
+}
 
-        // Add a filter for the required scopes
-        {
-            let scopes = scopes
-                .iter()
-                .map(|value| escape_typesense_value(value))
+/// Create the required typesense search filters for the `query`
+fn create_search_filters(
+    scopes: &[DocumentBoxScopeRaw],
+    query: &SearchRequest,
+    folder_children: Option<Vec<FolderId>>,
+) -> String {
+    let mut filter_parts = Vec::new();
+
+    // Add a filter for the required scopes
+    {
+        let scopes = scopes
+            .iter()
+            .map(|value| escape_typesense_value(value))
+            .join(", ");
+
+        filter_parts.push(format!("document_box:=[{scopes}]"));
+    }
+
+    // Filter to children of allowed folders
+    if let Some(folder_children) = folder_children {
+        if !folder_children.is_empty() {
+            let ids = folder_children
+                .into_iter()
+                // No need to escape UUIDs
+                .map(|value| value.to_string())
                 .join(", ");
 
-            filter_parts.push(format!("document_box:=[{scopes}]"));
+            filter_parts.push(format!("folder_id:=[{ids}]"));
         }
-
-        // Filter to children of allowed folders
-        if let Some(folder_children) = folder_children {
-            if !folder_children.is_empty() {
-                let ids = folder_children
-                    .into_iter()
-                    // No need to escape UUIDs
-                    .map(|value| value.to_string())
-                    .join(", ");
-
-                filter_parts.push(format!("folder_id:=[{ids}]"));
-            }
-        }
-
-        if let Some(range) = query.created_at.as_ref() {
-            if let Some(start) = range.start {
-                let start = start.timestamp();
-                filter_parts.push(format!(r#"created_at:>{start}"#));
-            }
-
-            if let Some(end) = range.end {
-                let end = end.timestamp();
-                filter_parts.push(format!(r#"created_at:<{end}"#));
-            }
-        }
-
-        if let Some(created_by) = query.created_by.as_ref() {
-            filter_parts.push(format!(
-                r#"created_by:="{}""#,
-                // User ID's must be escaped
-                escape_typesense_value(created_by)
-            ));
-        }
-
-        if let Some(folder_id) = query.folder_id {
-            filter_parts.push(format!(r#"folder_id:="{folder_id}""#));
-        }
-
-        filter_parts.join("&&")
     }
+
+    if let Some(range) = query.created_at.as_ref() {
+        if let Some(start) = range.start {
+            let start = start.timestamp();
+            filter_parts.push(format!(r#"created_at:>{start}"#));
+        }
+
+        if let Some(end) = range.end {
+            let end = end.timestamp();
+            filter_parts.push(format!(r#"created_at:<{end}"#));
+        }
+    }
+
+    if let Some(created_by) = query.created_by.as_ref() {
+        filter_parts.push(format!(
+            r#"created_by:="{}""#,
+            // User ID's must be escaped
+            escape_typesense_value(created_by)
+        ));
+    }
+
+    if let Some(folder_id) = query.folder_id {
+        filter_parts.push(format!(r#"folder_id:="{folder_id}""#));
+    }
+
+    filter_parts.join("&&")
 }
