@@ -1993,7 +1993,6 @@ dependencies = [
 name = "docbox-storage"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "aws-config",
  "aws-sdk-s3",
  "bytes",
@@ -2002,6 +2001,7 @@ dependencies = [
  "docbox-database",
  "futures",
  "serde",
+ "thiserror 2.0.12",
  "tracing",
 ]
 

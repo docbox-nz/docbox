@@ -18,7 +18,7 @@ use docbox_database::{
     },
 };
 use docbox_search::TenantSearchIndex;
-use docbox_storage::TenantStorageLayer;
+use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use mime::Mime;
 use serde::{Deserialize, Serialize};
 use std::ops::DerefMut;
@@ -55,7 +55,7 @@ pub enum UploadFileError {
 
     /// Failed to upload file to storage layer
     #[error("failed to upload file to storage layer: {0}")]
-    UploadFile(anyhow::Error),
+    UploadFile(StorageLayerError),
 
     /// Multiple error messages
     #[error(transparent)]

@@ -1,5 +1,4 @@
-use crate::{FileStream, StorageLayer};
-use anyhow::Context;
+use crate::{FileStream, StorageLayer, StorageLayerError};
 use aws_config::SdkConfig;
 use aws_sdk_s3::{
     config::Credentials,
@@ -15,6 +14,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::{error::Error, time::Duration};
+use thiserror::Error;
 
 pub type S3Client = aws_sdk_s3::Client;
 
@@ -23,8 +23,17 @@ pub struct S3StorageLayerFactoryConfig {
     pub endpoint: S3Endpoint,
 }
 
+#[derive(Debug, Error)]
+pub enum S3StorageLayerFactoryConfigError {
+    #[error("cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_ID")]
+    MissingAccessKeyId,
+
+    #[error("cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_SECRET")]
+    MissingAccessKeySecret,
+}
+
 impl S3StorageLayerFactoryConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub fn from_env() -> Result<Self, S3StorageLayerFactoryConfigError> {
         let endpoint = S3Endpoint::from_env()?;
 
         Ok(Self { endpoint })
@@ -43,16 +52,14 @@ pub enum S3Endpoint {
 }
 
 impl S3Endpoint {
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub fn from_env() -> Result<Self, S3StorageLayerFactoryConfigError> {
         match std::env::var("DOCBOX_S3_ENDPOINT") {
             // Using a custom S3 endpoint
             Ok(endpoint_url) => {
-                let access_key_id = std::env::var("DOCBOX_S3_ACCESS_KEY_ID").context(
-                    "cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_ID",
-                )?;
-                let access_key_secret = std::env::var("DOCBOX_S3_ACCESS_KEY_SECRET").context(
-                    "cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_SECRET",
-                )?;
+                let access_key_id = std::env::var("DOCBOX_S3_ACCESS_KEY_ID")
+                    .map_err(|_| S3StorageLayerFactoryConfigError::MissingAccessKeyId)?;
+                let access_key_secret = std::env::var("DOCBOX_S3_ACCESS_KEY_SECRET")
+                    .map_err(|_| S3StorageLayerFactoryConfigError::MissingAccessKeySecret)?;
 
                 Ok(S3Endpoint::Custom {
                     endpoint: endpoint_url,
@@ -131,13 +138,76 @@ impl S3StorageLayer {
     }
 }
 
+/// User facing storage errors
+///
+/// Should not contain the actual error types, these will be logged
+/// early, only includes the actual error message
+#[derive(Debug, Error)]
+pub enum S3StorageError {
+    /// AWS region missing
+    #[error("invalid server configuration (region)")]
+    MissingRegion,
+
+    /// Failed to create a bucket
+    #[error("failed to create storage bucket")]
+    CreateBucket,
+
+    /// Failed to delete a bucket
+    #[error("failed to delete storage bucket")]
+    DeleteBucket,
+
+    /// Failed to store a file in a bucket
+    #[error("failed to store file object")]
+    PutObject,
+
+    /// Failed to calculate future unix timestamps
+    #[error("failed to calculate expiry timestamp")]
+    UnixTimeCalculation,
+
+    /// Failed to create presigned upload
+    #[error("failed to create presigned store file object")]
+    PutObjectPresigned,
+
+    /// Failed to create presigned config
+    #[error("failed to create presigned config")]
+    PresignedConfig,
+
+    /// Failed to create presigned download
+    #[error("failed to get presigned store file object")]
+    GetObjectPresigned,
+
+    /// Failed to create the config for the notification queue
+    #[error("failed to create bucket notification queue config")]
+    QueueConfig,
+
+    /// Failed to setup a notification queue on the bucket
+    #[error("failed to add bucket notification queue")]
+    PutBucketNotification,
+
+    /// Failed to make the cors config or rules
+    #[error("failed to create bucket cors config")]
+    CreateCorsConfig,
+
+    /// Failed to put the bucket cors config
+    #[error("failed to set bucket cors rules")]
+    PutBucketCors,
+
+    /// Failed to delete a file object
+    #[error("failed to delete file object")]
+    DeleteObject,
+
+    /// Failed to get the file storage object
+    #[error("failed to get file storage object")]
+    GetObject,
+}
+
 impl StorageLayer for S3StorageLayer {
-    async fn create_bucket(&self) -> anyhow::Result<()> {
+    async fn create_bucket(&self) -> Result<(), StorageLayerError> {
         let bucket_region = self
             .client
             .config()
             .region()
-            .context("AWS config missing AWS_REGION")?
+            .ok_or(S3StorageError::MissingRegion)?
             .to_string();
 
         let constraint = BucketLocationConstraint::from(bucket_region.as_str());
@@ -146,7 +216,7 @@ impl StorageLayer for S3StorageLayer {
             .location_constraint(constraint)
             .build();
 
-        if let Err(err) = self
+        if let Err(error) = self
             .client
             .create_bucket()
             .create_bucket_configuration(cfg)
@@ -154,30 +224,47 @@ impl StorageLayer for S3StorageLayer {
             .send()
             .await
         {
-            let already_exists = err
+            let already_exists = error
                 .as_service_error()
                 .is_some_and(|value| value.is_bucket_already_owned_by_you());
 
             // Bucket has already been created
             if already_exists {
+                tracing::debug!("bucket already exists");
                 return Ok(());
             }
 
-            tracing::error!(cause = ?err, "failed to create bucket");
-
-            return Err(err.into());
+            tracing::error!(?error, "failed to create bucket");
+            return Err(S3StorageError::CreateBucket.into());
         }
 
         Ok(())
     }
 
-    async fn delete_bucket(&self) -> anyhow::Result<()> {
-        self.client
+    async fn delete_bucket(&self) -> Result<(), StorageLayerError> {
+        if let Err(error) = self
+            .client
             .delete_bucket()
             .bucket(&self.bucket_name)
             .send()
             .await
-            .context("failed to delete bucket")?;
+        {
+            // Handle the bucket not existing
+            // (This is not a failure and indicates the bucket is already deleted)
+            if error
+                .as_service_error()
+                .and_then(|err| err.source())
+                .and_then(|source| source.downcast_ref::<aws_sdk_s3::Error>())
+                .is_some_and(|err| matches!(err, aws_sdk_s3::Error::NoSuchBucket(_)))
+            {
+                tracing::debug!("bucket did not exist");
+                return Ok(());
+            }
+
+            tracing::error!(?error, "failed to delete bucket");
+
+            return Err(S3StorageError::DeleteBucket.into());
+        }
 
         Ok(())
     }
@@ -187,7 +274,7 @@ impl StorageLayer for S3StorageLayer {
         key: &str,
         content_type: String,
         body: Bytes,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), StorageLayerError> {
         self.client
             .put_object()
             .bucket(&self.bucket_name)
@@ -196,7 +283,10 @@ impl StorageLayer for S3StorageLayer {
             .body(body.into())
             .send()
             .await
-            .context("failed to store file in s3 bucket")?;
+            .map_err(|error| {
+                tracing::error!(?error, "failed to store file object");
+                S3StorageError::PutObject
+            })?;
 
         Ok(())
     }
@@ -205,11 +295,11 @@ impl StorageLayer for S3StorageLayer {
         &self,
         key: &str,
         size: i64,
-    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)> {
+    ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError> {
         let expiry_time_minutes = 30;
         let expires_at = Utc::now()
             .checked_add_signed(TimeDelta::minutes(expiry_time_minutes))
-            .context("expiry time exceeds unix limit")?;
+            .ok_or(S3StorageError::UnixTimeCalculation)?;
 
         let result = self
             .client
@@ -220,10 +310,17 @@ impl StorageLayer for S3StorageLayer {
             .presigned(
                 PresigningConfig::builder()
                     .expires_in(Duration::from_secs(60 * expiry_time_minutes as u64))
-                    .build()?,
+                    .build()
+                    .map_err(|error| {
+                        tracing::error!(?error, "Failed to create presigned store config");
+                        S3StorageError::PresignedConfig
+                    })?,
             )
             .await
-            .context("failed to create presigned request")?;
+            .map_err(|error| {
+                tracing::error!(?error, "failed to create presigned store file object");
+                S3StorageError::PutObjectPresigned
+            })?;
 
         Ok((result, expires_at))
     }
@@ -232,23 +329,30 @@ impl StorageLayer for S3StorageLayer {
         &self,
         key: &str,
         expires_in: Duration,
-    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)> {
+    ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError> {
         let expires_at = Utc::now()
             .checked_add_signed(TimeDelta::seconds(expires_in.as_secs() as i64))
-            .context("expiry time exceeds unix limit")?;
+            .ok_or(S3StorageError::UnixTimeCalculation)?;
 
         let result = self
             .client
             .get_object()
             .bucket(&self.bucket_name)
             .key(key)
-            .presigned(PresigningConfig::expires_in(expires_in)?)
-            .await?;
+            .presigned(PresigningConfig::expires_in(expires_in).map_err(|error| {
+                tracing::error!(?error, "failed to create presigned download config");
+                S3StorageError::PresignedConfig
+            })?)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to create presigned download");
+                S3StorageError::GetObjectPresigned
+            })?;
 
         Ok((result, expires_at))
     }
 
-    async fn add_bucket_notifications(&self, sqs_arn: &str) -> anyhow::Result<()> {
+    async fn add_bucket_notifications(&self, sqs_arn: &str) -> Result<(), StorageLayerError> {
         // Connect the S3 bucket for file upload notifications
         self.client
             .put_bucket_notification_configuration()
@@ -259,18 +363,29 @@ impl StorageLayer for S3StorageLayer {
                         QueueConfiguration::builder()
                             .queue_arn(sqs_arn)
                             .events(aws_sdk_s3::types::Event::S3ObjectCreated)
-                            .build()?,
+                            .build()
+                            .map_err(|error| {
+                                tracing::error!(
+                                    ?error,
+                                    "failed to create bucket notification queue config"
+                                );
+                                S3StorageError::QueueConfig
+                            })?,
                     ]))
                     .build(),
             )
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to add bucket notification queue");
+                S3StorageError::PutBucketNotification
+            })?;
 
         Ok(())
     }
 
-    async fn add_bucket_cors(&self, origins: Vec<String>) -> anyhow::Result<()> {
-        if let Err(cause) = self
+    async fn add_bucket_cors(&self, origins: Vec<String>) -> Result<(), StorageLayerError> {
+        if let Err(error) = self
             .client
             .put_bucket_cors()
             .bucket(&self.bucket_name)
@@ -282,15 +397,23 @@ impl StorageLayer for S3StorageLayer {
                             .allowed_methods("PUT")
                             .set_allowed_origins(Some(origins))
                             .set_expose_headers(Some(Vec::new()))
-                            .build()?,
+                            .build()
+                            .map_err(|error| {
+                                tracing::error!(?error, "failed to create cors rule");
+                                S3StorageError::CreateCorsConfig
+                            })?,
                     )
-                    .build()?,
+                    .build()
+                    .map_err(|error| {
+                        tracing::error!(?error, "failed to create cors config");
+                        S3StorageError::CreateCorsConfig
+                    })?,
             )
             .send()
             .await
         {
             // Handle "NotImplemented" errors (minio does not have CORS support)
-            if cause
+            if error
                 .raw_response()
                 // (501 Not Implemented)
                 .is_some_and(|response| response.status().as_u16() == 501)
@@ -299,14 +422,15 @@ impl StorageLayer for S3StorageLayer {
                 return Ok(());
             }
 
-            return Err(cause.into());
+            tracing::error!(?error, "failed to add bucket cors");
+            return Err(S3StorageError::PutBucketCors.into());
         };
 
         Ok(())
     }
 
-    async fn delete_file(&self, key: &str) -> anyhow::Result<()> {
-        if let Err(cause) = self
+    async fn delete_file(&self, key: &str) -> Result<(), StorageLayerError> {
+        if let Err(error) = self
             .client
             .delete_object()
             .bucket(&self.bucket_name)
@@ -316,7 +440,7 @@ impl StorageLayer for S3StorageLayer {
         {
             // Handle keys that don't exist in the bucket
             // (This is not a failure and indicates the file is already deleted)
-            if cause
+            if error
                 .as_service_error()
                 .and_then(|err| err.source())
                 .and_then(|source| source.downcast_ref::<aws_sdk_s3::Error>())
@@ -325,20 +449,25 @@ impl StorageLayer for S3StorageLayer {
                 return Ok(());
             }
 
-            return Err(cause.into());
+            tracing::error!(?error, "failed to delete file object");
+            return Err(S3StorageError::DeleteObject.into());
         }
 
         Ok(())
     }
 
-    async fn get_file(&self, key: &str) -> anyhow::Result<FileStream> {
+    async fn get_file(&self, key: &str) -> Result<FileStream, StorageLayerError> {
         let object = self
             .client
             .get_object()
             .bucket(&self.bucket_name)
             .key(key)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to get file storage object");
+                S3StorageError::GetObject
+            })?;
 
         let stream = FileStream {
             stream: Box::pin(AwsFileStream { inner: object.body }),

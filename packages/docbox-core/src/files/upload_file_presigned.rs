@@ -23,7 +23,7 @@ use docbox_database::{
     },
 };
 use docbox_search::TenantSearchIndex;
-use docbox_storage::TenantStorageLayer;
+use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use mime::Mime;
 use serde::Serialize;
 use std::{collections::HashMap, ops::DerefMut, str::FromStr};
@@ -45,9 +45,9 @@ pub enum PresignedUploadError {
     #[error(transparent)]
     UploadFile(#[from] UploadFileError),
 
-    /// Error loading the file from S3
-    #[error("failed to load file from s3")]
-    LoadFile(anyhow::Error),
+    /// Error loading the file the storage layer
+    #[error("failed to load file from storage")]
+    LoadFile(StorageLayerError),
 
     /// Stored file metadata mime type was invalid
     #[error("file had an invalid mime type")]

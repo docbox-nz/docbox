@@ -4,7 +4,7 @@ use docbox_database::models::tenant::TenantId;
 use docbox_database::{DbConnectErr, DbPool};
 use docbox_database::{DbErr, models::tenant::Tenant};
 use docbox_search::{SearchIndexFactory, TenantSearchIndex};
-use docbox_storage::StorageLayerFactory;
+use docbox_storage::{StorageLayerError, StorageLayerFactory};
 use std::ops::DerefMut;
 use thiserror::Error;
 
@@ -58,15 +58,15 @@ pub enum InitTenantError {
 
     /// Failed to create the S3 bucket
     #[error("failed to create tenant s3 bucket: {0}")]
-    CreateS3Bucket(anyhow::Error),
+    CreateS3Bucket(StorageLayerError),
 
     /// Failed to setup the S3 bucket CORS rules
     #[error("failed to setup s3 notification rules: {0}")]
-    SetupS3Notifications(anyhow::Error),
+    SetupS3Notifications(StorageLayerError),
 
     /// Failed to setup the S3 bucket CORS rules
     #[error("failed to setup s3 CORS rules: {0}")]
-    SetupS3Cors(anyhow::Error),
+    SetupS3Cors(StorageLayerError),
 
     /// Failed to create the search index
     #[error("failed to create tenant search index: {0}")]

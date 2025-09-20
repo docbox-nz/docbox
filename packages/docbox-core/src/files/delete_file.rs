@@ -11,7 +11,7 @@ use docbox_database::{
     },
 };
 use docbox_search::TenantSearchIndex;
-use docbox_storage::TenantStorageLayer;
+use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
 use tracing::error;
@@ -28,7 +28,7 @@ pub enum DeleteFileError {
 
     /// Failed to remove file from storage
     #[error("failed to remove file from storage: {0}")]
-    DeleteFileStorage(anyhow::Error),
+    DeleteFileStorage(StorageLayerError),
 
     /// Failed to remove generated file from storage
     #[error("failed to remove generated file from storage: {0}")]

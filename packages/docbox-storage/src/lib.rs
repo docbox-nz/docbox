@@ -7,6 +7,7 @@ use docbox_database::models::tenant::Tenant;
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{pin::Pin, time::Duration};
+use thiserror::Error;
 
 pub mod s3;
 
@@ -16,15 +17,35 @@ pub enum StorageLayerFactoryConfig {
     S3(s3::S3StorageLayerFactoryConfig),
 }
 
+#[derive(Debug, Error)]
+pub enum StorageLayerFactoryConfigError {
+    /// Error from the S3 layer config
+    #[error(transparent)]
+    S3(#[from] s3::S3StorageLayerFactoryConfigError),
+}
+
 impl StorageLayerFactoryConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
-        s3::S3StorageLayerFactoryConfig::from_env().map(Self::S3)
+    pub fn from_env() -> Result<Self, StorageLayerFactoryConfigError> {
+        s3::S3StorageLayerFactoryConfig::from_env()
+            .map(Self::S3)
+            .map_err(StorageLayerFactoryConfigError::S3)
     }
 }
 
 #[derive(Clone)]
 pub enum StorageLayerFactory {
     S3(s3::S3StorageLayerFactory),
+}
+
+#[derive(Debug, Error)]
+pub enum StorageLayerError {
+    /// Error from the S3 layer
+    #[error(transparent)]
+    S3(#[from] s3::S3StorageError),
+
+    /// Error collecting streamed response bytes
+    #[error("failed to collect file contents")]
+    CollectBytes,
 }
 
 impl StorageLayerFactory {
@@ -55,76 +76,85 @@ pub enum TenantStorageLayer {
 
 impl TenantStorageLayer {
     /// Creates the tenant S3 bucket
-    pub async fn create_bucket(&self) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn create_bucket(&self) -> Result<(), StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.create_bucket().await,
         }
     }
 
     /// Deletes the tenant S3 bucket
-    pub async fn delete_bucket(&self) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn delete_bucket(&self) -> Result<(), StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.delete_bucket().await,
         }
     }
 
     /// Create a presigned file upload URL
+    #[tracing::instrument(skip(self))]
     pub async fn create_presigned(
         &self,
         key: &str,
         size: i64,
-    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)> {
+    ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.create_presigned(key, size).await,
         }
     }
 
     /// Create a presigned file download URL
+    #[tracing::instrument(skip(self))]
     pub async fn create_presigned_download(
         &self,
         key: &str,
         expires_in: Duration,
-    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)> {
+    ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.create_presigned_download(key, expires_in).await,
         }
     }
 
     /// Uploads a file to the S3 bucket for the tenant
+    #[tracing::instrument(skip(self, body), fields(body_length = body.len()))]
     pub async fn upload_file(
         &self,
         key: &str,
         content_type: String,
         body: Bytes,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.upload_file(key, content_type, body).await,
         }
     }
 
     /// Add the SNS notification to a bucket
-    pub async fn add_bucket_notifications(&self, sns_arn: &str) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn add_bucket_notifications(&self, sns_arn: &str) -> Result<(), StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.add_bucket_notifications(sns_arn).await,
         }
     }
 
     /// Applies CORS rules for a bucket
-    pub async fn add_bucket_cors(&self, origins: Vec<String>) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn add_bucket_cors(&self, origins: Vec<String>) -> Result<(), StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.add_bucket_cors(origins).await,
         }
     }
 
     /// Deletes the S3 file
-    pub async fn delete_file(&self, key: &str) -> anyhow::Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub async fn delete_file(&self, key: &str) -> Result<(), StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.delete_file(key).await,
         }
     }
 
     /// Gets a byte stream for a file from S3
-    pub async fn get_file(&self, key: &str) -> anyhow::Result<FileStream> {
+    #[tracing::instrument(skip(self))]
+    pub async fn get_file(&self, key: &str) -> Result<FileStream, StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.get_file(key).await,
         }
@@ -134,40 +164,44 @@ impl TenantStorageLayer {
 /// Internal trait defining required async implementations for a storage backend
 pub(crate) trait StorageLayer {
     /// Creates the tenant S3 bucket
-    async fn create_bucket(&self) -> anyhow::Result<()>;
+    async fn create_bucket(&self) -> Result<(), StorageLayerError>;
 
     /// Deletes the tenant S3 bucket
-    async fn delete_bucket(&self) -> anyhow::Result<()>;
+    async fn delete_bucket(&self) -> Result<(), StorageLayerError>;
 
     /// Create a presigned file upload URL
     async fn create_presigned(
         &self,
         key: &str,
         size: i64,
-    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)>;
+    ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError>;
 
     /// Create a presigned file download URL
     async fn create_presigned_download(
         &self,
         key: &str,
         expires_in: Duration,
-    ) -> anyhow::Result<(PresignedRequest, DateTime<Utc>)>;
+    ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError>;
 
     /// Uploads a file to the S3 bucket for the tenant
-    async fn upload_file(&self, key: &str, content_type: String, body: Bytes)
-    -> anyhow::Result<()>;
+    async fn upload_file(
+        &self,
+        key: &str,
+        content_type: String,
+        body: Bytes,
+    ) -> Result<(), StorageLayerError>;
 
     /// Add the SNS notification to a bucket
-    async fn add_bucket_notifications(&self, sns_arn: &str) -> anyhow::Result<()>;
+    async fn add_bucket_notifications(&self, sns_arn: &str) -> Result<(), StorageLayerError>;
 
     /// Applies CORS rules for a bucket
-    async fn add_bucket_cors(&self, origins: Vec<String>) -> anyhow::Result<()>;
+    async fn add_bucket_cors(&self, origins: Vec<String>) -> Result<(), StorageLayerError>;
 
     /// Deletes the S3 file
-    async fn delete_file(&self, key: &str) -> anyhow::Result<()>;
+    async fn delete_file(&self, key: &str) -> Result<(), StorageLayerError>;
 
     /// Gets a byte stream for a file from S3
-    async fn get_file(&self, key: &str) -> anyhow::Result<FileStream>;
+    async fn get_file(&self, key: &str) -> Result<FileStream, StorageLayerError>;
 }
 
 /// Stream of bytes from a file
@@ -190,11 +224,15 @@ impl Stream for FileStream {
 
 impl FileStream {
     /// Collect the stream to completion as a single [Bytes] buffer
-    pub async fn collect_bytes(mut self) -> anyhow::Result<Bytes> {
+    pub async fn collect_bytes(mut self) -> Result<Bytes, StorageLayerError> {
         let mut output = SegmentedBuf::new();
 
         while let Some(result) = self.next().await {
-            let chunk = result?;
+            let chunk = result.map_err(|error| {
+                tracing::error!(?error, "failed to collect file stream bytes");
+                StorageLayerError::CollectBytes
+            })?;
+
             output.push(chunk);
         }
 
