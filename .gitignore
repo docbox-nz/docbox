@@ -45,3 +45,5 @@ crash.log
 
 /cli-credentials.json
 /create-demo-tenant.json
+
+.DS_Store
