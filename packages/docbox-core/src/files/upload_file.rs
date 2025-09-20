@@ -26,6 +26,8 @@ use tracing::Instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+/// Error messages from this are user-facing so any data included should ensure
+/// it does not expose any information that it should't
 #[derive(Debug, Error)]
 pub enum UploadFileError {
     /// Failed to create the search index

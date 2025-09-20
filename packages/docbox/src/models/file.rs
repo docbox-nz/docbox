@@ -3,7 +3,10 @@ use axum::http::StatusCode;
 use axum_typed_multipart::{FieldData, TryFromMultipart};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use docbox_core::files::upload_file::ProcessingConfig;
+use docbox_core::{
+    files::upload_file::{ProcessingConfig, UploadFileError},
+    processing::ProcessingError,
+};
 use docbox_database::models::{
     file::{FileId, FileWithExtra},
     folder::FolderId,
@@ -235,6 +238,9 @@ pub enum HttpFileError {
     #[allow(unused)]
     #[error("unsupported file type")]
     UnsupportedFileType,
+
+    #[error(transparent)]
+    UploadFileError(UploadFileError),
 }
 
 impl HttpError for HttpFileError {
@@ -248,6 +254,19 @@ impl HttpError for HttpFileError {
             HttpFileError::UnsupportedFileType | HttpFileError::InvalidMimeType => {
                 StatusCode::BAD_REQUEST
             }
+            HttpFileError::UploadFileError(error) => match error {
+                // Some processing errors can be assumed as the files fault
+                UploadFileError::Processing(
+                    ProcessingError::MalformedFile(_)
+                    | ProcessingError::ReadPdfInfo(_)
+                    | ProcessingError::ExtractFileText(_)
+                    | ProcessingError::DecodeImage(_)
+                    | ProcessingError::GenerateThumbnail(_)
+                    | ProcessingError::Email(_),
+                ) => StatusCode::UNPROCESSABLE_ENTITY,
+
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            },
         }
     }
 }

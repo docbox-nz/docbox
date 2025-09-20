@@ -177,9 +177,9 @@ pub async fn upload(
     if !req.asynchronous.unwrap_or_default() {
         let data = safe_upload_file(db, search, storage, events, processing, upload)
             .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to upload file");
-                HttpCommonError::ServerError
+            .map_err(|error| {
+                tracing::error!(?error, "failed to upload file");
+                HttpFileError::UploadFileError(error)
             })?;
         let result = map_uploaded_file(data, &created_by);
         return Ok(Json(FileUploadResponse::Sync(Box::new(result))));
@@ -194,16 +194,16 @@ pub async fn upload(
         async move {
             let result = safe_upload_file(db, search, storage, events, processing, upload)
                 .await
-                .map_err(|cause| {
-                    tracing::error!(?cause, "failed to upload file");
-                    DynHttpError::from(HttpCommonError::ServerError)
+                .map_err(|error| {
+                    tracing::error!(?error, "failed to upload file");
+                    DynHttpError::from(HttpFileError::UploadFileError(error))
                 })
                 // Map the response into the desired format
                 .map(|data| map_uploaded_file(data, &created_by))
                 // Serialize the response for storage
                 .and_then(|value| {
-                    serde_json::to_value(&value).map_err(|cause| {
-                        tracing::error!(?cause, "failed to serialize upload task outcome");
+                    serde_json::to_value(&value).map_err(|error| {
+                        tracing::error!(?error, "failed to serialize upload task outcome");
                         DynHttpError::from(HttpCommonError::ServerError)
                     })
                 });

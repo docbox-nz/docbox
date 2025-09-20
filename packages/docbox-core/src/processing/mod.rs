@@ -31,11 +31,11 @@ pub enum ProcessingError {
     MalformedFile(String),
 
     /// Failed to convert file to pdf
-    #[error("failed to convert file: {0}")]
+    #[error("failed to convert file")]
     ConvertFile(#[from] PdfConvertError),
 
     /// Failed to read info about pdf file
-    #[error("failed to read pdf info: {0}")]
+    #[error("failed to read pdf info")]
     ReadPdfInfo(PdfInfoError),
 
     /// Failed to extract text from pdf file
