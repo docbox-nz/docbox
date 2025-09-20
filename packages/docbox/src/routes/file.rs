@@ -1028,10 +1028,7 @@ pub async fn get_generated_raw_presigned(
     let (signed_request, expires_at) = storage
         .create_presigned_download(&file.file_key, expires_at)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to created file presigned download");
-            HttpCommonError::ServerError
-        })?;
+        .map_err(|_| HttpCommonError::ServerError)?;
 
     Ok(Json(PresignedDownloadResponse {
         method: signed_request.method().to_string(),

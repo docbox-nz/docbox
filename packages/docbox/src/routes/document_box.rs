@@ -226,7 +226,7 @@ pub async fn stats(
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
-        ("scope" = DocumentBoxScope, Path, description = "Scope of the document box"),    
+        ("scope" = DocumentBoxScope, Path, description = "Scope of the document box"),
         TenantParams
     )
 )]
@@ -240,13 +240,13 @@ pub async fn delete(
 ) -> HttpStatusResult {
     delete_document_box(&db, &search, &storage, &events, scope)
         .await
-        .map_err(|cause| match cause {
+        .map_err(|error| match error {
             DeleteDocumentBoxError::UnknownScope => {
                 DynHttpError::from(HttpDocumentBoxError::UnknownDocumentBox)
             }
 
-            cause => {
-                tracing::error!(?cause, "failed to delete document box");
+            error => {
+                tracing::error!(?error, "failed to delete document box");
                 DynHttpError::from(HttpCommonError::ServerError)
             }
         })?;

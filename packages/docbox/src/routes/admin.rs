@@ -185,7 +185,7 @@ pub async fn rebuild_search_index_tenant(
     docbox_core::tenant::rebuild_tenant_index::rebuild_tenant_index(&db, &search, &storage)
         .await
         .map_err(|error| {
-            tracing::error!(?error, "failed to reprocess octet-stream files");
+            tracing::error!(?error, "failed to rebuilt tenant search index");
             HttpCommonError::ServerError
         })?;
 
@@ -253,10 +253,7 @@ pub async fn http_purge_expired_presigned_tasks(
 ) -> HttpStatusResult {
     purge_expired_presigned_tasks(db_cache, storage_factory)
         .await
-        .map_err(|error| {
-            tracing::error!(?error, "failed to purge expired presigned tasks");
-            HttpCommonError::ServerError
-        })?;
+        .map_err(|_| HttpCommonError::ServerError)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
