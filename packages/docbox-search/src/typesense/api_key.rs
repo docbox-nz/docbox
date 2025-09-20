@@ -1,5 +1,5 @@
 use super::TypesenseSearchError;
-use docbox_secrets::{AppSecretManager, Secret};
+use docbox_secrets::{Secret, SecretManager};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
@@ -27,7 +27,7 @@ pub(crate) trait ApiKeyProvider {
 /// API key from a secret manager that must be loaded at runtime
 pub struct TypesenseApiKeySecret {
     /// Secret manager access
-    secrets: Arc<AppSecretManager>,
+    secrets: Arc<SecretManager>,
 
     /// Name of the secret the API key is within
     secret_name: String,
@@ -37,7 +37,7 @@ pub struct TypesenseApiKeySecret {
 }
 
 impl TypesenseApiKeySecret {
-    pub fn new(secrets: Arc<AppSecretManager>, secret_name: String) -> Self {
+    pub fn new(secrets: Arc<SecretManager>, secret_name: String) -> Self {
         Self {
             secrets,
             secret_name,

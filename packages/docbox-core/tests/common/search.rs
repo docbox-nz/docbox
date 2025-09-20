@@ -6,7 +6,7 @@ use docbox_search::{
     SearchIndexFactory, SearchIndexFactoryConfig, TenantSearchIndex, TypesenseApiKey,
     TypesenseSearchConfig,
 };
-use docbox_secrets::{AppSecretManager, memory::MemorySecretManager};
+use docbox_secrets::{SecretManager, memory::MemorySecretManager};
 use testcontainers::{
     GenericImage, ImageExt,
     core::{IntoContainerPort, WaitFor, wait::HttpWaitStrategy},
@@ -52,7 +52,7 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
     });
 
     let aws_config = aws_config().await;
-    let secrets = Arc::new(AppSecretManager::Memory(MemorySecretManager::default()));
+    let secrets = Arc::new(SecretManager::Memory(MemorySecretManager::default()));
 
     // This will absolutely fail if you try and use it, but we don't we only provide it because
     // its required due to the possibility of a database search backend in the real app
@@ -61,7 +61,7 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
         0,
         "test/test".to_string(),
         secrets.clone(),
-        None
+        None,
     );
 
     let index =

@@ -5,7 +5,7 @@ use docbox_database::{
     models::tenant::{Tenant, TenantId},
 };
 use docbox_search::SearchIndexFactory;
-use docbox_secrets::{AppSecretManager, SecretManagerError};
+use docbox_secrets::{SecretManager, SecretManagerError};
 use docbox_storage::StorageLayerFactory;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -77,7 +77,7 @@ pub async fn create_tenant(
     db_provider: &impl DatabaseProvider,
     search_factory: &SearchIndexFactory,
     storage_factory: &StorageLayerFactory,
-    secrets: &AppSecretManager,
+    secrets: &SecretManager,
     config: CreateTenantConfig,
 ) -> Result<Tenant, CreateTenantError> {
     // Create tenant database
@@ -183,7 +183,7 @@ pub async fn initialize_tenant_db_role(
 
 /// Initializes and stores the secret for the tenant database access
 pub async fn initialize_tenant_db_secret(
-    secrets: &AppSecretManager,
+    secrets: &SecretManager,
     secret_name: &str,
     role_name: &str,
     role_password: &str,

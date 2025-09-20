@@ -10,7 +10,7 @@
 //! * `DOCBOX_SECRET_MANAGER_KEY` - Specifies the encryption key to use
 //! * `DOCBOX_SECRET_MANAGER_PATH` - Path to the encrypted JSON file
 
-use crate::{Secret, SecretManager, SecretManagerError};
+use crate::{Secret, SecretManagerError, SecretManagerImpl};
 use age::secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug, path::PathBuf};
@@ -138,7 +138,7 @@ impl JsonSecretManager {
     }
 }
 
-impl SecretManager for JsonSecretManager {
+impl SecretManagerImpl for JsonSecretManager {
     async fn get_secret(&self, name: &str) -> Result<Option<Secret>, SecretManagerError> {
         let file = match self.read_file().await {
             Ok(value) => value,

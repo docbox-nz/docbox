@@ -17,7 +17,7 @@ use docbox_database::{
     DbTransaction,
     models::{document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, tenant::Tenant},
 };
-use docbox_secrets::AppSecretManager;
+use docbox_secrets::SecretManager;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -74,7 +74,7 @@ pub struct TypesenseIndexFactory {
 
 impl TypesenseIndexFactory {
     pub fn from_config(
-        secrets: Arc<AppSecretManager>,
+        secrets: Arc<SecretManager>,
         config: TypesenseSearchConfig,
     ) -> Result<Self, TypesenseIndexFactoryError> {
         let api_key_provider = match (config.api_key, config.api_key_secret_name) {

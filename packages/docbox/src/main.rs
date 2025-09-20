@@ -17,7 +17,7 @@ use docbox_core::{
 };
 use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
-use docbox_secrets::{AppSecretManager, SecretsManagerConfig};
+use docbox_secrets::{SecretManager, SecretsManagerConfig};
 use docbox_storage::{StorageLayerFactory, StorageLayerFactoryConfig};
 use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
 use logging::{init_logging, init_logging_with_sentry};
@@ -93,7 +93,7 @@ async fn server() -> anyhow::Result<()> {
 
     // Create secrets manager
     let secrets_config = SecretsManagerConfig::from_env()?;
-    let secrets = AppSecretManager::from_config(&aws_config, secrets_config);
+    let secrets = SecretManager::from_config(&aws_config, secrets_config);
     let secrets = Arc::new(secrets);
 
     // Load database credentials

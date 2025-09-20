@@ -10,7 +10,7 @@ use docbox_database::{
         tenant_migration::{CreateTenantMigration, TenantMigration},
     },
 };
-use docbox_secrets::AppSecretManager;
+use docbox_secrets::SecretManager;
 use models::{
     FileSearchRequest, FileSearchResults, SearchIndexData, SearchRequest, SearchResults,
     UpdateSearchIndexData,
@@ -88,7 +88,7 @@ impl SearchIndexFactory {
     /// Create a search index factory from the provided `config`
     pub fn from_config(
         aws_config: &SdkConfig,
-        secrets: Arc<AppSecretManager>,
+        secrets: Arc<SecretManager>,
         db: Arc<DatabasePoolCache>,
         config: SearchIndexFactoryConfig,
     ) -> Result<Self, SearchIndexFactoryError> {

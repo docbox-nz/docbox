@@ -8,7 +8,7 @@
 //! * `DOCBOX_SECRET_MANAGER_MEMORY_DEFAULT` - Optional default secret value to provide when missing the secret
 //! * `DOCBOX_SECRET_MANAGER_MEMORY_SECRETS` - JSON encoded hashmap of available secrets
 
-use crate::{Secret, SecretManager, SecretManagerError};
+use crate::{Secret, SecretManagerError, SecretManagerImpl};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::Infallible, fmt::Debug};
 use thiserror::Error;
@@ -69,7 +69,7 @@ impl MemorySecretManager {
 
 pub type MemorySecretError = Infallible;
 
-impl SecretManager for MemorySecretManager {
+impl SecretManagerImpl for MemorySecretManager {
     async fn get_secret(&self, name: &str) -> Result<Option<super::Secret>, SecretManagerError> {
         if let Some(value) = self.data.lock().await.get(name) {
             return Ok(Some(value.clone()));

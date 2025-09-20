@@ -5,7 +5,7 @@
 //!
 //! Intended for AWS hosted environments
 
-use crate::{Secret, SecretManager, SecretManagerError};
+use crate::{Secret, SecretManagerError, SecretManagerImpl};
 use aws_config::SdkConfig;
 use std::fmt::Debug;
 use thiserror::Error;
@@ -39,7 +39,7 @@ pub enum AwsSecretError {
     UpdateSecret,
 }
 
-impl SecretManager for AwsSecretManager {
+impl SecretManagerImpl for AwsSecretManager {
     async fn get_secret(&self, name: &str) -> Result<Option<super::Secret>, SecretManagerError> {
         let result = self
             .client

@@ -4,7 +4,7 @@ use docbox_database::{
     models::tenant::Tenant,
     sqlx::types::Uuid,
 };
-use docbox_secrets::{AppSecretManager, SecretManagerError};
+use docbox_secrets::{SecretManager, SecretManagerError};
 use serde_json::json;
 use thiserror::Error;
 
@@ -76,7 +76,7 @@ const TEMP_SETUP_DATABASE: &str = "postgres";
 /// Initializes the root database of provida
 pub async fn initialize(
     db_provider: &impl DatabaseProvider,
-    secrets: &AppSecretManager,
+    secrets: &SecretManager,
     root_secret_name: &str,
 ) -> Result<(), InitializeError> {
     let db_docbox = initialize_root_database(db_provider).await?;
@@ -146,7 +146,7 @@ pub async fn initialize_root_role(
 
 /// Initializes and stores the secret for the root database access
 pub async fn initialize_root_secret(
-    secrets: &AppSecretManager,
+    secrets: &SecretManager,
     root_secret_name: &str,
     root_role_name: &str,
     root_role_password: &str,

@@ -53,15 +53,15 @@ impl SecretsManagerConfig {
     }
 }
 
-/// App blanket secret manager backed by some underlying
+/// Secret manager backed by some underlying
 /// secret manager implementation
-pub enum AppSecretManager {
+pub enum SecretManager {
     Aws(aws::AwsSecretManager),
     Memory(memory::MemorySecretManager),
     Json(json::JsonSecretManager),
 }
 
-impl AppSecretManager {
+impl SecretManager {
     /// Create the secret manager from the provided `config`
     ///
     /// The `aws_config` is required to provide aws specific settings when the AWS secret
@@ -70,7 +70,7 @@ impl AppSecretManager {
         match config {
             SecretsManagerConfig::Memory(config) => {
                 tracing::debug!("using in memory secret manager");
-                AppSecretManager::Memory(memory::MemorySecretManager::new(
+                SecretManager::Memory(memory::MemorySecretManager::new(
                     config
                         .secrets
                         .into_iter()
@@ -82,11 +82,11 @@ impl AppSecretManager {
 
             SecretsManagerConfig::Json(config) => {
                 tracing::debug!("using json secret manager");
-                AppSecretManager::Json(json::JsonSecretManager::from_config(config))
+                SecretManager::Json(json::JsonSecretManager::from_config(config))
             }
             SecretsManagerConfig::Aws => {
                 tracing::debug!("using aws secret manager");
-                AppSecretManager::Aws(aws::AwsSecretManager::from_sdk_config(aws_config))
+                SecretManager::Aws(aws::AwsSecretManager::from_sdk_config(aws_config))
             }
         }
     }
@@ -96,9 +96,9 @@ impl AppSecretManager {
     pub async fn get_secret(&self, name: &str) -> Result<Option<Secret>, SecretManagerError> {
         tracing::debug!(?name, "reading secret");
         match self {
-            AppSecretManager::Aws(inner) => inner.get_secret(name).await,
-            AppSecretManager::Memory(inner) => inner.get_secret(name).await,
-            AppSecretManager::Json(inner) => inner.get_secret(name).await,
+            SecretManager::Aws(inner) => inner.get_secret(name).await,
+            SecretManager::Memory(inner) => inner.get_secret(name).await,
+            SecretManager::Json(inner) => inner.get_secret(name).await,
         }
     }
 
@@ -109,9 +109,9 @@ impl AppSecretManager {
     pub async fn set_secret(&self, name: &str, value: &str) -> Result<(), SecretManagerError> {
         tracing::debug!(?name, "writing secret");
         match self {
-            AppSecretManager::Aws(inner) => inner.set_secret(name, value).await,
-            AppSecretManager::Memory(inner) => inner.set_secret(name, value).await,
-            AppSecretManager::Json(inner) => inner.set_secret(name, value).await,
+            SecretManager::Aws(inner) => inner.set_secret(name, value).await,
+            SecretManager::Memory(inner) => inner.set_secret(name, value).await,
+            SecretManager::Json(inner) => inner.set_secret(name, value).await,
         }
     }
 
@@ -120,9 +120,9 @@ impl AppSecretManager {
     pub async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
         tracing::debug!(?name, "deleting secret");
         match self {
-            AppSecretManager::Aws(inner) => inner.delete_secret(name).await,
-            AppSecretManager::Memory(inner) => inner.delete_secret(name).await,
-            AppSecretManager::Json(inner) => inner.delete_secret(name).await,
+            SecretManager::Aws(inner) => inner.delete_secret(name).await,
+            SecretManager::Memory(inner) => inner.delete_secret(name).await,
+            SecretManager::Json(inner) => inner.delete_secret(name).await,
         }
     }
 
@@ -179,7 +179,7 @@ pub enum Secret {
 }
 
 /// Internal trait defining required async implementations for a secret manager
-pub(crate) trait SecretManager: Send + Sync {
+pub(crate) trait SecretManagerImpl: Send + Sync {
     async fn get_secret(&self, name: &str) -> Result<Option<Secret>, SecretManagerError>;
 
     async fn set_secret(&self, name: &str, value: &str) -> Result<(), SecretManagerError>;

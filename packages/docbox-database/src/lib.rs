@@ -1,4 +1,4 @@
-use docbox_secrets::AppSecretManager;
+use docbox_secrets::SecretManager;
 use models::tenant::Tenant;
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
@@ -107,7 +107,7 @@ pub struct DatabasePoolCache {
     connect_info_cache: Cache<String, DbSecrets>,
 
     /// Secrets manager access to load credentials
-    secrets_manager: Arc<AppSecretManager>,
+    secrets_manager: Arc<SecretManager>,
 
     /// Max connections per database pool
     max_connections: u32,
@@ -135,7 +135,7 @@ pub enum DbConnectErr {
 impl DatabasePoolCache {
     pub fn from_config(
         config: DatabasePoolCacheConfig,
-        secrets_manager: Arc<AppSecretManager>,
+        secrets_manager: Arc<SecretManager>,
     ) -> Self {
         Self::new(
             config.host,
@@ -150,7 +150,7 @@ impl DatabasePoolCache {
         host: String,
         port: u16,
         root_secret_name: String,
-        secrets_manager: Arc<AppSecretManager>,
+        secrets_manager: Arc<SecretManager>,
         max_connections: Option<u32>,
     ) -> Self {
         let cache = Cache::builder()
