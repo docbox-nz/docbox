@@ -10,11 +10,11 @@
 //! * `DOCBOX_SECRET_MANAGER_KEY` - Specifies the encryption key to use
 //! * `DOCBOX_SECRET_MANAGER_PATH` - Path to the encrypted JSON file
 
-use crate::{Secret, SecretManager};
+use crate::{Secret, SecretManager, SecretManagerError};
 use age::secrecy::SecretString;
-use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt::Debug, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf};
+use thiserror::Error;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct JsonSecretManagerConfig {
@@ -23,6 +23,14 @@ pub struct JsonSecretManagerConfig {
 
     /// Path to the encrypted JSON file
     pub path: PathBuf,
+}
+
+#[derive(Debug, Error)]
+pub enum JsonSecretManagerConfigError {
+    #[error("missing DOCBOX_SECRET_MANAGER_KEY secret key to access store")]
+    MissingKey,
+    #[error("missing DOCBOX_SECRET_MANAGER_PATH file path to access store")]
+    MissingPath,
 }
 
 impl Debug for JsonSecretManagerConfig {
@@ -35,15 +43,15 @@ impl Debug for JsonSecretManagerConfig {
 
 impl JsonSecretManagerConfig {
     /// Load a config from environment variables
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub fn from_env() -> Result<Self, JsonSecretManagerConfigError> {
         let key = std::env::var("DOCBOX_SECRET_MANAGER_KEY")
-            .context("missing DOCBOX_SECRET_MANAGER_KEY secret key to access store")?;
+            .map_err(|_| JsonSecretManagerConfigError::MissingKey)?;
         let path = std::env::var("DOCBOX_SECRET_MANAGER_PATH")
-            .context("missing DOCBOX_SECRET_MANAGER_PATH file path to access store")?;
+            .map_err(|_| JsonSecretManagerConfigError::MissingPath)?;
 
         Ok(Self {
             key,
-            path: PathBuf::from_str(&path)?,
+            path: PathBuf::from(&path),
         })
     }
 }
@@ -61,6 +69,22 @@ struct SecretFile {
     secrets: HashMap<String, String>,
 }
 
+#[derive(Debug, Error)]
+pub enum JsonSecretError {
+    #[error("failed to read secrets")]
+    ReadFile,
+    #[error("failed to write secrets")]
+    WriteFile,
+    #[error("failed to decrypt secrets")]
+    Decrypt,
+    #[error("failed to encrypt secrets")]
+    Encrypt,
+    #[error("failed to deserialize secrets")]
+    Deserialize,
+    #[error("failed to serialize secrets")]
+    Serialize,
+}
+
 impl JsonSecretManager {
     pub fn from_config(config: JsonSecretManagerConfig) -> Self {
         let key = SecretString::from(config.key);
@@ -71,25 +95,51 @@ impl JsonSecretManager {
         }
     }
 
-    async fn read_file(&self) -> anyhow::Result<SecretFile> {
-        let bytes = tokio::fs::read(&self.path).await?;
+    async fn read_file(&self) -> Result<SecretFile, JsonSecretError> {
+        let bytes = tokio::fs::read(&self.path).await.map_err(|error| {
+            tracing::error!(?error, "failed to read secrets file");
+            JsonSecretError::ReadFile
+        })?;
+
         let identity = age::scrypt::Identity::new(self.key.clone());
-        let decrypted = age::decrypt(&identity, &bytes)?;
-        let file = serde_json::from_slice(&decrypted)?;
+        let decrypted = age::decrypt(&identity, &bytes).map_err(|error| {
+            tracing::error!(?error, "failed to decrypt secrets file");
+            JsonSecretError::Decrypt
+        })?;
+
+        let file = serde_json::from_slice(&decrypted).map_err(|error| {
+            tracing::error!(?error, "failed to deserialize secrets file");
+            JsonSecretError::Deserialize
+        })?;
+
         Ok(file)
     }
 
-    async fn write_file(&self, file: SecretFile) -> anyhow::Result<()> {
-        let bytes = serde_json::to_string(&file)?;
+    async fn write_file(&self, file: SecretFile) -> Result<(), JsonSecretError> {
+        let bytes = serde_json::to_string(&file).map_err(|error| {
+            tracing::error!(?error, "failed to serialize secrets file");
+            JsonSecretError::Serialize
+        })?;
+
         let recipient = age::scrypt::Recipient::new(self.key.clone());
-        let encrypted = age::encrypt(&recipient, bytes.as_bytes())?;
-        tokio::fs::write(&self.path, encrypted).await?;
+        let encrypted = age::encrypt(&recipient, bytes.as_bytes()).map_err(|error| {
+            tracing::error!(?error, "failed to encrypt secrets file");
+            JsonSecretError::Encrypt
+        })?;
+
+        tokio::fs::write(&self.path, encrypted)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to write secrets file");
+                JsonSecretError::WriteFile
+            })?;
+
         Ok(())
     }
 }
 
 impl SecretManager for JsonSecretManager {
-    async fn get_secret(&self, name: &str) -> anyhow::Result<Option<Secret>> {
+    async fn get_secret(&self, name: &str) -> Result<Option<Secret>, SecretManagerError> {
         let file = match self.read_file().await {
             Ok(value) => value,
             Err(_) => return Ok(None),
@@ -99,7 +149,7 @@ impl SecretManager for JsonSecretManager {
         Ok(secret.map(|value| Secret::String(value.clone())))
     }
 
-    async fn set_secret(&self, name: &str, value: &str) -> anyhow::Result<()> {
+    async fn set_secret(&self, name: &str, value: &str) -> Result<(), SecretManagerError> {
         let mut secrets = if self.path.exists() {
             self.read_file().await?
         } else {
@@ -113,7 +163,7 @@ impl SecretManager for JsonSecretManager {
         Ok(())
     }
 
-    async fn delete_secret(&self, name: &str) -> anyhow::Result<()> {
+    async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
         let mut secrets = if self.path.exists() {
             self.read_file().await?
         } else {

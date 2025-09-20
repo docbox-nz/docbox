@@ -5,7 +5,7 @@ use docbox_database::{
     models::tenant::{Tenant, TenantId},
 };
 use docbox_search::SearchIndexFactory;
-use docbox_secrets::AppSecretManager;
+use docbox_secrets::{AppSecretManager, SecretManagerError};
 use docbox_storage::StorageLayerFactory;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -34,7 +34,7 @@ pub enum CreateTenantError {
     SerializeSecret(serde_json::Error),
 
     #[error("failed to create tenant secret: {0}")]
-    CreateTenantSecret(anyhow::Error),
+    CreateTenantSecret(SecretManagerError),
 
     #[error("failed to init tenant: {0}")]
     CreateTenant(InitTenantError),

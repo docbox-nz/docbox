@@ -1979,7 +1979,6 @@ name = "docbox-secrets"
 version = "0.1.0"
 dependencies = [
  "age",
- "anyhow",
  "aws-config",
  "aws-sdk-secretsmanager",
  "serde",

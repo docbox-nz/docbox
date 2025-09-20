@@ -47,7 +47,7 @@ pub enum UploadFileError {
 
     /// Failed to upload generated file to storage layer
     #[error("failed to upload generated file to storage layer: {0}")]
-    UploadGeneratedFile(anyhow::Error),
+    UploadGeneratedFile(StorageLayerError),
 
     /// Failed to create the generated file database row
     #[error("failed to create generated file")]

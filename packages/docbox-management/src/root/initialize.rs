@@ -4,7 +4,7 @@ use docbox_database::{
     models::tenant::Tenant,
     sqlx::types::Uuid,
 };
-use docbox_secrets::AppSecretManager;
+use docbox_secrets::{AppSecretManager, SecretManagerError};
 use serde_json::json;
 use thiserror::Error;
 
@@ -64,7 +64,7 @@ pub enum InitializeError {
     SerializeSecret(serde_json::Error),
 
     #[error("failed to create root secret: {0}")]
-    CreateRootSecret(anyhow::Error),
+    CreateRootSecret(SecretManagerError),
 
     #[error("error creating tenants table: {0}")]
     CreateTenantsTable(DbErr),

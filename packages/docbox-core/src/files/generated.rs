@@ -1,9 +1,8 @@
 //! Business logic for working with generated files
 
 use crate::files::create_generated_file_key;
-use anyhow::Context;
 use bytes::Bytes;
-use docbox_storage::TenantStorageLayer;
+use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{
     StreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -85,7 +84,7 @@ pub async fn upload_generated_files(
     file_id: &FileId,
     file_hash: &str,
     queued_uploads: Vec<QueuedUpload>,
-) -> Vec<anyhow::Result<CreateGeneratedFile>> {
+) -> Vec<Result<CreateGeneratedFile, StorageLayerError>> {
     queued_uploads
         .into_iter()
         .map(|queued_upload| {
@@ -101,9 +100,12 @@ pub async fn upload_generated_files(
                 storage
                     .upload_file(&file_key, file_mime, queued_upload.bytes)
                     .await
-                    .context("failed to upload generated file")?;
+                    .inspect_err(|error |{
+                        tracing::error!(?error, "failed to store generated file");
+                    })?;
 
-                anyhow::Ok(CreateGeneratedFile {
+
+                Ok(CreateGeneratedFile {
                     file_id,
                     hash: file_hash,
                     mime: queued_upload.mime.to_string(),
