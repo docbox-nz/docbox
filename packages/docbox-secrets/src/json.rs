@@ -13,7 +13,7 @@
 use crate::{Secret, SecretManagerError, SecretManagerImpl};
 use age::secrecy::SecretString;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt::Debug, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, io, path::PathBuf};
 use thiserror::Error;
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -72,17 +72,17 @@ struct SecretFile {
 #[derive(Debug, Error)]
 pub enum JsonSecretError {
     #[error("failed to read secrets")]
-    ReadFile,
+    ReadFile(io::Error),
     #[error("failed to write secrets")]
-    WriteFile,
+    WriteFile(io::Error),
     #[error("failed to decrypt secrets")]
-    Decrypt,
+    Decrypt(age::DecryptError),
     #[error("failed to encrypt secrets")]
-    Encrypt,
+    Encrypt(age::EncryptError),
     #[error("failed to deserialize secrets")]
-    Deserialize,
+    Deserialize(serde_json::Error),
     #[error("failed to serialize secrets")]
-    Serialize,
+    Serialize(serde_json::Error),
 }
 
 impl JsonSecretManager {
@@ -98,18 +98,18 @@ impl JsonSecretManager {
     async fn read_file(&self) -> Result<SecretFile, JsonSecretError> {
         let bytes = tokio::fs::read(&self.path).await.map_err(|error| {
             tracing::error!(?error, "failed to read secrets file");
-            JsonSecretError::ReadFile
+            JsonSecretError::ReadFile(error)
         })?;
 
         let identity = age::scrypt::Identity::new(self.key.clone());
         let decrypted = age::decrypt(&identity, &bytes).map_err(|error| {
             tracing::error!(?error, "failed to decrypt secrets file");
-            JsonSecretError::Decrypt
+            JsonSecretError::Decrypt(error)
         })?;
 
         let file = serde_json::from_slice(&decrypted).map_err(|error| {
             tracing::error!(?error, "failed to deserialize secrets file");
-            JsonSecretError::Deserialize
+            JsonSecretError::Deserialize(error)
         })?;
 
         Ok(file)
@@ -118,20 +118,20 @@ impl JsonSecretManager {
     async fn write_file(&self, file: SecretFile) -> Result<(), JsonSecretError> {
         let bytes = serde_json::to_string(&file).map_err(|error| {
             tracing::error!(?error, "failed to serialize secrets file");
-            JsonSecretError::Serialize
+            JsonSecretError::Serialize(error)
         })?;
 
         let recipient = age::scrypt::Recipient::new(self.key.clone());
         let encrypted = age::encrypt(&recipient, bytes.as_bytes()).map_err(|error| {
             tracing::error!(?error, "failed to encrypt secrets file");
-            JsonSecretError::Encrypt
+            JsonSecretError::Encrypt(error)
         })?;
 
         tokio::fs::write(&self.path, encrypted)
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to write secrets file");
-                JsonSecretError::WriteFile
+                JsonSecretError::WriteFile(error)
             })?;
 
         Ok(())

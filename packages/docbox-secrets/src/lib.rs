@@ -160,13 +160,25 @@ pub enum SecretManagerError {
     Memory(memory::MemorySecretError),
 
     #[error(transparent)]
-    Json(#[from] json::JsonSecretError),
+    Json(Box<json::JsonSecretError>),
 
     #[error(transparent)]
-    Aws(#[from] aws::AwsSecretError),
+    Aws(Box<aws::AwsSecretError>),
 
     #[error("failed to parse secret JSON")]
     ParseSecret,
+}
+
+impl From<json::JsonSecretError> for SecretManagerError {
+    fn from(value: json::JsonSecretError) -> Self {
+        Self::Json(Box::new(value))
+    }
+}
+
+impl From<aws::AwsSecretError> for SecretManagerError {
+    fn from(value: aws::AwsSecretError) -> Self {
+        Self::Aws(Box::new(value))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

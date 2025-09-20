@@ -7,6 +7,13 @@
 
 use crate::{Secret, SecretManagerError, SecretManagerImpl};
 use aws_config::SdkConfig;
+use aws_sdk_secretsmanager::{
+    error::SdkError,
+    operation::{
+        create_secret::CreateSecretError, delete_secret::DeleteSecretError,
+        get_secret_value::GetSecretValueError, update_secret::UpdateSecretError,
+    },
+};
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -30,13 +37,13 @@ impl AwsSecretManager {
 #[derive(Debug, Error)]
 pub enum AwsSecretError {
     #[error("failed to get secret value")]
-    GetSecretValue,
+    GetSecretValue(SdkError<GetSecretValueError>),
     #[error("failed to create secret")]
-    CreateSecret,
+    CreateSecret(SdkError<CreateSecretError>),
     #[error("failed to delete secret")]
-    DeleteSecret,
+    DeleteSecret(SdkError<DeleteSecretError>),
     #[error("failed to update secret")]
-    UpdateSecret,
+    UpdateSecret(SdkError<UpdateSecretError>),
 }
 
 impl SecretManagerImpl for AwsSecretManager {
@@ -49,7 +56,7 @@ impl SecretManagerImpl for AwsSecretManager {
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to get secret value");
-                AwsSecretError::GetSecretValue
+                AwsSecretError::GetSecretValue(error)
             })?;
 
         if let Some(value) = result.secret_string {
@@ -91,14 +98,14 @@ impl SecretManagerImpl for AwsSecretManager {
                 .await
                 .map_err(|error| {
                     tracing::error!(?error, "failed to update secret");
-                    AwsSecretError::UpdateSecret
+                    AwsSecretError::UpdateSecret(error)
                 })?;
 
             return Ok(());
         }
 
         tracing::error!(?error, "failed to create secret");
-        Err(AwsSecretError::CreateSecret.into())
+        Err(AwsSecretError::CreateSecret(error).into())
     }
 
     async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
@@ -117,6 +124,6 @@ impl SecretManagerImpl for AwsSecretManager {
         }
 
         tracing::error!(?error, "failed to create secret");
-        Err(AwsSecretError::DeleteSecret.into())
+        Err(AwsSecretError::DeleteSecret(error).into())
     }
 }
