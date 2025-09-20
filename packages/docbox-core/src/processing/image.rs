@@ -81,7 +81,7 @@ struct GeneratedPreviewImages {
 fn generate_image_preview(
     image: DynamicImage,
     format: ImageFormat,
-) -> anyhow::Result<GeneratedPreviewImages> {
+) -> ImageResult<GeneratedPreviewImages> {
     tracing::debug!("rendering image preview variants");
 
     let thumbnail_jpeg = create_thumbnail(&image, format)?;

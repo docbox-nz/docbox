@@ -1,10 +1,10 @@
 use crate::{
     files::{generated::QueuedUpload, upload_file::ProcessingConfig},
     processing::{
-        email::{is_mail_mime, process_email},
+        email::{EmailProcessingError, is_mail_mime, process_email},
         image::process_image_async,
         office::{PdfConvertError, process_office},
-        pdf::process_pdf,
+        pdf::{GeneratePdfImagesError, process_pdf},
     },
 };
 use ::image::{ImageError, ImageFormat};
@@ -30,10 +30,6 @@ pub enum ProcessingError {
     #[error("file is invalid or malformed: {0}")]
     MalformedFile(String),
 
-    /// Internal server error
-    #[error("internal server error")]
-    InternalServerError,
-
     /// Failed to convert file to pdf
     #[error("failed to convert file: {0}")]
     ConvertFile(#[from] PdfConvertError),
@@ -52,7 +48,15 @@ pub enum ProcessingError {
 
     /// Failed to generate thumbnail from pdf file
     #[error("failed to generate file thumbnail: {0}")]
-    GenerateThumbnail(anyhow::Error),
+    GenerateThumbnail(ImageError),
+
+    /// Failed to generate thumbnail from pdf file
+    #[error("failed to generate pdf file thumbnail: {0}")]
+    GeneratePdfThumbnail(GeneratePdfImagesError),
+
+    /// Failed to process an email file
+    #[error("failed to process email file: {0}")]
+    Email(#[from] EmailProcessingError),
 
     /// Failed to join the image processing thread output
     #[error("error waiting for image processing")]

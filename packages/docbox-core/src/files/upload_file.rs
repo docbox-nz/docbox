@@ -60,6 +60,14 @@ pub enum UploadFileError {
     /// Multiple error messages
     #[error(transparent)]
     Composite(#[from] CompositeError),
+
+    /// Failed to begin the transaction
+    #[error("failed to perform operation (start)")]
+    BeginTransaction(DbErr),
+
+    /// Failed to commit the transaction
+    #[error("failed to perform operation (end)")]
+    CommitTransaction(DbErr),
 }
 
 /// State keeping track of whats been generated from a file
@@ -138,11 +146,11 @@ pub async fn safe_upload_file(
     events: TenantEventPublisher,
     processing: ProcessingLayer,
     upload: UploadFile,
-) -> Result<UploadedFileData, anyhow::Error> {
+) -> Result<UploadedFileData, UploadFileError> {
     // Start a database transaction
-    let mut db = db.begin().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to begin transaction");
-        anyhow::anyhow!("failed to begin transaction")
+    let mut db = db.begin().await.map_err(|error| {
+        tracing::error!(?error, "failed to begin transaction");
+        UploadFileError::BeginTransaction(error)
     })?;
 
     // Create state for tracking allocated resources
@@ -160,7 +168,7 @@ pub async fn safe_upload_file(
     .await
     {
         Ok(value) => value,
-        Err(err) => {
+        Err(error) => {
             let span = tracing::Span::current();
 
             // Attempt to rollback any allocated resources in the background
@@ -175,13 +183,13 @@ pub async fn safe_upload_file(
                 .instrument(span),
             );
 
-            return Err(anyhow::Error::from(err));
+            return Err(error);
         }
     };
 
     // Commit the transaction
-    if let Err(cause) = db.commit().await {
-        tracing::error!(?cause, "failed to commit transaction");
+    if let Err(error) = db.commit().await {
+        tracing::error!(?error, "failed to commit transaction");
         let span = tracing::Span::current();
 
         // Attempt to rollback any allocated resources in the background
@@ -192,7 +200,7 @@ pub async fn safe_upload_file(
             .instrument(span),
         );
 
-        return Err(anyhow::anyhow!("failed to commit transaction"));
+        return Err(UploadFileError::CommitTransaction(error));
     }
 
     Ok(output)

@@ -11,8 +11,20 @@ use mail_parser::{
 };
 use mime::Mime;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::{AdditionalProcessingFile, ProcessingError, ProcessingIndexMetadata, ProcessingOutput};
+
+#[derive(Debug, Error)]
+pub enum EmailProcessingError {
+    /// Email is missing at least one From: header
+    #[error("email must have at least one sender")]
+    MissingSender,
+
+    /// JSON serialization failure for metadata storage
+    #[error("failed to serialize email metadata")]
+    MetadataSerialize(serde_json::Error),
+}
 
 /// Checks if the provided mime is for an email
 pub fn is_mail_mime(mime: &Mime) -> bool {
@@ -120,9 +132,7 @@ pub fn process_email(
     let from = from
         .first()
         // Email must have at least one sender
-        .ok_or_else(|| {
-            ProcessingError::MalformedFile("email must have at least one sender".to_string())
-        })?
+        .ok_or(EmailProcessingError::MissingSender)?
         .clone();
 
     let to = map_email_address(message.to());
@@ -268,7 +278,9 @@ pub fn process_email(
         Ok(value) => value,
         Err(cause) => {
             tracing::error!(?cause, "failed to serialize email json metadata document");
-            return Err(ProcessingError::InternalServerError);
+            return Err(ProcessingError::Email(
+                EmailProcessingError::MetadataSerialize(cause),
+            ));
         }
     };
 

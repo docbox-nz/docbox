@@ -4,18 +4,19 @@ use crate::{
         ProcessingError, ProcessingIndexMetadata, ProcessingOutput, image::create_img_bytes,
     },
 };
-use anyhow::Context;
 use docbox_database::models::generated_file::GeneratedFileType;
 use docbox_search::models::DocumentPage;
 use futures::TryFutureExt;
-use image::{DynamicImage, ImageFormat};
+use image::{DynamicImage, ImageError, ImageFormat, ImageResult};
 use mime::Mime;
 use pdf_process::{
-    OutputFormat, PdfInfo, PdfInfoArgs, PdfInfoError, PdfTextArgs, RenderArgs, pdf_info,
-    render_single_page, text_all_pages_split,
+    OutputFormat, PdfInfo, PdfInfoArgs, PdfInfoError, PdfRenderError, PdfTextArgs, RenderArgs,
+    pdf_info, render_single_page, text_all_pages_split,
 };
 
 pub use pdf_process::text::PAGE_END_CHARACTER;
+use thiserror::Error;
+use tokio::task::JoinError;
 
 /// Processes a PDF compatible file producing index data and generated files such as
 /// thumbnails and a converted pdf version
@@ -77,7 +78,7 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
 
     // Generate pdf thumbnails
     let thumbnail_future = generate_pdf_images_async(&pdf_info, file_bytes)
-        .map_err(ProcessingError::GenerateThumbnail);
+        .map_err(ProcessingError::GeneratePdfThumbnail);
 
     let (pages, generated) = tokio::try_join!(pages_text_future, thumbnail_future)?;
 
@@ -135,7 +136,7 @@ pub fn is_pdf_file(mime: &Mime) -> bool {
         return true;
     }
 
-    // Some outdated clients use application/x-pdf for pdfs
+    // Some outdated clients use application/x-pdf for pdf
     if mime.type_() == mime::APPLICATION && mime.subtype().as_str() == "x-pdf" {
         return true;
     }
@@ -144,13 +145,11 @@ pub fn is_pdf_file(mime: &Mime) -> bool {
 }
 
 /// Renders the cover page for a PDF file
-async fn render_pdf_cover(pdf_info: &PdfInfo, pdf: &[u8]) -> anyhow::Result<DynamicImage> {
+async fn render_pdf_cover(pdf_info: &PdfInfo, pdf: &[u8]) -> Result<DynamicImage, PdfRenderError> {
     let args = RenderArgs::default();
 
     // Render the pdf cover page
-    let page = render_single_page(pdf, pdf_info, OutputFormat::Jpeg, 1, &args)
-        .await
-        .context("failed to render pdf page")?;
+    let page = render_single_page(pdf, pdf_info, OutputFormat::Jpeg, 1, &args).await?;
 
     Ok(page)
 }
@@ -165,22 +164,35 @@ pub struct GeneratedPdfImages {
     pub large_thumbnail_jpeg: Vec<u8>,
 }
 
+#[derive(Debug, Error)]
+pub enum GeneratePdfImagesError {
+    /// PDF rendering error
+    #[error("failed to render pdf: {0}")]
+    PdfRender(#[from] PdfRenderError),
+
+    /// Image processing error
+    #[error("error processing image: {0}")]
+    ImageError(#[from] ImageError),
+
+    /// Failed to join the image processing thread output
+    #[error("error waiting for image processing")]
+    Threading(#[from] JoinError),
+}
+
 async fn generate_pdf_images_async(
     pdf_info: &PdfInfo,
     pdf: &[u8],
-) -> anyhow::Result<GeneratedPdfImages> {
+) -> Result<GeneratedPdfImages, GeneratePdfImagesError> {
     tracing::debug!("rendering pdf cover");
     let page = render_pdf_cover(pdf_info, pdf).await?;
 
     tracing::debug!("rendering pdf image variants");
-    tokio::task::spawn_blocking(move || generate_pdf_images_variants(page))
-        .await
-        .context("failed to process image preview")
-        .and_then(|value| value)
+    let result = tokio::task::spawn_blocking(move || generate_pdf_images_variants(page)).await??;
+    Ok(result)
 }
 
 /// Generates the various versions of the PDF cover images
-fn generate_pdf_images_variants(cover_page: DynamicImage) -> anyhow::Result<GeneratedPdfImages> {
+fn generate_pdf_images_variants(cover_page: DynamicImage) -> ImageResult<GeneratedPdfImages> {
     tracing::debug!("rendering pdf image variants");
     let cover_page_jpeg = create_img_bytes(&cover_page, ImageFormat::Jpeg)?;
 
