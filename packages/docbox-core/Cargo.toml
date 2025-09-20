@@ -39,7 +39,6 @@ futures.workspace = true
 reqwest.workspace = true
 
 # Error handling
-anyhow.workspace = true
 thiserror.workspace = true
 
 # Serialization and JSON

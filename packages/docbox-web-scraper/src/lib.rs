@@ -3,14 +3,14 @@
 //! Web-scraping client for getting website metadata, favicon, ...etc and
 //! maintaining an internal cache
 
-use anyhow::Context;
 use bytes::Bytes;
 use document::{Favicon, determine_best_favicon, get_website_metadata};
 use download_image::{ResolvedUri, download_image_href, resolve_full_url};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
+use thiserror::Error;
 use tracing::Instrument;
 use url_validation::{TokioDomainResolver, is_allowed_url};
 
@@ -48,9 +48,25 @@ pub struct WebsiteMetaServiceConfig {
     pub metadata_read_timeout: Duration,
 }
 
+#[derive(Debug, Error)]
+pub enum WebsiteMetaServiceConfigError {
+    #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION must be a number in seconds: {0}")]
+    InvalidMetadataCacheDuration(<u64 as FromStr>::Err),
+    #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY must be a number: {0}")]
+    InvalidMetadataCacheCapacity(<u64 as FromStr>::Err),
+    #[error("DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT must be a number in seconds: {0}")]
+    InvalidMetadataConnectTimeout(<u64 as FromStr>::Err),
+    #[error("DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT must be a number in seconds")]
+    InvalidMetadataReadTimeout(<u64 as FromStr>::Err),
+    #[error("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION must be a number in seconds")]
+    InvalidImageCacheDuration(<u64 as FromStr>::Err),
+    #[error("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY must be a number")]
+    InvalidImageCacheCapacity(<u64 as FromStr>::Err),
+}
+
 impl WebsiteMetaServiceConfig {
     /// Load a website meta service config from its environment variables
-    pub fn from_env() -> anyhow::Result<WebsiteMetaServiceConfig> {
+    pub fn from_env() -> Result<WebsiteMetaServiceConfig, WebsiteMetaServiceConfigError> {
         let mut config = WebsiteMetaServiceConfig::default();
 
         if let Ok(metadata_cache_duration) =
@@ -58,7 +74,7 @@ impl WebsiteMetaServiceConfig {
         {
             let metadata_cache_duration = metadata_cache_duration
                 .parse::<u64>()
-                .context("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION must be a number in seconds")?;
+                .map_err(WebsiteMetaServiceConfigError::InvalidMetadataCacheDuration)?;
 
             config.metadata_cache_duration = Duration::from_secs(metadata_cache_duration);
         }
@@ -68,7 +84,7 @@ impl WebsiteMetaServiceConfig {
         {
             let metadata_cache_capacity = metadata_cache_capacity
                 .parse::<u64>()
-                .context("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY must be a number")?;
+                .map_err(WebsiteMetaServiceConfigError::InvalidMetadataCacheCapacity)?;
 
             config.metadata_cache_capacity = metadata_cache_capacity;
         }
@@ -76,9 +92,9 @@ impl WebsiteMetaServiceConfig {
         if let Ok(metadata_connect_timeout) =
             std::env::var("DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT")
         {
-            let metadata_connect_timeout = metadata_connect_timeout.parse::<u64>().context(
-                "DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT must be a number in seconds",
-            )?;
+            let metadata_connect_timeout = metadata_connect_timeout
+                .parse::<u64>()
+                .map_err(WebsiteMetaServiceConfigError::InvalidMetadataConnectTimeout)?;
 
             config.metadata_connect_timeout = Duration::from_secs(metadata_connect_timeout);
         }
@@ -87,7 +103,7 @@ impl WebsiteMetaServiceConfig {
         {
             let metadata_read_timeout = metadata_read_timeout
                 .parse::<u64>()
-                .context("DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT must be a number in seconds")?;
+                .map_err(WebsiteMetaServiceConfigError::InvalidMetadataReadTimeout)?;
 
             config.metadata_read_timeout = Duration::from_secs(metadata_read_timeout);
         }
@@ -95,7 +111,7 @@ impl WebsiteMetaServiceConfig {
         if let Ok(image_cache_duration) = std::env::var("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION") {
             let image_cache_duration = image_cache_duration
                 .parse::<u64>()
-                .context("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION must be a number in seconds")?;
+                .map_err(WebsiteMetaServiceConfigError::InvalidImageCacheDuration)?;
 
             config.image_cache_duration = Duration::from_secs(image_cache_duration);
         }
@@ -103,7 +119,7 @@ impl WebsiteMetaServiceConfig {
         if let Ok(image_cache_capacity) = std::env::var("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY") {
             let image_cache_capacity = image_cache_capacity
                 .parse::<u64>()
-                .context("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY must be a number")?;
+                .map_err(WebsiteMetaServiceConfigError::InvalidImageCacheCapacity)?;
 
             config.image_cache_capacity = image_cache_capacity;
         }

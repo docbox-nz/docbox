@@ -41,6 +41,12 @@ pub struct PresignedUploadOutcome {
 
 #[derive(Debug, Error)]
 pub enum PresignedUploadError {
+    #[error("failed to perform operation (start)")]
+    BeginTransaction,
+
+    #[error("failed to perform operation (end)")]
+    CommitTransaction,
+
     /// Error when uploading files
     #[error(transparent)]
     UploadFile(#[from] UploadFileError),
@@ -100,12 +106,24 @@ pub struct CreatePresigned {
     pub processing_config: Option<ProcessingConfig>,
 }
 
+#[derive(Debug, Error)]
+pub enum CreatePresignedUploadError {
+    #[error("failed to create presigned url")]
+    CreatePresigned,
+
+    #[error("failed to store upload configuration")]
+    SerializeConfig,
+
+    #[error("failed to store presigned upload task")]
+    StoreTask,
+}
+
 /// Create a new presigned file upload request
 pub async fn create_presigned_upload(
     db: &DbPool,
     storage: &TenantStorageLayer,
     create: CreatePresigned,
-) -> anyhow::Result<PresignedUploadOutcome> {
+) -> Result<PresignedUploadOutcome, CreatePresignedUploadError> {
     let file_key = create_file_key(
         &create.folder.document_box,
         &create.name,
@@ -114,12 +132,20 @@ pub async fn create_presigned_upload(
     );
     let (signed_request, expires_at) = storage
         .create_presigned(&file_key, create.size as i64)
-        .await?;
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "failed to create presigned upload");
+            CreatePresignedUploadError::CreatePresigned
+        })?;
 
     // Encode the processing config for the database
     let processing_config = match &create.processing_config {
         Some(config) => {
-            let value = serde_json::to_value(config).map_err(|err| DbErr::Encode(Box::new(err)))?;
+            let value = serde_json::to_value(config).map_err(|error| {
+                tracing::error!(?error, "failed to serialize processing config");
+                CreatePresignedUploadError::SerializeConfig
+            })?;
+
             Some(value)
         }
         None => None,
@@ -140,7 +166,11 @@ pub async fn create_presigned_upload(
             processing_config,
         },
     )
-    .await?;
+    .await
+    .map_err(|error| {
+        tracing::error!(?error, "failed to store presigned upload task");
+        CreatePresignedUploadError::StoreTask
+    })?;
 
     Ok(PresignedUploadOutcome {
         task_id: task.id,
@@ -167,11 +197,11 @@ pub async fn safe_complete_presigned(
     events: TenantEventPublisher,
     processing: ProcessingLayer,
     mut complete: CompletePresigned,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), PresignedUploadError> {
     // Start a database transaction
-    let mut db = db_pool.begin().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to begin transaction");
-        anyhow::anyhow!("failed to begin transaction")
+    let mut db = db_pool.begin().await.map_err(|error| {
+        tracing::error!(?error, "failed to begin transaction");
+        PresignedUploadError::BeginTransaction
     })?;
 
     let mut upload_state = PresignedUploadState::default();
@@ -188,8 +218,8 @@ pub async fn safe_complete_presigned(
     .await
     {
         Ok(value) => value,
-        Err(err) => {
-            let error_message = err.to_string();
+        Err(error) => {
+            let error_message = error.to_string();
 
             let span = tracing::Span::current();
 
@@ -219,13 +249,13 @@ pub async fn safe_complete_presigned(
                 .instrument(span),
             );
 
-            return Err(anyhow::Error::from(err));
+            return Err(error);
         }
     };
 
     // Commit the transaction
-    if let Err(cause) = db.commit().await {
-        tracing::error!(?cause, "failed to commit transaction");
+    if let Err(error) = db.commit().await {
+        tracing::error!(?error, "failed to commit transaction");
 
         // Update the task status
         if let Err(cause) = complete
@@ -251,7 +281,7 @@ pub async fn safe_complete_presigned(
             .instrument(span),
         );
 
-        return Err(anyhow::anyhow!("failed to commit transaction"));
+        return Err(PresignedUploadError::CommitTransaction);
     }
 
     Ok(())

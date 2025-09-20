@@ -2,7 +2,9 @@ use crate::{
     files::generated::QueuedUpload,
     processing::{
         ProcessingError, ProcessingOutput,
-        office::convert_server::{OfficeConvertServerConfig, is_known_pdf_convertable},
+        office::convert_server::{
+            OfficeConvertServerConfig, OfficeConvertServerError, is_known_pdf_convertable,
+        },
         pdf::{is_pdf_file, process_pdf},
     },
 };
@@ -37,8 +39,9 @@ pub enum OfficeConverterConfig {
 }
 
 impl OfficeConverterConfig {
-    pub fn from_env() -> anyhow::Result<OfficeConverterConfig> {
-        OfficeConvertServerConfig::from_env().map(OfficeConverterConfig::ConverterServer)
+    pub fn from_env() -> OfficeConverterConfig {
+        let config = OfficeConvertServerConfig::from_env();
+        OfficeConverterConfig::ConverterServer(config)
     }
 }
 
@@ -47,13 +50,21 @@ pub enum OfficeConverter {
     ConverterServer(OfficeConverterServer),
 }
 
+#[derive(Debug, Error)]
+pub enum OfficeConverterError {
+    #[error(transparent)]
+    ConverterServer(#[from] OfficeConvertServerError),
+}
+
 #[derive(Clone)]
 pub struct OfficeProcessingLayer {
     pub converter: OfficeConverter,
 }
 
 impl OfficeConverter {
-    pub fn from_config(config: OfficeConverterConfig) -> anyhow::Result<OfficeConverter> {
+    pub fn from_config(
+        config: OfficeConverterConfig,
+    ) -> Result<OfficeConverter, OfficeConverterError> {
         match config {
             OfficeConverterConfig::ConverterServer(config) => {
                 let converter_server = OfficeConverterServer::from_config(config)?;

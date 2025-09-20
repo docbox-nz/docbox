@@ -1,8 +1,5 @@
-use std::str::FromStr;
-
-use anyhow::Context;
 use docbox_database::{
-    DbPool, DbResult,
+    DbErr, DbPool, DbResult,
     models::{
         document_box::DocumentBoxScopeRaw,
         file::{File, FileWithScope},
@@ -12,15 +9,25 @@ use docbox_database::{
     },
 };
 use docbox_search::{
-    TenantSearchIndex,
+    SearchError, TenantSearchIndex,
     models::{DocumentPage, SearchIndexData, SearchIndexType},
 };
-use docbox_storage::TenantStorageLayer;
+use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
 use itertools::Itertools;
 use pdf_process::text::PAGE_END_CHARACTER;
+use std::{str::FromStr, string::FromUtf8Error};
+use thiserror::Error;
 
 use crate::processing::office::is_pdf_compatible;
+
+#[derive(Debug, Error)]
+pub enum RebuildTenantIndexError {
+    #[error(transparent)]
+    Database(#[from] DbErr),
+    #[error(transparent)]
+    Search(#[from] SearchError),
+}
 
 /// Rebuild the search index for the tenant based on that
 /// data stored in the database and the content stored in S3
@@ -28,7 +35,7 @@ pub async fn rebuild_tenant_index(
     db: &DbPool,
     search: &TenantSearchIndex,
     storage: &TenantStorageLayer,
-) -> anyhow::Result<()> {
+) -> Result<(), RebuildTenantIndexError> {
     tracing::info!("started re-indexing tenant");
 
     let index_data = recreate_search_index_data(db, storage).await?;
@@ -50,7 +57,7 @@ pub async fn rebuild_tenant_index(
 pub async fn apply_rebuilt_tenant_index(
     search: &TenantSearchIndex,
     data: Vec<SearchIndexData>,
-) -> anyhow::Result<()> {
+) -> Result<(), SearchError> {
     // Ensure the index exists
     _ = search.create_index().await;
 
@@ -69,7 +76,7 @@ pub async fn apply_rebuilt_tenant_index(
 pub async fn recreate_search_index_data(
     db: &DbPool,
     storage: &TenantStorageLayer,
-) -> anyhow::Result<Vec<SearchIndexData>> {
+) -> DbResult<Vec<SearchIndexData>> {
     let links = create_links_index_data(db).await?;
     let folders = create_folders_index_data(db).await?;
     let files = create_files_index_data(db, storage).await?;
@@ -281,17 +288,32 @@ pub async fn create_files_index_data(
     Ok(data)
 }
 
+#[derive(Debug, Error)]
+pub enum PdfCompatibleRebuildError {
+    #[error("file is missing text content")]
+    MissingTextContent,
+
+    #[error(transparent)]
+    Database(#[from] DbErr),
+
+    #[error(transparent)]
+    Storage(#[from] StorageLayerError),
+
+    #[error(transparent)]
+    InvalidTextContent(#[from] FromUtf8Error),
+}
+
 /// Attempts to obtain the [DocumentPage] collection for a PDF compatible file
 pub async fn try_pdf_compatible_document_pages(
     db: &DbPool,
     storage: &TenantStorageLayer,
     scope: &DocumentBoxScopeRaw,
     file: &File,
-) -> anyhow::Result<Vec<DocumentPage>> {
+) -> Result<Vec<DocumentPage>, PdfCompatibleRebuildError> {
     // Load the extracted text content for the file
     let text_file = GeneratedFile::find(db, scope, file.id, GeneratedFileType::TextContent)
         .await?
-        .context("missing text content")?;
+        .ok_or(PdfCompatibleRebuildError::MissingTextContent)?;
 
     tracing::debug!(?text_file, "loaded file generated text content");
 
@@ -307,7 +329,8 @@ pub async fn try_pdf_compatible_document_pages(
 
     // Load the text content
     let text_content = text_content.to_vec();
-    let text_content = String::from_utf8(text_content).context("invalid utf8 text content")?;
+    let text_content =
+        String::from_utf8(text_content).map_err(PdfCompatibleRebuildError::InvalidTextContent)?;
 
     // Split the content back into pages
     let pages = text_content.split(PAGE_END_CHARACTER);

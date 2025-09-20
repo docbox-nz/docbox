@@ -253,8 +253,8 @@ pub async fn http_purge_expired_presigned_tasks(
 ) -> HttpStatusResult {
     purge_expired_presigned_tasks(db_cache, storage_factory)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to purge expired presigned tasks");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to purge expired presigned tasks");
             HttpCommonError::ServerError
         })?;
 

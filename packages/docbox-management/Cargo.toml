@@ -29,7 +29,6 @@ serde_json.workspace = true
 tracing.workspace = true
 
 # Error handling
-anyhow.workspace = true
 thiserror.workspace = true
 
 # AWS configuration

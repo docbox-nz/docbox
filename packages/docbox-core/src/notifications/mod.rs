@@ -24,17 +24,15 @@ pub enum NotificationConfig {
 }
 
 impl NotificationConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
-        Ok(
-            match (
-                std::env::var("DOCBOX_MPSC_QUEUE"),
-                std::env::var("DOCBOX_SQS_URL"),
-            ) {
-                (Ok(_), _) => NotificationConfig::Mpsc,
-                (_, Ok(queue_url)) => NotificationConfig::Sqs { queue_url },
-                _ => NotificationConfig::Noop,
-            },
-        )
+    pub fn from_env() -> Self {
+        match (
+            std::env::var("DOCBOX_MPSC_QUEUE"),
+            std::env::var("DOCBOX_SQS_URL"),
+        ) {
+            (Ok(_), _) => NotificationConfig::Mpsc,
+            (_, Ok(queue_url)) => NotificationConfig::Sqs { queue_url },
+            _ => NotificationConfig::Noop,
+        }
     }
 }
 
@@ -45,23 +43,19 @@ pub enum AppNotificationQueue {
 }
 
 impl AppNotificationQueue {
-    pub fn from_config(sqs_client: SqsClient, config: NotificationConfig) -> anyhow::Result<Self> {
+    pub fn from_config(sqs_client: SqsClient, config: NotificationConfig) -> Self {
         match config {
             NotificationConfig::Sqs { queue_url } => {
                 tracing::debug!(%queue_url, "using SQS notification queue");
-                Ok(AppNotificationQueue::Sqs(
-                    sqs::SqsNotificationQueue::create(sqs_client, queue_url),
-                ))
+                AppNotificationQueue::Sqs(sqs::SqsNotificationQueue::create(sqs_client, queue_url))
             }
             NotificationConfig::Noop => {
                 tracing::warn!("queue not specified, falling back to no-op queue");
-                Ok(AppNotificationQueue::Noop(noop::NoopNotificationQueue))
+                AppNotificationQueue::Noop(noop::NoopNotificationQueue)
             }
             NotificationConfig::Mpsc => {
                 tracing::debug!("DOCBOX_MPSC_QUEUE is set using local webhook notification queue");
-                Ok(AppNotificationQueue::Mpsc(
-                    mpsc::MpscNotificationQueue::create(),
-                ))
+                AppNotificationQueue::Mpsc(mpsc::MpscNotificationQueue::create())
             }
         }
     }

@@ -61,7 +61,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .enable_all()
         .build()
         .expect("Failed building the Runtime")
-        .block_on(server())
+        .block_on(async move {
+            if let Err(error) = server().await {
+                tracing::error!(?error, message = %error, "error running server");
+                return Err(error);
+            }
+
+            Ok(())
+        })
 }
 
 async fn server() -> Result<(), Box<dyn Error>> {
@@ -72,7 +79,7 @@ async fn server() -> Result<(), Box<dyn Error>> {
     };
 
     // Create the converter
-    let converter_config = OfficeConverterConfig::from_env()?;
+    let converter_config = OfficeConverterConfig::from_env();
     let converter = OfficeConverter::from_config(converter_config)?;
 
     // Setup processing layer
@@ -127,9 +134,8 @@ async fn server() -> Result<(), Box<dyn Error>> {
     let tenant_cache = Arc::new(TenantCache::new());
 
     // Setup notification queue
-    let notification_config = NotificationConfig::from_env()?;
-    let mut notification_queue =
-        AppNotificationQueue::from_config(sqs_client, notification_config)?;
+    let notification_config = NotificationConfig::from_env();
+    let mut notification_queue = AppNotificationQueue::from_config(sqs_client, notification_config);
 
     // Setup router
     let mut app = router();

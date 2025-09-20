@@ -3,10 +3,9 @@
 //! HTML document related logic for extracting information scraped from remote
 //! HTML pages such as OGP metadata <title/> tags etc
 
-use std::str::FromStr;
-
-use anyhow::Context;
 use mime::Mime;
+use std::str::FromStr;
+use thiserror::Error;
 use tl::{HTMLTag, Parser};
 use url::Url;
 
@@ -38,12 +37,41 @@ struct WebsiteDocumentState {
     favicons: Vec<Favicon>,
 }
 
+#[derive(Debug, Error)]
+pub enum WebsiteMetadataError {
+    #[error("failed to request resource")]
+    FailedRequest(reqwest::Error),
+
+    #[error("error response from server")]
+    ErrorResponse(reqwest::Error),
+
+    #[error("failed to read response")]
+    ReadResponse(reqwest::Error),
+
+    #[error(transparent)]
+    Parse(WebsiteMetadataParseError),
+}
+
+#[derive(Debug, Error)]
+pub enum WebsiteMetadataParseError {
+    #[error("failed to parse resource response")]
+    Parsing,
+    #[error("failed to query page head")]
+    QueryHead,
+    #[error("page missing head element")]
+    MissingHead,
+    #[error("failed to parse head element")]
+    InvalidHead,
+    #[error("head element has no children")]
+    EmptyHead,
+}
+
 /// Connects to a website reading the HTML contents, extracts the metadata
 /// required from the <head/> element
 pub async fn get_website_metadata(
     client: &reqwest::Client,
     url: &Url,
-) -> anyhow::Result<WebsiteMetadata> {
+) -> Result<WebsiteMetadata, WebsiteMetadataError> {
     let mut url = url.clone();
 
     // Get the path from the URL
@@ -60,22 +88,37 @@ pub async fn get_website_metadata(
         .get(url)
         .send()
         .await
-        .context("failed to request resource")?
+        .map_err(WebsiteMetadataError::FailedRequest)?
         .error_for_status()
-        .context("resource responded with error")?;
+        .map_err(WebsiteMetadataError::ErrorResponse)?;
 
     // Read response text
     let text = response
         .text()
         .await
-        .context("failed to read resource response")?;
+        .map_err(WebsiteMetadataError::ReadResponse)?;
 
-    parse_website_metadata(&text)
+    parse_website_metadata(&text).map_err(WebsiteMetadataError::Parse)
+}
+
+#[derive(Debug, Error)]
+pub enum RobotsTxtError {
+    #[error("failed to request resource")]
+    FailedRequest(reqwest::Error),
+
+    #[error("error response from server")]
+    ErrorResponse(reqwest::Error),
+
+    #[error("failed to read response")]
+    ReadResponse(reqwest::Error),
 }
 
 /// Attempts to read the robots.txt file for the website to determine if
 /// scraping is allowed
-pub async fn is_allowed_robots_txt(client: &reqwest::Client, url: &Url) -> anyhow::Result<bool> {
+pub async fn is_allowed_robots_txt(
+    client: &reqwest::Client,
+    url: &Url,
+) -> Result<bool, RobotsTxtError> {
     let mut url = url.clone();
 
     let original_url = url.to_string();
@@ -88,15 +131,15 @@ pub async fn is_allowed_robots_txt(client: &reqwest::Client, url: &Url) -> anyho
         .get(url)
         .send()
         .await
-        .context("failed to request resource")?
+        .map_err(RobotsTxtError::FailedRequest)?
         .error_for_status()
-        .context("resource responded with error")?;
+        .map_err(RobotsTxtError::ErrorResponse)?;
 
     // Read response text
     let robots_txt = response
         .text()
         .await
-        .context("failed to read resource response")?;
+        .map_err(RobotsTxtError::ReadResponse)?;
 
     let mut matcher = robotstxt::DefaultMatcher::default();
     let is_allowed =
@@ -105,24 +148,26 @@ pub async fn is_allowed_robots_txt(client: &reqwest::Client, url: &Url) -> anyho
     Ok(is_allowed)
 }
 
-pub fn parse_website_metadata(html: &str) -> anyhow::Result<WebsiteMetadata> {
+pub fn parse_website_metadata(html: &str) -> Result<WebsiteMetadata, WebsiteMetadataParseError> {
     let dom = tl::parse(html, tl::ParserOptions::default())
-        .context("failed to parse resource response")?;
+        .map_err(|_| WebsiteMetadataParseError::Parsing)?;
 
     let parser = dom.parser();
 
     // Find the head element
     let head = dom
         .query_selector("head")
-        .context("failed to query page head")?
+        .ok_or(WebsiteMetadataParseError::QueryHead)?
         .next()
-        .context("page missing head")?
+        .ok_or(WebsiteMetadataParseError::MissingHead)?
         .get(parser)
-        .context("failed to parse head")?;
+        .ok_or(WebsiteMetadataParseError::InvalidHead)?;
 
     let mut state = WebsiteDocumentState::default();
 
-    let children = head.children().context("head missing children")?;
+    let children = head
+        .children()
+        .ok_or(WebsiteMetadataParseError::EmptyHead)?;
     for child in children.all(parser) {
         let tag = match child.as_tag() {
             Some(tag) => tag,

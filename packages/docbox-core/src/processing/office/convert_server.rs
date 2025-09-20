@@ -1,10 +1,10 @@
-use anyhow::Context;
 use bytes::Bytes;
 use office_convert_client::{
     OfficeConvertClient, OfficeConvertLoadBalancer, OfficeConverter, RequestError,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::{ConvertToPdf, PdfConvertError};
 
@@ -80,7 +80,7 @@ pub struct OfficeConvertServerConfig {
 }
 
 impl OfficeConvertServerConfig {
-    pub fn from_env() -> anyhow::Result<OfficeConvertServerConfig> {
+    pub fn from_env() -> OfficeConvertServerConfig {
         let addresses =
             std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://127.0.0.1:8081".to_string());
         let addresses = addresses
@@ -88,7 +88,7 @@ impl OfficeConvertServerConfig {
             .map(|value| value.to_string())
             .collect();
 
-        Ok(OfficeConvertServerConfig { addresses })
+        OfficeConvertServerConfig { addresses }
     }
 }
 
@@ -99,16 +99,26 @@ pub struct OfficeConverterServer {
     client: OfficeConverter,
 }
 
+#[derive(Debug, Error)]
+pub enum OfficeConvertServerError {
+    #[error("failed to build http client")]
+    BuildHttpClient(reqwest::Error),
+    #[error("no office convert server addresses provided")]
+    NoAddresses,
+}
+
 impl OfficeConverterServer {
     pub fn new(client: OfficeConverter) -> Self {
         Self { client }
     }
 
-    pub fn from_config(config: OfficeConvertServerConfig) -> anyhow::Result<Self> {
+    pub fn from_config(
+        config: OfficeConvertServerConfig,
+    ) -> Result<Self, OfficeConvertServerError> {
         Self::from_addresses(config.addresses.iter().map(|value| value.as_str()))
     }
 
-    pub fn from_addresses<'a, I>(addresses: I) -> anyhow::Result<Self>
+    pub fn from_addresses<'a, I>(addresses: I) -> Result<Self, OfficeConvertServerError>
     where
         I: IntoIterator<Item = &'a str>,
     {
@@ -120,7 +130,7 @@ impl OfficeConverterServer {
         let http_client = Client::builder()
             .no_proxy()
             .build()
-            .context("failed to build convert http client")?;
+            .map_err(OfficeConvertServerError::BuildHttpClient)?;
 
         for convert_server_address in addresses {
             tracing::debug!(address = ?convert_server_address, "added convert server");
@@ -132,9 +142,7 @@ impl OfficeConverterServer {
         }
 
         if convert_clients.is_empty() {
-            return Err(anyhow::anyhow!(
-                "no office convert server addresses provided"
-            ));
+            return Err(OfficeConvertServerError::NoAddresses);
         }
 
         // Create a convert load balancer

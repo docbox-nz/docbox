@@ -39,42 +39,39 @@ pub async fn process_notification_queue(
                 bucket_name,
                 object_key,
             } => {
-                tokio::spawn(safe_handle_file_uploaded(
-                    data.clone(),
-                    bucket_name,
-                    object_key,
-                ));
+                tokio::spawn(handle_file_uploaded(data.clone(), bucket_name, object_key));
             }
         }
     }
 }
 
-pub async fn safe_handle_file_uploaded(
-    data: NotificationQueueData,
-    bucket_name: String,
-    object_key: String,
-) {
-    if let Err(cause) = handle_file_uploaded(data, bucket_name, object_key).await {
-        tracing::error!(?cause, "failed to handle sqs file upload");
-    }
-}
-
+/// Handle file upload notifications
+#[tracing::instrument(skip(data))]
 pub async fn handle_file_uploaded(
     data: NotificationQueueData,
     bucket_name: String,
     object_key: String,
-) -> anyhow::Result<()> {
+) {
     let tenant = {
-        let db = data.db_cache.get_root_pool().await?;
-        match Tenant::find_by_bucket(&db, &bucket_name).await? {
-            Some(value) => value,
-            None => {
+        let db = match data.db_cache.get_root_pool().await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::error!(?error, "failed to acquire root database pool");
+                return;
+            }
+        };
+
+        match Tenant::find_by_bucket(&db, &bucket_name).await {
+            Ok(Some(value)) => value,
+            Ok(None) => {
                 tracing::warn!(
-                    ?bucket_name,
-                    ?object_key,
                     "file was uploaded into a bucket sqs is listening to but there was no matching tenant"
                 );
-                return Ok(());
+                return;
+            }
+            Err(error) => {
+                tracing::error!(?error, "failed to query tenant for bucket");
+                return;
             }
         }
     };
@@ -84,40 +81,48 @@ pub async fn handle_file_uploaded(
 
     handle_file_uploaded_tenant(tenant, data, bucket_name, object_key)
         .instrument(span)
-        .await
+        .await;
 }
 
+/// Handle file upload notification once the tenant has been identified
+#[tracing::instrument(skip(data))]
 pub async fn handle_file_uploaded_tenant(
     tenant: Tenant,
     data: NotificationQueueData,
     bucket_name: String,
     object_key: String,
-) -> anyhow::Result<()> {
+) {
     let object_key = match urlencoding::decode(&object_key) {
         Ok(value) => value.to_string(),
-        Err(err) => {
+        Err(error) => {
             tracing::warn!(
-                ?err,
-                ?bucket_name,
-                ?object_key,
+                ?error,
                 "file was uploaded into a bucket but had an invalid file name"
             );
-            return Ok(());
+            return;
         }
     };
 
-    let db = data.db_cache.get_tenant_pool(&tenant).await?;
+    let db = match data.db_cache.get_tenant_pool(&tenant).await {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::error!(?error, "failed to get tenant database pool");
+            return;
+        }
+    };
 
     // Locate a pending upload task for the uploaded file
     let task = match PresignedUploadTask::find_by_file_key(&db, &object_key).await {
         Ok(Some(task)) => task,
+        // Ignore files that aren't attached to a presigned upload task
+        // (Things like generated files will show up here)
         Ok(None) => {
             tracing::debug!("uploaded file was not a presigned upload");
-            return Ok(());
+            return;
         }
-        Err(cause) => {
-            tracing::error!(?cause, "unable to query presigned upload");
-            anyhow::bail!("unable to query presigned upload");
+        Err(error) => {
+            tracing::error!(?error, "unable to query presigned upload");
+            return;
         }
     };
 
@@ -128,11 +133,11 @@ pub async fn handle_file_uploaded_tenant(
         Ok(Some(value)) => value,
         Ok(None) => {
             tracing::error!("presigned upload folder no longer exists");
-            anyhow::bail!("presigned upload folder no longer exists");
+            return;
         }
-        Err(cause) => {
-            tracing::error!(?cause, "unable to query folder");
-            anyhow::bail!("unable to query folder");
+        Err(error) => {
+            tracing::error!(?error, "unable to query folder");
+            return;
         }
     };
 
@@ -144,7 +149,9 @@ pub async fn handle_file_uploaded_tenant(
     let events = data.events.create_event_publisher(&tenant);
 
     // Create task future that performs the file upload
-    safe_complete_presigned(db, search, storage, events, data.processing, complete).await?;
-
-    Ok(())
+    if let Err(error) =
+        safe_complete_presigned(db, search, storage, events, data.processing, complete).await
+    {
+        tracing::error!(?error, "failed to complete presigned file upload");
+    }
 }
