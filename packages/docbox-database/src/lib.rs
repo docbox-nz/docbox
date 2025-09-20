@@ -1,4 +1,4 @@
-use docbox_secrets::SecretManager;
+use docbox_secrets::{SecretManager, SecretManagerError};
 use models::tenant::Tenant;
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
@@ -7,9 +7,8 @@ pub use sqlx::{
     PgPool, Postgres, Transaction,
     postgres::{PgConnectOptions, PgPoolOptions},
 };
-
 use std::sync::Arc;
-use std::{error::Error, time::Duration};
+use std::time::Duration;
 use thiserror::Error;
 use tracing::debug;
 
@@ -126,7 +125,7 @@ pub enum DbConnectErr {
     MissingCredentials,
 
     #[error(transparent)]
-    SecretsManager(Box<dyn Error + Send + Sync + 'static>),
+    SecretsManager(Box<SecretManagerError>),
 
     #[error(transparent)]
     Db(#[from] DbErr),
@@ -219,7 +218,7 @@ impl DatabasePoolCache {
             .secrets_manager
             .parsed_secret::<DbSecrets>(secret_name)
             .await
-            .map_err(|err| DbConnectErr::SecretsManager(err.into()))?
+            .map_err(|err| DbConnectErr::SecretsManager(Box::new(err)))?
             .ok_or(DbConnectErr::MissingCredentials)?;
 
         // Cache the credential
