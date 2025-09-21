@@ -1,6 +1,8 @@
 use docbox_database::models::tenant::TenantId;
 use serde::{Deserialize, Serialize};
 
+use crate::tenant::migrate_tenant::MigrateTenantError;
+
 pub mod create_tenant;
 pub mod delete_tenant;
 pub mod get_pending_tenant_migrations;
@@ -15,11 +17,12 @@ pub mod migrate_tenants_search;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TenantTarget {
     pub env: String,
+    pub name: String,
     pub tenant_id: TenantId,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MigrateTenantsOutcome {
     pub applied_tenants: Vec<TenantTarget>,
-    pub failed_tenants: Vec<TenantTarget>,
+    pub failed_tenants: Vec<(String, TenantTarget)>,
 }

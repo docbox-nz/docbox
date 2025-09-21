@@ -80,14 +80,19 @@ pub async fn migrate_tenants_search(
             Ok(_) => {
                 applied_tenants.push(TenantTarget {
                     env: tenant.env,
+                    name: tenant.name,
                     tenant_id: tenant.id,
                 });
             }
             Err(error) => {
-                failed_tenants.push(TenantTarget {
-                    env: tenant.env,
-                    tenant_id: tenant.id,
-                });
+                failed_tenants.push((
+                    error.to_string(),
+                    TenantTarget {
+                        env: tenant.env,
+                        name: tenant.name,
+                        tenant_id: tenant.id,
+                    },
+                ));
 
                 tracing::error!(?error, "failed to apply tenant migration");
 
