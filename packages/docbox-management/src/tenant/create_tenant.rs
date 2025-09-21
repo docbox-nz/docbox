@@ -13,6 +13,7 @@ use thiserror::Error;
 
 use crate::{database::DatabaseProvider, password::random_password};
 
+/// Errors that can occur when creating a tenant
 #[derive(Debug, Error)]
 pub enum CreateTenantError {
     #[error("error connecting to 'postgres' database: {0}")]
@@ -73,6 +74,7 @@ pub struct CreateTenantConfig {
     pub event_queue_url: Option<String>,
 }
 
+#[tracing::instrument(skip_all, fields(?config))]
 pub async fn create_tenant(
     db_provider: &impl DatabaseProvider,
     search_factory: &SearchIndexFactory,
@@ -136,6 +138,7 @@ pub async fn create_tenant(
     Ok(tenant)
 }
 
+#[tracing::instrument(skip(db_provider))]
 pub async fn initialize_tenant_database(
     db_provider: &impl DatabaseProvider,
     db_name: &str,
@@ -167,6 +170,7 @@ pub async fn initialize_tenant_database(
 
 /// Initializes a tenant db role that the docbox API will use when accessing
 /// the tenant databases
+#[tracing::instrument(skip(db, role_password))]
 pub async fn initialize_tenant_db_role(
     db: &DbPool,
     db_name: &str,
@@ -182,6 +186,7 @@ pub async fn initialize_tenant_db_role(
 }
 
 /// Initializes and stores the secret for the tenant database access
+#[tracing::instrument(skip(secrets, role_password))]
 pub async fn initialize_tenant_db_secret(
     secrets: &SecretManager,
     secret_name: &str,

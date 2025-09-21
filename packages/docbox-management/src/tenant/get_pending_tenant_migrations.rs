@@ -1,6 +1,7 @@
 use crate::database::DatabaseProvider;
 use docbox_database::{DbResult, ROOT_DATABASE_NAME, models::tenant::Tenant};
 
+#[tracing::instrument(skip(db_provider))]
 pub async fn get_pending_tenant_migrations(
     db_provider: &impl DatabaseProvider,
     tenant: &Tenant,

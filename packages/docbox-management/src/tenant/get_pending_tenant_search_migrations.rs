@@ -15,6 +15,7 @@ pub enum GetPendingTenantMigrationsError {
     GetPendingMigrations(SearchError),
 }
 
+#[tracing::instrument(skip(db_provider, search_factory))]
 pub async fn get_pending_tenant_search_migrations(
     db_provider: &impl DatabaseProvider,
     search_factory: &SearchIndexFactory,

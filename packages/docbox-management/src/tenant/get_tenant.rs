@@ -4,6 +4,7 @@ use docbox_database::{
     models::tenant::{Tenant, TenantId},
 };
 
+#[tracing::instrument(skip(db_provider))]
 pub async fn get_tenant(
     db_provider: &impl DatabaseProvider,
     env: &str,

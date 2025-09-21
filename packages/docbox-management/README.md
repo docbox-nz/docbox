@@ -1,3 +1,12 @@
 # Docbox Management
 
-Library providing all the management capabilities required for managing, creating, and deleting docbox tenants
+This library provides a core set of functions for managing docbox environments. 
+
+Provides functions for:
+
+- Initializing the root database
+- Creating Tenants
+- Deleting Tenants
+- Fetching and applying migrations
+
+This is used by the docbox-cli and other management tools

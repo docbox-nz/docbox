@@ -17,6 +17,7 @@ pub enum DeleteTenantError {
     DeleteTenant(DbErr),
 }
 
+#[tracing::instrument(skip(db_provider))]
 pub async fn delete_tenant(
     db_provider: &impl DatabaseProvider,
     env: &str,

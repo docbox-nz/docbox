@@ -36,6 +36,7 @@ pub struct MigrateTenantsConfig {
     pub target_migration_name: Option<String>,
 }
 
+#[tracing::instrument(skip(db_provider))]
 pub async fn migrate_tenants(
     db_provider: &impl DatabaseProvider,
     config: MigrateTenantsConfig,

@@ -22,6 +22,7 @@ pub enum MigrateTenantError {
     CommitTransaction(DbErr),
 }
 
+#[tracing::instrument(skip(db_provider))]
 pub async fn migrate_tenant(
     db_provider: &impl DatabaseProvider,
     tenant: &Tenant,

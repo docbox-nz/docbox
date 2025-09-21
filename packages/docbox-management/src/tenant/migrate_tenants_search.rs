@@ -35,6 +35,7 @@ pub struct MigrateTenantsSearchConfig {
     pub target_migration_name: Option<String>,
 }
 
+#[tracing::instrument(skip(db_provider, search_factory))]
 pub async fn migrate_tenants_search(
     db_provider: &impl DatabaseProvider,
     search_factory: &SearchIndexFactory,

@@ -30,6 +30,7 @@ pub enum MigrateTenantSearchError {
     CommitTransaction(DbErr),
 }
 
+#[tracing::instrument(skip(db_provider, search_factory))]
 pub async fn migrate_tenant_search(
     db_provider: &impl DatabaseProvider,
     search_factory: &SearchIndexFactory,

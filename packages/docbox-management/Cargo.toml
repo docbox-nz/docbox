@@ -22,7 +22,7 @@ docbox-secrets.workspace = true
 docbox-storage.workspace = true
 
 # Serialization and JSON
-serde = { workspace = true, features = ["derive"] }
+serde.workspace = true
 serde_json.workspace = true
 
 # Logging
@@ -32,7 +32,7 @@ tracing.workspace = true
 thiserror.workspace = true
 
 # AWS configuration
-aws-config = { workspace = true, features = ["behavior-version-latest"] }
+aws-config.workspace = true
 
 # Random for random password generation
 rand = "=0.8.5"

@@ -1,3 +1,4 @@
+use crate::{database::DatabaseProvider, password::random_password};
 use docbox_database::{
     DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
     create::{create_database, create_restricted_role, create_tenants_table},
@@ -8,9 +9,35 @@ use docbox_secrets::{SecretManager, SecretManagerError};
 use serde_json::json;
 use thiserror::Error;
 
-use crate::{database::DatabaseProvider, password::random_password};
+/// Temporary database to connect to while setting up the other databases
+const TEMP_SETUP_DATABASE: &str = "postgres";
+
+#[derive(Debug, Error)]
+pub enum InitializeError {
+    #[error("error connecting to 'postgres' database: {0}")]
+    ConnectPostgres(DbErr),
+
+    #[error("error creating root database: {0}")]
+    CreateRootDatabase(DbErr),
+
+    #[error("error connecting to root database: {0}")]
+    ConnectRootDatabase(DbErr),
+
+    #[error("error creating root database role: {0}")]
+    CreateRootRole(DbErr),
+
+    #[error("error serializing root secret: {0}")]
+    SerializeSecret(serde_json::Error),
+
+    #[error("failed to create root secret: {0}")]
+    CreateRootSecret(SecretManagerError),
+
+    #[error("error creating tenants table: {0}")]
+    CreateTenantsTable(DbErr),
+}
 
 /// Check if the root database is initialized
+#[tracing::instrument(skip(db_provider))]
 pub async fn is_initialized(db_provider: &impl DatabaseProvider) -> DbResult<bool> {
     // First check if the root database exists
     let db = match db_provider.connect(ROOT_DATABASE_NAME).await {
@@ -46,34 +73,8 @@ pub async fn is_initialized(db_provider: &impl DatabaseProvider) -> DbResult<boo
     Ok(true)
 }
 
-#[derive(Debug, Error)]
-pub enum InitializeError {
-    #[error("error connecting to 'postgres' database: {0}")]
-    ConnectPostgres(DbErr),
-
-    #[error("error creating root database: {0}")]
-    CreateRootDatabase(DbErr),
-
-    #[error("error connecting to root database: {0}")]
-    ConnectRootDatabase(DbErr),
-
-    #[error("error creating root database role: {0}")]
-    CreateRootRole(DbErr),
-
-    #[error("error serializing root secret: {0}")]
-    SerializeSecret(serde_json::Error),
-
-    #[error("failed to create root secret: {0}")]
-    CreateRootSecret(SecretManagerError),
-
-    #[error("error creating tenants table: {0}")]
-    CreateTenantsTable(DbErr),
-}
-
-/// Temporary database to connect to while setting up the other databases
-const TEMP_SETUP_DATABASE: &str = "postgres";
-
 /// Initializes the root database of provida
+#[tracing::instrument(skip(db_provider, secrets))]
 pub async fn initialize(
     db_provider: &impl DatabaseProvider,
     secrets: &SecretManager,
@@ -101,6 +102,7 @@ pub async fn initialize(
 }
 
 /// Initializes the root database used by docbox
+#[tracing::instrument(skip(db_provider))]
 pub async fn initialize_root_database(
     db_provider: &impl DatabaseProvider,
 ) -> Result<DbPool, InitializeError> {
@@ -131,6 +133,7 @@ pub async fn initialize_root_database(
 
 /// Initializes a root role that the docbox API will use when accessing
 /// the tenants table
+#[tracing::instrument(skip(db, root_role_password))]
 pub async fn initialize_root_role(
     db: &DbPool,
     root_role_name: &str,
@@ -145,6 +148,7 @@ pub async fn initialize_root_role(
 }
 
 /// Initializes and stores the secret for the root database access
+#[tracing::instrument(skip(secrets, root_role_password))]
 pub async fn initialize_root_secret(
     secrets: &SecretManager,
     root_secret_name: &str,
