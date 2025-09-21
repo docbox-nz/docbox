@@ -1,7 +1,15 @@
-use crate::{FileStream, StorageLayer, StorageLayerError};
+use crate::{FileStream, StorageLayerError, StorageLayerImpl};
 use aws_config::SdkConfig;
 use aws_sdk_s3::{
     config::Credentials,
+    error::SdkError,
+    operation::{
+        create_bucket::CreateBucketError, delete_bucket::DeleteBucketError,
+        delete_object::DeleteObjectError, get_object::GetObjectError,
+        put_bucket_cors::PutBucketCorsError,
+        put_bucket_notification_configuration::PutBucketNotificationConfigurationError,
+        put_object::PutObjectError,
+    },
     presigning::{PresignedRequest, PresigningConfig},
     primitives::ByteStream,
     types::{
@@ -150,15 +158,15 @@ pub enum S3StorageError {
 
     /// Failed to create a bucket
     #[error("failed to create storage bucket")]
-    CreateBucket,
+    CreateBucket(SdkError<CreateBucketError>),
 
     /// Failed to delete a bucket
     #[error("failed to delete storage bucket")]
-    DeleteBucket,
+    DeleteBucket(SdkError<DeleteBucketError>),
 
     /// Failed to store a file in a bucket
     #[error("failed to store file object")]
-    PutObject,
+    PutObject(SdkError<PutObjectError>),
 
     /// Failed to calculate future unix timestamps
     #[error("failed to calculate expiry timestamp")]
@@ -166,7 +174,7 @@ pub enum S3StorageError {
 
     /// Failed to create presigned upload
     #[error("failed to create presigned store file object")]
-    PutObjectPresigned,
+    PutObjectPresigned(SdkError<PutObjectError>),
 
     /// Failed to create presigned config
     #[error("failed to create presigned config")]
@@ -174,7 +182,7 @@ pub enum S3StorageError {
 
     /// Failed to create presigned download
     #[error("failed to get presigned store file object")]
-    GetObjectPresigned,
+    GetObjectPresigned(SdkError<GetObjectError>),
 
     /// Failed to create the config for the notification queue
     #[error("failed to create bucket notification queue config")]
@@ -182,7 +190,7 @@ pub enum S3StorageError {
 
     /// Failed to setup a notification queue on the bucket
     #[error("failed to add bucket notification queue")]
-    PutBucketNotification,
+    PutBucketNotification(SdkError<PutBucketNotificationConfigurationError>),
 
     /// Failed to make the cors config or rules
     #[error("failed to create bucket cors config")]
@@ -190,18 +198,18 @@ pub enum S3StorageError {
 
     /// Failed to put the bucket cors config
     #[error("failed to set bucket cors rules")]
-    PutBucketCors,
+    PutBucketCors(SdkError<PutBucketCorsError>),
 
     /// Failed to delete a file object
     #[error("failed to delete file object")]
-    DeleteObject,
+    DeleteObject(SdkError<DeleteObjectError>),
 
     /// Failed to get the file storage object
     #[error("failed to get file storage object")]
-    GetObject,
+    GetObject(SdkError<GetObjectError>),
 }
 
-impl StorageLayer for S3StorageLayer {
+impl StorageLayerImpl for S3StorageLayer {
     async fn create_bucket(&self) -> Result<(), StorageLayerError> {
         let bucket_region = self
             .client
@@ -235,7 +243,7 @@ impl StorageLayer for S3StorageLayer {
             }
 
             tracing::error!(?error, "failed to create bucket");
-            return Err(S3StorageError::CreateBucket.into());
+            return Err(S3StorageError::CreateBucket(error).into());
         }
 
         Ok(())
@@ -263,7 +271,7 @@ impl StorageLayer for S3StorageLayer {
 
             tracing::error!(?error, "failed to delete bucket");
 
-            return Err(S3StorageError::DeleteBucket.into());
+            return Err(S3StorageError::DeleteBucket(error).into());
         }
 
         Ok(())
@@ -285,7 +293,7 @@ impl StorageLayer for S3StorageLayer {
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to store file object");
-                S3StorageError::PutObject
+                S3StorageError::PutObject(error)
             })?;
 
         Ok(())
@@ -319,7 +327,7 @@ impl StorageLayer for S3StorageLayer {
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to create presigned store file object");
-                S3StorageError::PutObjectPresigned
+                S3StorageError::PutObjectPresigned(error)
             })?;
 
         Ok((result, expires_at))
@@ -346,7 +354,7 @@ impl StorageLayer for S3StorageLayer {
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to create presigned download");
-                S3StorageError::GetObjectPresigned
+                S3StorageError::GetObjectPresigned(error)
             })?;
 
         Ok((result, expires_at))
@@ -378,13 +386,13 @@ impl StorageLayer for S3StorageLayer {
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to add bucket notification queue");
-                S3StorageError::PutBucketNotification
+                S3StorageError::PutBucketNotification(error)
             })?;
 
         Ok(())
     }
 
-    async fn add_bucket_cors(&self, origins: Vec<String>) -> Result<(), StorageLayerError> {
+    async fn set_bucket_cors_origins(&self, origins: Vec<String>) -> Result<(), StorageLayerError> {
         if let Err(error) = self
             .client
             .put_bucket_cors()
@@ -423,7 +431,7 @@ impl StorageLayer for S3StorageLayer {
             }
 
             tracing::error!(?error, "failed to add bucket cors");
-            return Err(S3StorageError::PutBucketCors.into());
+            return Err(S3StorageError::PutBucketCors(error).into());
         };
 
         Ok(())
@@ -450,7 +458,7 @@ impl StorageLayer for S3StorageLayer {
             }
 
             tracing::error!(?error, "failed to delete file object");
-            return Err(S3StorageError::DeleteObject.into());
+            return Err(S3StorageError::DeleteObject(error).into());
         }
 
         Ok(())
@@ -466,7 +474,7 @@ impl StorageLayer for S3StorageLayer {
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to get file storage object");
-                S3StorageError::GetObject
+                S3StorageError::GetObject(error)
             })?;
 
         let stream = FileStream {

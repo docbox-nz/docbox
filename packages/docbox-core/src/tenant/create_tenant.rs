@@ -211,7 +211,7 @@ async fn create_tenant_storage(
     // Setup bucket allowed origins for presigned uploads
     if !origins.is_empty() {
         storage
-            .add_bucket_cors(origins)
+            .set_bucket_cors_origins(origins)
             .await
             .inspect_err(|error| tracing::error!(?error, "failed to add bucket cors rules"))
             .map_err(InitTenantError::SetupS3Cors)?;

@@ -59,7 +59,7 @@ pub struct CreateTenantConfig {
     /// Name for the tenant role
     pub db_role_name: String,
 
-    /// Name of the tenant s3 bucket
+    /// Name of the tenant storage bucket
     pub storage_bucket_name: String,
     /// CORS Origins for setting up presigned uploads with S3
     pub storage_cors_origins: Vec<String>,

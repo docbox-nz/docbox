@@ -37,11 +37,11 @@ pub enum DeleteFileError {
 
 /// Deletes a file and all associated generated files.
 ///
-/// Deletes files from S3 before deleting the database metadata to
+/// Deletes files from storage before deleting the database metadata to
 /// prevent dangling files in the bucket. Same goes for the search
 /// index
 ///
-/// This process cannot be rolled back since the changes to S3 are
+/// This process cannot be rolled back since the changes to storage are
 /// permanent. If a failure occurs after generated files are deleted
 /// they will stay deleted.
 ///
@@ -62,7 +62,7 @@ pub async fn delete_file(
     match delete_generated_files(storage, &generated).await {
         GeneratedFileDeleteResult::Ok => {}
         GeneratedFileDeleteResult::Err(deleted, err) => {
-            // Attempt to delete generated files from db that were deleted from S3
+            // Attempt to delete generated files from db that were deleted from storage
             let mut delete_files_future = generated
                 .into_iter()
                 .filter(|file| deleted.contains(&file.id))
@@ -93,7 +93,7 @@ pub async fn delete_file(
         }
     }
 
-    // Delete the file from S3
+    // Delete the file from storage
     storage
         .delete_file(&file.file_key)
         .await

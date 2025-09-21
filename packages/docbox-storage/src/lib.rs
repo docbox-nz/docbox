@@ -41,11 +41,17 @@ pub enum StorageLayerFactory {
 pub enum StorageLayerError {
     /// Error from the S3 layer
     #[error(transparent)]
-    S3(#[from] s3::S3StorageError),
+    S3(Box<s3::S3StorageError>),
 
     /// Error collecting streamed response bytes
     #[error("failed to collect file contents")]
     CollectBytes,
+}
+
+impl From<s3::S3StorageError> for StorageLayerError {
+    fn from(value: s3::S3StorageError) -> Self {
+        Self::S3(Box::new(value))
+    }
 }
 
 impl StorageLayerFactory {
@@ -75,7 +81,7 @@ pub enum TenantStorageLayer {
 }
 
 impl TenantStorageLayer {
-    /// Creates the tenant S3 bucket
+    /// Creates the tenant storage bucket
     #[tracing::instrument(skip(self))]
     pub async fn create_bucket(&self) -> Result<(), StorageLayerError> {
         match self {
@@ -83,7 +89,7 @@ impl TenantStorageLayer {
         }
     }
 
-    /// Deletes the tenant S3 bucket
+    /// Deletes the tenant storage bucket
     #[tracing::instrument(skip(self))]
     pub async fn delete_bucket(&self) -> Result<(), StorageLayerError> {
         match self {
@@ -136,11 +142,14 @@ impl TenantStorageLayer {
         }
     }
 
-    /// Applies CORS rules for a bucket
+    /// Sets the allowed CORS origins for accessing the storage from the frontend
     #[tracing::instrument(skip(self))]
-    pub async fn add_bucket_cors(&self, origins: Vec<String>) -> Result<(), StorageLayerError> {
+    pub async fn set_bucket_cors_origins(
+        &self,
+        origins: Vec<String>,
+    ) -> Result<(), StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.add_bucket_cors(origins).await,
+            TenantStorageLayer::S3(layer) => layer.set_bucket_cors_origins(origins).await,
         }
     }
 
@@ -162,28 +171,23 @@ impl TenantStorageLayer {
 }
 
 /// Internal trait defining required async implementations for a storage backend
-pub(crate) trait StorageLayer {
-    /// Creates the tenant S3 bucket
+pub(crate) trait StorageLayerImpl {
     async fn create_bucket(&self) -> Result<(), StorageLayerError>;
 
-    /// Deletes the tenant S3 bucket
     async fn delete_bucket(&self) -> Result<(), StorageLayerError>;
 
-    /// Create a presigned file upload URL
     async fn create_presigned(
         &self,
         key: &str,
         size: i64,
     ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError>;
 
-    /// Create a presigned file download URL
     async fn create_presigned_download(
         &self,
         key: &str,
         expires_in: Duration,
     ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError>;
 
-    /// Uploads a file to the S3 bucket for the tenant
     async fn upload_file(
         &self,
         key: &str,
@@ -191,16 +195,12 @@ pub(crate) trait StorageLayer {
         body: Bytes,
     ) -> Result<(), StorageLayerError>;
 
-    /// Add the SNS notification to a bucket
     async fn add_bucket_notifications(&self, sns_arn: &str) -> Result<(), StorageLayerError>;
 
-    /// Applies CORS rules for a bucket
-    async fn add_bucket_cors(&self, origins: Vec<String>) -> Result<(), StorageLayerError>;
+    async fn set_bucket_cors_origins(&self, origins: Vec<String>) -> Result<(), StorageLayerError>;
 
-    /// Deletes the S3 file
     async fn delete_file(&self, key: &str) -> Result<(), StorageLayerError>;
 
-    /// Gets a byte stream for a file from S3
     async fn get_file(&self, key: &str) -> Result<FileStream, StorageLayerError>;
 }
 

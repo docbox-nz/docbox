@@ -50,15 +50,15 @@ pub async fn delete_generated_files(
                 let file_id = file.file_id;
                 let file_key = file.file_key.to_string();
 
-                debug!(%id, %file_id, %file_key, "uploading file to s3",);
+                debug!(%id, %file_id, %file_key, "deleting file from storage");
 
-                // Delete file from S3
+                // Delete file from storage
                 if let Err(error) = storage.delete_file(&file_key).await {
                     error!(%id, %file_id, %file_key, ?error, "failed to delete generated file");
                     return Err(error);
                 }
 
-                debug!("deleted file from s3");
+                debug!("deleted file from storage");
                 Ok(id)
             }
         })
@@ -96,7 +96,7 @@ pub async fn upload_generated_files(
             let span = tracing::info_span!("upload_generated_files", %file_id, %file_hash, %file_key, %file_mime);
 
             async move {
-                // Upload the file to S3
+                // Upload the file to storage
                 storage
                     .upload_file(&file_key, file_mime, queued_upload.bytes)
                     .await

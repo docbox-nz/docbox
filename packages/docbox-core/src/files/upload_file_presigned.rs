@@ -299,7 +299,7 @@ pub async fn complete_presigned(
 ) -> Result<(), PresignedUploadError> {
     let task = &mut complete.task;
 
-    // Load the file from S3
+    // Load the file from storage
     let file_bytes = storage
         .get_file(&task.file_key)
         .await

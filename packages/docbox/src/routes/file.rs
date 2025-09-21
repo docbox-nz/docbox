@@ -270,7 +270,7 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
 /// Create presigned file upload
 ///
 /// Creates a new "presigned" upload, where the file is uploaded
-/// directly to S3 [complete_presigned] is called by the client
+/// directly to storage [complete_presigned] is called by the client
 /// after it has completed its upload
 #[utoipa::path(
     post,
@@ -655,7 +655,7 @@ pub async fn get_raw(
         .ok_or(HttpFileError::UnknownFile)?;
 
     let byte_stream = storage.get_file(&file.file_key).await.map_err(|cause| {
-        tracing::error!(?cause, "failed to get file from S3");
+        tracing::error!(?cause, "failed to get file from storage");
         HttpCommonError::ServerError
     })?;
 
@@ -960,7 +960,7 @@ pub async fn get_generated_raw(
         .ok_or(HttpFileError::NoMatchingGenerated)?;
 
     let byte_stream = storage.get_file(&file.file_key).await.map_err(|cause| {
-        tracing::error!(?cause, "failed to file from S3");
+        tracing::error!(?cause, "failed to file from storage");
         HttpCommonError::ServerError
     })?;
 

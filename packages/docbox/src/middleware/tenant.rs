@@ -207,7 +207,7 @@ where
     }
 }
 
-/// Tenant S3 access
+/// Tenant storage access
 pub struct TenantStorage(pub TenantStorageLayer);
 
 impl<S> FromRequestParts<S> for TenantStorage
@@ -236,7 +236,7 @@ where
     }
 }
 
-/// Tenant S3 access
+/// Tenant events access
 pub struct TenantEvents(pub TenantEventPublisher);
 
 impl<S> FromRequestParts<S> for TenantEvents
