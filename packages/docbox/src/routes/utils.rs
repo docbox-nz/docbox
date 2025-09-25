@@ -4,12 +4,29 @@ use docbox_core::notifications::{
 };
 
 use crate::{
+    VERSION,
     error::{DynHttpError, HttpCommonError},
     extensions::max_file_size::MaxFileSizeBytes,
-    models::document_box::DocumentBoxOptions,
+    models::{document_box::DocumentBoxOptions, utils::DocboxServerResponse},
 };
 
 pub const UTILS_TAG: &str = "Utils";
+
+/// Server status
+///
+/// Request basic details about the server
+#[utoipa::path(
+    get,
+    operation_id = "server_details",
+    tag = UTILS_TAG,
+    path = "/server-details",
+    responses(
+        (status = 200, description = "Got server details successfully", body = DocboxServerResponse)
+    )
+)]
+pub async fn server_details() -> Json<DocboxServerResponse> {
+    Json(DocboxServerResponse { version: VERSION })
+}
 
 /// Health check
 ///

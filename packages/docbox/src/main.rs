@@ -37,6 +37,9 @@ mod middleware;
 mod models;
 pub mod routes;
 
+/// The server version extracted from the Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Default server address when not specified
 const DEFAULT_SERVER_ADDRESS: SocketAddr =
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8080));

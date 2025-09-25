@@ -19,6 +19,7 @@ pub fn router() -> Router {
         .nest("/box", document_box_router())
         .route("/options", get(utils::get_options))
         .route("/health", get(utils::health))
+        .route("/server-details", get(utils::server_details))
 }
 
 /// Routes for /admin/

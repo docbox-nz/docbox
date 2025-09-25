@@ -11,7 +11,7 @@
       "name": "MIT",
       "url": "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md"
     },
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "paths": {
     "/admin/boxes": {
@@ -712,7 +712,7 @@
           "File"
         ],
         "summary": "Create presigned file upload",
-        "description": "Creates a new \"presigned\" upload, where the file is uploaded\ndirectly to S3 [complete_presigned] is called by the client\nafter it has completed its upload",
+        "description": "Creates a new \"presigned\" upload, where the file is uploaded\ndirectly to storage [complete_presigned] is called by the client\nafter it has completed its upload",
         "operationId": "file_create_presigned",
         "parameters": [
           {
@@ -3520,6 +3520,28 @@
           }
         }
       }
+    },
+    "/server-details": {
+      "get": {
+        "tags": [
+          "Utils"
+        ],
+        "summary": "Server status",
+        "description": "Request basic details about the server",
+        "operationId": "server_details",
+        "responses": {
+          "200": {
+            "description": "Got server details successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocboxServerResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3700,6 +3722,17 @@
             "format": "int32",
             "description": "Size of the file being uploaded",
             "minimum": 1
+          }
+        }
+      },
+      "DocboxServerResponse": {
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
           }
         }
       },
@@ -4877,7 +4910,7 @@
           {
             "type": "number",
             "format": "float",
-            "description": "OpenSearch uses float scoring"
+            "description": "OpenSearch and database use float scoring"
           }
         ]
       },
