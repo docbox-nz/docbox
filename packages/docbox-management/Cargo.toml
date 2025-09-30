@@ -34,9 +34,5 @@ thiserror.workspace = true
 # AWS configuration
 aws-config.workspace = true
 
-tokio.workspace = true
-reqwest.workspace = true
-
-
 # Random for random password generation
 rand = "=0.8.5"
