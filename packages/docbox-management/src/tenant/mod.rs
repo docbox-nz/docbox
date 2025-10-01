@@ -1,8 +1,6 @@
 use docbox_database::models::tenant::TenantId;
 use serde::{Deserialize, Serialize};
 
-use crate::tenant::migrate_tenant::MigrateTenantError;
-
 pub mod create_tenant;
 pub mod delete_tenant;
 pub mod get_pending_tenant_migrations;

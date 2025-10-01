@@ -27,6 +27,10 @@ pub enum RebuildTenantIndexError {
     Database(#[from] DbErr),
     #[error(transparent)]
     Search(#[from] SearchError),
+    #[error(transparent)]
+    WriteIndexData(std::io::Error),
+    #[error(transparent)]
+    SerializeIndexData(serde_json::Error),
 }
 
 /// Rebuild the search index for the tenant based on that
@@ -42,10 +46,11 @@ pub async fn rebuild_tenant_index(
     tracing::debug!("all data loaded: {}", index_data.len());
 
     {
-        let serialized = serde_json::to_string(&index_data).unwrap();
+        let serialized = serde_json::to_string(&index_data)
+            .map_err(RebuildTenantIndexError::SerializeIndexData)?;
         tokio::fs::write("index_data.json", serialized)
             .await
-            .unwrap();
+            .map_err(RebuildTenantIndexError::WriteIndexData)?;
     }
 
     apply_rebuilt_tenant_index(search, index_data).await?;
