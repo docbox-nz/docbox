@@ -5,6 +5,7 @@ use sqlx::{postgres::PgQueryResult, prelude::FromRow};
 use utoipa::ToSchema;
 
 pub type DocumentBoxScopeRaw = String;
+pub type DocumentBoxScopeRawRef<'a> = &'a str;
 
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
 pub struct DocumentBox {
@@ -28,13 +29,6 @@ impl<T> WithScope<T> {
 }
 
 impl DocumentBox {
-    /// Find all document boxes within a specific tenant
-    pub async fn all(db: impl DbExecutor<'_>) -> DbResult<Vec<DocumentBox>> {
-        sqlx::query_as(r#"SELECT * FROM "docbox_boxes""#)
-            .fetch_all(db)
-            .await
-    }
-
     /// Get a page from the document boxes list
     pub async fn query(
         db: impl DbExecutor<'_>,
@@ -43,8 +37,8 @@ impl DocumentBox {
     ) -> DbResult<Vec<DocumentBox>> {
         sqlx::query_as(
             r#"
-            SELECT * FROM "docbox_boxes" 
-            ORDER BY "created_at" DESC 
+            SELECT * FROM "docbox_boxes"
+            ORDER BY "created_at" DESC
             OFFSET $1 LIMIT $2"#,
         )
         .bind(offset as i64)

@@ -1941,6 +1941,7 @@ dependencies = [
  "docbox-search",
  "docbox-secrets",
  "docbox-storage",
+ "futures",
  "rand 0.8.5",
  "serde",
  "serde_json",

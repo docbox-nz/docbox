@@ -18,6 +18,7 @@ pub use sqlx::PgExecutor as DbExecutor;
 pub mod create;
 pub mod migrations;
 pub mod models;
+pub mod utils;
 
 /// Type of the database connection pool
 pub type DbPool = PgPool;

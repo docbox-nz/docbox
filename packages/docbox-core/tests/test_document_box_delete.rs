@@ -32,7 +32,7 @@ async fn test_delete_document_box() {
 
     _ = events_rx.recv().await.unwrap();
 
-    delete_document_box(&db, &search, &storage, &events, "test".to_string())
+    delete_document_box(&db, &search, &storage, &events, "test")
         .await
         .unwrap();
 
@@ -60,7 +60,7 @@ async fn test_delete_unknown_document_box() {
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
 
-    let err = delete_document_box(&db, &search, &storage, &events, "test".to_string())
+    let err = delete_document_box(&db, &search, &storage, &events, "test")
         .await
         .unwrap_err();
 
@@ -111,7 +111,7 @@ async fn test_delete_document_box_deletes_children() {
 
     _ = events_rx.recv().await.unwrap();
 
-    delete_document_box(&db, &search, &storage, &events, "test".to_string())
+    delete_document_box(&db, &search, &storage, &events, "test")
         .await
         .unwrap();
 

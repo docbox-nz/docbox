@@ -11,6 +11,7 @@ use super::{
 };
 use aws_config::SdkConfig;
 use docbox_database::DbTransaction;
+use docbox_database::models::document_box::DocumentBoxScopeRawRef;
 use docbox_database::models::file::FileId;
 use docbox_database::models::{
     document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant,
@@ -237,6 +238,8 @@ impl SearchIndex for OpenSearchIndex {
                 tracing::error!(?error, "failed to delete index");
                 OpenSearchSearchError::DeleteIndex
             })?;
+
+        // TODO: Gracefully handle 404 from already deleted index
 
         Ok(())
     }
@@ -536,7 +539,7 @@ impl SearchIndex for OpenSearchIndex {
         Ok(())
     }
 
-    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRawRef<'_>) -> Result<(), SearchError> {
         self.client
             .delete_by_query(DeleteByQueryParts::Index(&[&self.search_index.0]))
             .body(json!({

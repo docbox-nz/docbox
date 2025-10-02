@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
-use crate::{DbPool, DbResult, models::document_box::DocumentBoxScopeRaw};
+use crate::{
+    DbPool, DbResult,
+    models::document_box::{DocumentBoxScopeRaw, DocumentBoxScopeRawRef},
+};
 
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct DbPageResult {
@@ -74,7 +77,10 @@ pub async fn search_file_pages(
     .await
 }
 
-pub async fn delete_file_pages_by_scope(db: &DbPool, scope: &DocumentBoxScopeRaw) -> DbResult<()> {
+pub async fn delete_file_pages_by_scope(
+    db: &DbPool,
+    scope: DocumentBoxScopeRawRef<'_>,
+) -> DbResult<()> {
     sqlx::query(
         r#"
         DELETE FROM "docbox_files_pages" AS "page"

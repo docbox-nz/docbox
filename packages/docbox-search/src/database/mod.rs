@@ -21,7 +21,7 @@ use docbox_database::{
     DatabasePoolCache, DbPool,
     migrations::apply_tenant_migration,
     models::{
-        document_box::DocumentBoxScopeRaw,
+        document_box::{DocumentBoxScopeRaw, DocumentBoxScopeRawRef},
         file::FileId,
         folder::FolderId,
         search::{
@@ -435,9 +435,9 @@ WITH
         Ok(())
     }
 
-    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRawRef<'_>) -> Result<(), SearchError> {
         let db = self.acquire_db().await?;
-        delete_file_pages_by_scope(&db, &scope)
+        delete_file_pages_by_scope(&db, scope)
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to delete search data by scope");

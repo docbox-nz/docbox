@@ -238,7 +238,7 @@ pub async fn delete(
     TenantEvents(events): TenantEvents,
     Path(DocumentBoxScope(scope)): Path<DocumentBoxScope>,
 ) -> HttpStatusResult {
-    delete_document_box(&db, &search, &storage, &events, scope)
+    delete_document_box(&db, &search, &storage, &events, &scope)
         .await
         .map_err(|error| match error {
             DeleteDocumentBoxError::UnknownScope => {

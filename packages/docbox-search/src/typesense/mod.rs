@@ -15,7 +15,12 @@ use crate::{
 };
 use docbox_database::{
     DbTransaction,
-    models::{document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, tenant::Tenant},
+    models::{
+        document_box::{DocumentBoxScopeRaw, DocumentBoxScopeRawRef},
+        file::FileId,
+        folder::FolderId,
+        tenant::Tenant,
+    },
 };
 use docbox_secrets::SecretManager;
 use itertools::Itertools;
@@ -202,6 +207,8 @@ impl SearchIndex for TypesenseIndex {
                 tracing::error!(?error, "failed to delete search index (response)");
                 TypesenseSearchError::DeleteIndex
             })?;
+
+        // TODO: Gracefully handle 404 from already deleted index
 
         Ok(())
     }
@@ -588,7 +595,7 @@ impl SearchIndex for TypesenseIndex {
         Ok(())
     }
 
-    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRawRef<'_>) -> Result<(), SearchError> {
         let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
         self.client

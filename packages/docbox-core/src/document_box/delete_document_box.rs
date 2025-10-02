@@ -4,7 +4,10 @@ use crate::{
 };
 use docbox_database::{
     DbErr, DbPool,
-    models::{document_box::DocumentBox, folder::Folder},
+    models::{
+        document_box::{DocumentBox, DocumentBoxScopeRawRef},
+        folder::Folder,
+    },
 };
 use docbox_search::{SearchError, TenantSearchIndex};
 use docbox_storage::TenantStorageLayer;
@@ -26,18 +29,19 @@ pub enum DeleteDocumentBoxError {
     FailedToDeleteRoot(DeleteFolderError),
 }
 
+#[tracing::instrument(skip_all, fields(scope))]
 pub async fn delete_document_box(
     db: &DbPool,
     search: &TenantSearchIndex,
     storage: &TenantStorageLayer,
     events: &TenantEventPublisher,
-    scope: String,
+    scope: DocumentBoxScopeRawRef<'_>,
 ) -> Result<(), DeleteDocumentBoxError> {
-    let document_box = DocumentBox::find_by_scope(db, &scope)
+    let document_box = DocumentBox::find_by_scope(db, &scope.to_string())
         .await?
         .ok_or(DeleteDocumentBoxError::UnknownScope)?;
 
-    let root = Folder::find_root(db, &scope).await?;
+    let root = Folder::find_root(db, &scope.to_string()).await?;
 
     if let Some(root) = root {
         // Delete root folder
@@ -45,6 +49,8 @@ pub async fn delete_document_box(
             .await
             .inspect_err(|error| tracing::error!(?error, "failed to delete bucket root folder"))
             .map_err(DeleteDocumentBoxError::FailedToDeleteRoot)?;
+    } else {
+        tracing::warn!("failed to delete document box");
     }
 
     // Delete document box

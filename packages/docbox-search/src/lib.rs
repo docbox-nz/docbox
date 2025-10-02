@@ -3,7 +3,7 @@ use chrono::Utc;
 use docbox_database::{
     DatabasePoolCache, DbTransaction,
     models::{
-        document_box::DocumentBoxScopeRaw,
+        document_box::{DocumentBoxScopeRaw, DocumentBoxScopeRawRef},
         file::FileId,
         folder::FolderId,
         tenant::Tenant,
@@ -254,7 +254,10 @@ impl TenantSearchIndex {
 
     /// Deletes all data contained within the specified `scope`
     #[tracing::instrument(skip(self))]
-    pub async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError> {
+    pub async fn delete_by_scope(
+        &self,
+        scope: DocumentBoxScopeRawRef<'_>,
+    ) -> Result<(), SearchError> {
         match self {
             TenantSearchIndex::Typesense(index) => index.delete_by_scope(scope).await,
             TenantSearchIndex::OpenSearch(index) => index.delete_by_scope(scope).await,
@@ -407,7 +410,7 @@ pub(crate) trait SearchIndex: Send + Sync + 'static {
 
     async fn delete_data(&self, id: Uuid) -> Result<(), SearchError>;
 
-    async fn delete_by_scope(&self, scope: DocumentBoxScopeRaw) -> Result<(), SearchError>;
+    async fn delete_by_scope(&self, scope: DocumentBoxScopeRawRef<'_>) -> Result<(), SearchError>;
 
     async fn get_pending_migrations(
         &self,

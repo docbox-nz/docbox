@@ -36,3 +36,5 @@ aws-config.workspace = true
 
 # Random for random password generation
 rand = "=0.8.5"
+
+futures.workspace = true

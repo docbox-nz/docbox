@@ -4,6 +4,7 @@ use docbox_database::{
     create::{create_database, create_restricted_role, create_tenants_table},
     models::tenant::Tenant,
     sqlx::types::Uuid,
+    utils::DatabaseErrorExt,
 };
 use docbox_secrets::{SecretManager, SecretManagerError};
 use serde_json::json;
@@ -43,31 +44,23 @@ pub async fn is_initialized(db_provider: &impl DatabaseProvider) -> DbResult<boo
     let db = match db_provider.connect(ROOT_DATABASE_NAME).await {
         Ok(value) => value,
         Err(error) => {
-            if !error.as_database_error().is_some_and(|error| {
-                error.code().is_some_and(|code| {
-                    code.to_string().eq("3D000" /* Database does not exist */)
-                })
-            }) {
-                return Err(error);
+            if error.is_database_does_not_exist() {
+                // Database is not setup, server is not initialized
+                return Ok(false);
             }
 
-            // Database is not setup, server is not initialized
-            return Ok(false);
+            return Err(error);
         }
     };
 
     // Then query the table for a non-existent tenant to make sure its setup correctly
     if let Err(error) = Tenant::find_by_id(&db, Uuid::nil(), "__DO_NOT_USE").await {
-        if !error.as_database_error().is_some_and(|error| {
-            error.code().is_some_and(|code| {
-                code.to_string().eq("42P01" /* Table does not exist */)
-            })
-        }) {
-            return Err(error);
+        if error.is_table_does_not_exist() {
+            // Database is not setup, server is not initialized
+            return Ok(false);
         }
 
-        // Database is not setup, server is not initialized
-        return Ok(false);
+        return Err(error);
     }
 
     Ok(true)

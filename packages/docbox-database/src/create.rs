@@ -15,6 +15,17 @@ pub async fn create_database(db: &DbPool, db_name: &str) -> DbResult<()> {
     Ok(())
 }
 
+/// Delete a database.
+///
+/// Running this requires using an account with a higher level of access
+/// than the standard db user
+pub async fn delete_database(db: &DbPool, db_name: &str) -> DbResult<()> {
+    let sql = format!(r#"DROP DATABASE "{db_name}";"#);
+    sqlx::raw_sql(&sql).execute(db).await?;
+
+    Ok(())
+}
+
 /// Setup the tenants table in the main docbox database
 pub async fn create_tenants_table(db: &DbPool) -> DbResult<()> {
     sqlx::raw_sql(include_str!(
@@ -68,10 +79,21 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO {role_name};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO {role_name};
 
 -- ensure our api user can connect to the db
-GRANT CONNECT ON DATABASE "{db_name}" TO {role_name};    
+GRANT CONNECT ON DATABASE "{db_name}" TO {role_name};
     "#
     );
 
+    sqlx::raw_sql(&sql).execute(db).await?;
+
+    Ok(())
+}
+
+/// Delete a database role.
+///
+/// Running this requires using an account with a higher level of access
+/// than the standard db user
+pub async fn delete_role(db: &DbPool, role_name: &str) -> DbResult<()> {
+    let sql = format!(r#"DROP ROLE IF EXISTS "{role_name}";"#);
     sqlx::raw_sql(&sql).execute(db).await?;
 
     Ok(())
