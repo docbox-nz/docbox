@@ -22,11 +22,16 @@ use uuid::Uuid;
 
 pub mod models;
 
-pub use database::{DatabaseSearchConfig, DatabaseSearchError, DatabaseSearchIndexFactoryError};
-pub use opensearch::{OpenSearchConfig, OpenSearchIndexFactoryError, OpenSearchSearchError};
+pub use database::{
+    DatabaseSearchConfig, DatabaseSearchError, DatabaseSearchIndexFactory,
+    DatabaseSearchIndexFactoryError,
+};
+pub use opensearch::{
+    OpenSearchConfig, OpenSearchIndexFactory, OpenSearchIndexFactoryError, OpenSearchSearchError,
+};
 pub use typesense::{
-    TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseIndexFactoryError,
-    TypesenseSearchConfig, TypesenseSearchError,
+    TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseIndexFactory,
+    TypesenseIndexFactoryError, TypesenseSearchConfig, TypesenseSearchError,
 };
 
 mod database;
@@ -163,6 +168,16 @@ impl TenantSearchIndex {
             TenantSearchIndex::Typesense(index) => index.create_index().await,
             TenantSearchIndex::OpenSearch(index) => index.create_index().await,
             TenantSearchIndex::Database(index) => index.create_index().await,
+        }
+    }
+
+    /// Checks if the tenant search index exists
+    #[tracing::instrument(skip(self))]
+    pub async fn index_exists(&self) -> Result<bool, SearchError> {
+        match self {
+            TenantSearchIndex::Typesense(index) => index.index_exists().await,
+            TenantSearchIndex::OpenSearch(index) => index.index_exists().await,
+            TenantSearchIndex::Database(index) => index.index_exists().await,
         }
     }
 
@@ -383,6 +398,8 @@ impl TenantSearchIndex {
 
 pub(crate) trait SearchIndex: Send + Sync + 'static {
     async fn create_index(&self) -> Result<(), SearchError>;
+
+    async fn index_exists(&self) -> Result<bool, SearchError>;
 
     async fn delete_index(&self) -> Result<(), SearchError>;
 

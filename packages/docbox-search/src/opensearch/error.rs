@@ -16,6 +16,8 @@ pub enum OpenSearchIndexFactoryError {
 pub enum OpenSearchSearchError {
     #[error("failed to create index")]
     CreateIndex,
+    #[error("failed to get index")]
+    GetIndex,
     #[error("failed to delete index")]
     DeleteIndex,
     #[error("failed to search index")]

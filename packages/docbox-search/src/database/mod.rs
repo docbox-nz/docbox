@@ -111,6 +111,14 @@ impl SearchIndex for DatabaseSearchIndex {
         Ok(())
     }
 
+    async fn index_exists(&self) -> Result<bool, SearchError> {
+        // Since "index_exists" is used by the management interface to detect
+        // if the index has been already created, in this case we want to always
+        // report false so that it doesn't think the index exists
+        // (Even though if the tenant exists then the index exists)
+        Ok(false)
+    }
+
     async fn delete_index(&self) -> Result<(), SearchError> {
         // No-op
         Ok(())

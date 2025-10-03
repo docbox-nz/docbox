@@ -16,6 +16,7 @@ use docbox_database::models::file::FileId;
 use docbox_database::models::{
     document_box::DocumentBoxScopeRaw, folder::FolderId, tenant::Tenant,
 };
+use opensearch::indices::IndicesGetParts;
 use opensearch::{
     DeleteByQueryParts, OpenSearch, SearchParts,
     http::{
@@ -25,6 +26,7 @@ use opensearch::{
     },
     indices::{IndicesCreateParts, IndicesDeleteParts},
 };
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::skip_serializing_none;
@@ -225,6 +227,31 @@ impl SearchIndex for OpenSearchIndex {
         tracing::debug!("open search response {response:?}");
 
         Ok(())
+    }
+
+    async fn index_exists(&self) -> Result<bool, SearchError> {
+        // Delete index for files
+        let response = self
+            .client
+            .indices()
+            .get(IndicesGetParts::Index(&[&self.search_index.0]))
+            .send()
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to get index");
+                OpenSearchSearchError::GetIndex
+            })?;
+
+        if response.status_code() == StatusCode::NOT_FOUND {
+            return Ok(false);
+        }
+
+        response.error_for_status_code().map_err(|error| {
+            tracing::error!(?error, "failed to get index");
+            OpenSearchSearchError::GetIndex
+        })?;
+
+        Ok(true)
     }
 
     async fn delete_index(&self) -> Result<(), SearchError> {

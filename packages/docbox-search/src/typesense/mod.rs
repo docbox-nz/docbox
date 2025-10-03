@@ -24,6 +24,7 @@ use docbox_database::{
 };
 use docbox_secrets::SecretManager;
 use itertools::Itertools;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{fmt::Debug, sync::Arc};
@@ -185,6 +186,35 @@ impl SearchIndex for TypesenseIndex {
             })?;
 
         Ok(())
+    }
+
+    async fn index_exists(&self) -> Result<bool, SearchError> {
+        let api_key = self.client_data.api_key_provider.get_api_key().await?;
+
+        let response = self
+            .client
+            .get(format!(
+                "{}/collections/{}",
+                self.client_data.base_url, self.index
+            ))
+            .header("x-typesense-api-key", api_key)
+            .send()
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to get search index (io)");
+                TypesenseSearchError::GetIndex
+            })?;
+
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(false);
+        }
+
+        response.error_for_status().map_err(|error| {
+            tracing::error!(?error, "failed to get search index (response)");
+            TypesenseSearchError::GetIndex
+        })?;
+
+        Ok(true)
     }
 
     async fn delete_index(&self) -> Result<(), SearchError> {
@@ -825,15 +855,16 @@ fn create_search_filters(
 
     // Filter to children of allowed folders
     if let Some(folder_children) = folder_children
-        && !folder_children.is_empty() {
-            let ids = folder_children
-                .into_iter()
-                // No need to escape UUIDs
-                .map(|value| value.to_string())
-                .join(", ");
+        && !folder_children.is_empty()
+    {
+        let ids = folder_children
+            .into_iter()
+            // No need to escape UUIDs
+            .map(|value| value.to_string())
+            .join(", ");
 
-            filter_parts.push(format!("folder_id:=[{ids}]"));
-        }
+        filter_parts.push(format!("folder_id:=[{ids}]"));
+    }
 
     if let Some(range) = query.created_at.as_ref() {
         if let Some(start) = range.start {
