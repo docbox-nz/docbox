@@ -1,8 +1,11 @@
 use docbox_core::tenant::create_tenant::InitTenantError;
 use docbox_database::{
-    DbErr, DbPool, ROOT_DATABASE_NAME,
-    create::{create_database, create_restricted_role},
+    DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
+    create::{
+        check_database_exists, check_database_role_exists, create_database, create_restricted_role,
+    },
     models::tenant::{Tenant, TenantId},
+    utils::DatabaseErrorExt,
 };
 use docbox_search::SearchIndexFactory;
 use docbox_secrets::{SecretManager, SecretManagerError};
@@ -138,6 +141,21 @@ pub async fn create_tenant(
     Ok(tenant)
 }
 
+/// Helper to check if a tenant database already exists
+/// (Used to warn against duplicate creation when performing validation)
+#[tracing::instrument(skip(db_provider))]
+pub async fn is_tenant_database_existing(
+    db_provider: &impl DatabaseProvider,
+    db_name: &str,
+) -> DbResult<bool> {
+    // Connect to the "postgres" database to use while creating the tenant database
+    let db_postgres = db_provider.connect("postgres").await?;
+    check_database_exists(&db_postgres, db_name).await
+}
+
+/// Initializes the creation of a tenant database, if the database
+/// already exists that silently passes. Returns a [DbPool] to the
+/// tenant database
 #[tracing::instrument(skip(db_provider))]
 pub async fn initialize_tenant_database(
     db_provider: &impl DatabaseProvider,
@@ -151,12 +169,10 @@ pub async fn initialize_tenant_database(
 
     // Create the tenant database
     if let Err(error) = create_database(&db_postgres, db_name).await
-        && !error
-            .as_database_error()
-            .is_some_and(|err| err.code().is_some_and(|code| code.to_string().eq("42P04")))
-        {
-            return Err(CreateTenantError::CreateTenantDatabase(error));
-        }
+        && !error.is_database_exists()
+    {
+        return Err(CreateTenantError::CreateTenantDatabase(error));
+    }
 
     // Connect to the tenant database
     let tenant_db = db_provider
@@ -165,6 +181,18 @@ pub async fn initialize_tenant_database(
         .map_err(CreateTenantError::ConnectTenantDatabase)?;
 
     Ok(tenant_db)
+}
+
+/// Helper to check if a tenant database role already exists
+/// (Used to warn against duplicate creation when performing validation)
+#[tracing::instrument(skip(db_provider))]
+pub async fn is_tenant_database_role_existing(
+    db_provider: &impl DatabaseProvider,
+    role_name: &str,
+) -> DbResult<bool> {
+    // Connect to the "postgres" database to use while creating the tenant database
+    let db_postgres = db_provider.connect("postgres").await?;
+    check_database_role_exists(&db_postgres, role_name).await
 }
 
 /// Initializes a tenant db role that the docbox API will use when accessing
@@ -182,6 +210,19 @@ pub async fn initialize_tenant_db_role(
         .map_err(CreateTenantError::CreateTenantRole)?;
 
     Ok(())
+}
+
+/// Helper to check if a tenant database role secret already exists
+/// (Used to warn against duplicate creation when performing validation)
+#[tracing::instrument(skip(secrets))]
+pub async fn is_tenant_database_role_secret_existing(
+    secrets: &SecretManager,
+    secret_name: &str,
+) -> Result<bool, SecretManagerError> {
+    secrets
+        .get_secret(secret_name)
+        .await
+        .map(|value| value.is_some())
 }
 
 /// Initializes and stores the secret for the tenant database access

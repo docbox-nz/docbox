@@ -15,6 +15,26 @@ pub async fn create_database(db: &DbPool, db_name: &str) -> DbResult<()> {
     Ok(())
 }
 
+/// Check if a database with the provided `db_name` exists
+pub async fn check_database_exists(db: &DbPool, db_name: &str) -> DbResult<bool> {
+    let result = sqlx::query("SELECT 1 FROM pg_database WHERE datname = $1")
+        .bind(db_name)
+        .fetch_optional(db)
+        .await?;
+
+    Ok(result.is_some())
+}
+
+/// Check if a database role with the provided `role_name` exists
+pub async fn check_database_role_exists(db: &DbPool, role_name: &str) -> DbResult<bool> {
+    let result = sqlx::query("SELECT 1 FROM pg_roles WHERE rolname = $1")
+        .bind(role_name)
+        .fetch_optional(db)
+        .await?;
+
+    Ok(result.is_some())
+}
+
 /// Delete a database.
 ///
 /// Running this requires using an account with a higher level of access
