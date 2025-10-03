@@ -89,6 +89,14 @@ impl TenantStorageLayer {
         }
     }
 
+    /// Checks if the bucket exists
+    #[tracing::instrument(skip(self))]
+    pub async fn bucket_exists(&self) -> Result<bool, StorageLayerError> {
+        match self {
+            TenantStorageLayer::S3(layer) => layer.bucket_exists().await,
+        }
+    }
+
     /// Deletes the tenant storage bucket
     #[tracing::instrument(skip(self))]
     pub async fn delete_bucket(&self) -> Result<(), StorageLayerError> {
@@ -173,6 +181,8 @@ impl TenantStorageLayer {
 /// Internal trait defining required async implementations for a storage backend
 pub(crate) trait StorageLayerImpl {
     async fn create_bucket(&self) -> Result<(), StorageLayerError>;
+
+    async fn bucket_exists(&self) -> Result<bool, StorageLayerError>;
 
     async fn delete_bucket(&self) -> Result<(), StorageLayerError>;
 

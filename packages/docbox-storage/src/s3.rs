@@ -5,7 +5,7 @@ use aws_sdk_s3::{
     error::SdkError,
     operation::{
         create_bucket::CreateBucketError, delete_bucket::DeleteBucketError,
-        delete_object::DeleteObjectError, get_object::GetObjectError,
+        delete_object::DeleteObjectError, get_object::GetObjectError, head_bucket::HeadBucketError,
         put_bucket_cors::PutBucketCorsError,
         put_bucket_notification_configuration::PutBucketNotificationConfigurationError,
         put_object::PutObjectError,
@@ -164,6 +164,10 @@ pub enum S3StorageError {
     #[error("failed to delete storage bucket")]
     DeleteBucket(SdkError<DeleteBucketError>),
 
+    /// Failed to head a bucket
+    #[error("failed to get storage bucket")]
+    HeadBucket(SdkError<HeadBucketError>),
+
     /// Failed to store a file in a bucket
     #[error("failed to store file object")]
     PutObject(SdkError<PutObjectError>),
@@ -247,6 +251,28 @@ impl StorageLayerImpl for S3StorageLayer {
         }
 
         Ok(())
+    }
+
+    async fn bucket_exists(&self) -> Result<bool, StorageLayerError> {
+        if let Err(error) = self
+            .client
+            .head_bucket()
+            .bucket(&self.bucket_name)
+            .send()
+            .await
+        {
+            // Handle not found error (In this case its an indicator and not an error)
+            if error
+                .as_service_error()
+                .is_some_and(|error| error.is_not_found())
+            {
+                return Ok(false);
+            }
+
+            return Err(S3StorageError::HeadBucket(error).into());
+        }
+
+        Ok(true)
     }
 
     async fn delete_bucket(&self) -> Result<(), StorageLayerError> {
