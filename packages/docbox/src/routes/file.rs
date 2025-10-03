@@ -108,8 +108,8 @@ pub async fn upload(
         })?
         .ok_or(HttpFolderError::UnknownTargetFolder)?;
 
-    if let Some(fixed_id) = req.fixed_id {
-        if File::find(&db, &scope, fixed_id)
+    if let Some(fixed_id) = req.fixed_id
+        && File::find(&db, &scope, fixed_id)
             .await
             .map_err(|cause| {
                 tracing::error!(?cause, "failed to check for duplicate files");
@@ -119,7 +119,6 @@ pub async fn upload(
         {
             return Err(DynHttpError::from(HttpFileError::FileIdInUse));
         }
-    }
 
     let content_type = req.mime.or(req.file.metadata.content_type);
 

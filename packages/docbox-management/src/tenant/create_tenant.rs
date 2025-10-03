@@ -150,14 +150,13 @@ pub async fn initialize_tenant_database(
         .map_err(CreateTenantError::ConnectPostgres)?;
 
     // Create the tenant database
-    if let Err(error) = create_database(&db_postgres, db_name).await {
-        if !error
+    if let Err(error) = create_database(&db_postgres, db_name).await
+        && !error
             .as_database_error()
             .is_some_and(|err| err.code().is_some_and(|code| code.to_string().eq("42P04")))
         {
             return Err(CreateTenantError::CreateTenantDatabase(error));
         }
-    }
 
     // Connect to the tenant database
     let tenant_db = db_provider

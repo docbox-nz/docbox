@@ -314,12 +314,11 @@ impl WebsiteMetaService {
                     let image_url = resolve_full_url(url, &image).ok()?;
 
                     // Check we are allowed to access the URL if its absolute
-                    if let ResolvedUri::Absolute(image_url) = &image_url {
-                        if !is_allowed_url::<TokioDomainResolver>(image_url).await {
+                    if let ResolvedUri::Absolute(image_url) = &image_url
+                        && !is_allowed_url::<TokioDomainResolver>(image_url).await {
                             tracing::warn!("skipping resolve image for disallowed url");
                             return None;
                         }
-                    }
 
                     let (bytes, content_type) =
                         download_image_href(&self.client, image_url).await.ok()?;

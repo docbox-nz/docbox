@@ -824,8 +824,8 @@ fn create_search_filters(
     }
 
     // Filter to children of allowed folders
-    if let Some(folder_children) = folder_children {
-        if !folder_children.is_empty() {
+    if let Some(folder_children) = folder_children
+        && !folder_children.is_empty() {
             let ids = folder_children
                 .into_iter()
                 // No need to escape UUIDs
@@ -834,7 +834,6 @@ fn create_search_filters(
 
             filter_parts.push(format!("folder_id:=[{ids}]"));
         }
-    }
 
     if let Some(range) = query.created_at.as_ref() {
         if let Some(start) = range.start {

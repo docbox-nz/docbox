@@ -14,11 +14,10 @@ pub fn init_logging_with_sentry(dsn: String) -> sentry::ClientInitGuard {
                 &Level::ERROR => {
                     // Ignore errors emitted from the docbox_web_scraper when emitting
                     // errors to sentry (These are errors caused by the upstream site)
-                    if let Some(module_path) = event.module_path() {
-                        if module_path.starts_with("docbox_web_scraper") {
+                    if let Some(module_path) = event.module_path()
+                        && module_path.starts_with("docbox_web_scraper") {
                             return sentry_tracing::EventFilter::Ignore;
                         }
-                    }
 
                     sentry_tracing::EventFilter::Event
                 }

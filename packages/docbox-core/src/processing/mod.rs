@@ -147,6 +147,6 @@ pub async fn process_file(
     }
     // No processing for this file type
     else {
-        return Ok(None);
+        Ok(None)
     }
 }

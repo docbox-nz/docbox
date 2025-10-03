@@ -75,7 +75,7 @@ pub async fn search_document_box(
 
     // Query search engine
     let results = search
-        .search_index(&[scope.clone()], request, search_folder_ids)
+        .search_index(std::slice::from_ref(&scope), request, search_folder_ids)
         .await
         .map_err(|cause| {
             tracing::error!(?cause, "failed to query search index");
