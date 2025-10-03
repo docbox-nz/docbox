@@ -37,3 +37,8 @@ bytes-utils.workspace = true
 
 # Date time
 chrono.workspace = true
+
+[dev-dependencies]
+testcontainers = { workspace = true, features = ["http_wait"] }
+testcontainers-modules = { workspace = true, features = ["postgres", "minio"] }
+tokio = { workspace = true, features = ["full"] }

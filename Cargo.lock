@@ -2000,7 +2000,10 @@ dependencies = [
  "docbox-database",
  "futures",
  "serde",
+ "testcontainers",
+ "testcontainers-modules",
  "thiserror 2.0.12",
+ "tokio",
  "tracing",
 ]
 
