@@ -1965,6 +1965,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "testcontainers",
+ "testcontainers-modules",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
