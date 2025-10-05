@@ -98,14 +98,6 @@ services:
         extra_hosts:
             - "host.docker.internal:host-gateway"
 
-    # HTTP proxy server
-    squid:
-        image: sameersbn/squid:3.5.27-2
-        ports:
-            - "3128:3128"
-        volumes:
-            - ./dev.squid.conf:/etc/squid/squid.conf
-
     # Docbox server
     docbox:
         build:
@@ -123,7 +115,6 @@ services:
             - opensearch-node1
             - opensearch-node2
             - opensearch-dashboards
-            - squid
         profiles: ["api"]
 
     # Office file converter server
