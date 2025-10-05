@@ -1,6 +1,7 @@
 use docbox_database::models::tenant::Tenant;
 
 /// Create a mock tenant for testing
+#[allow(dead_code)]
 pub fn test_tenant() -> Tenant {
     Tenant {
         id: "00000000-0000-0000-0000-000000000000".parse().unwrap(),

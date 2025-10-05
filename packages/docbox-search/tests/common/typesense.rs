@@ -10,7 +10,7 @@ use testcontainers::{
 use testcontainers_modules::testcontainers::ContainerAsync;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
 
-const TEST_API_KEY: &str = "typesensedev";
+pub const TEST_API_KEY: &str = "typesensedev";
 
 /// Create a new [Typesense](https://typesense.org/) container for testing
 pub async fn test_typesense_container() -> ContainerAsync<GenericImage> {
@@ -29,6 +29,7 @@ pub async fn test_typesense_container() -> ContainerAsync<GenericImage> {
 }
 
 /// Create a new search factory based on the provided Typesense container
+#[allow(dead_code)]
 pub async fn test_search_factory(container: &ContainerAsync<GenericImage>) -> SearchIndexFactory {
     let host = container.get_host().await.unwrap();
     let host_port = container.get_host_port_ipv4(8108).await.unwrap();
