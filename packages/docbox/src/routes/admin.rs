@@ -32,7 +32,7 @@ pub const ADMIN_TAG: &str = "Admin";
     tag = ADMIN_TAG,
     path = "/admin/boxes",
     responses(
-        (status = 201, description = "Searched successfully", body = AdminSearchResultResponse),
+        (status = 201, description = "Searched successfully", body = TenantDocumentBoxesResponse),
         (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
         (status = 409, description = "Scope already exists", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
@@ -47,17 +47,54 @@ pub async fn tenant_boxes(
     let offset = req.offset.unwrap_or(0);
     let limit = req.size.unwrap_or(100);
 
-    let document_boxes = DocumentBox::query(&db, offset, limit as u64)
-        .await
-        .map_err(|error| {
-            tracing::error!(?error, "failed to query document boxes");
-            HttpCommonError::ServerError
-        })?;
+    let (document_boxes, total) = match req.query {
+        Some(query) if !query.is_empty() => {
+            // Adjust the query to be better suited for searching
+            let mut query = query
+                // Replace wildcards with the SQL wildcard version
+                .replace("*", "%")
+                // Escape underscore literal
+                .replace("_", "\\_");
 
-    let total = DocumentBox::total(&db).await.map_err(|error| {
-        tracing::error!(?error, "failed to query document boxes total");
-        HttpCommonError::ServerError
-    })?;
+            let has_wildcard = query.chars().any(|char| matches!(char, '*' | '%'));
+
+            // Query contains no wildcards, insert a wildcard at the end for prefix matching
+            if !has_wildcard {
+                query.push('%');
+            }
+
+            let document_boxes = DocumentBox::search_query(&db, &query, offset, limit as u64)
+                .await
+                .map_err(|error| {
+                    tracing::error!(?error, "failed to query document boxes");
+                    HttpCommonError::ServerError
+                })?;
+
+            let total = DocumentBox::search_total(&db, &query)
+                .await
+                .map_err(|error| {
+                    tracing::error!(?error, "failed to query document boxes total");
+                    HttpCommonError::ServerError
+                })?;
+
+            (document_boxes, total)
+        }
+        _ => {
+            let document_boxes = DocumentBox::query(&db, offset, limit as u64)
+                .await
+                .map_err(|error| {
+                    tracing::error!(?error, "failed to query document boxes");
+                    HttpCommonError::ServerError
+                })?;
+
+            let total = DocumentBox::total(&db).await.map_err(|error| {
+                tracing::error!(?error, "failed to query document boxes total");
+                HttpCommonError::ServerError
+            })?;
+
+            (document_boxes, total)
+        }
+    };
 
     Ok(Json(TenantDocumentBoxesResponse {
         results: document_boxes,

@@ -28,6 +28,11 @@ impl<T> WithScope<T> {
     }
 }
 
+#[derive(FromRow)]
+struct CountResult {
+    count: i64,
+}
+
 impl DocumentBox {
     /// Get a page from the document boxes list
     pub async fn query(
@@ -49,15 +54,46 @@ impl DocumentBox {
 
     /// Get the total number of document boxes in the tenant
     pub async fn total(db: impl DbExecutor<'_>) -> DbResult<i64> {
-        #[derive(FromRow)]
-        struct CountResult {
-            count: i64,
-        }
-
         let result: CountResult =
             sqlx::query_as(r#"SELECT COUNT(*) as "count" FROM "docbox_boxes""#)
                 .fetch_one(db)
                 .await?;
+
+        Ok(result.count)
+    }
+
+    /// Get a page from the document boxes list based on a search query
+    pub async fn search_query(
+        db: impl DbExecutor<'_>,
+        query: &str,
+        offset: u64,
+        limit: u64,
+    ) -> DbResult<Vec<DocumentBox>> {
+        sqlx::query_as(
+            r#"
+            SELECT * FROM "docbox_boxes"
+            WHERE ($3 IS NULL OR "scope" ILIKE $3)
+            ORDER BY "created_at" DESC
+            OFFSET $1 LIMIT $2"#,
+        )
+        .bind(offset as i64)
+        .bind(limit as i64)
+        .bind(query)
+        .fetch_all(db)
+        .await
+    }
+
+    /// Get the total number of document boxes in the tenant for the specific search query
+    pub async fn search_total(db: impl DbExecutor<'_>, query: &str) -> DbResult<i64> {
+        let result: CountResult = sqlx::query_as(
+            r#"
+                SELECT COUNT(*) as "count" FROM "docbox_boxes"
+                WHERE ($1 IS NULL OR "scope" ILIKE $1)
+                "#,
+        )
+        .bind(query)
+        .fetch_one(db)
+        .await?;
 
         Ok(result.count)
     }

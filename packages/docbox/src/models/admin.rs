@@ -6,6 +6,10 @@ use utoipa::ToSchema;
 #[derive(Default, Debug, Validate, Deserialize, Serialize, ToSchema)]
 #[serde(default)]
 pub struct TenantDocumentBoxesRequest {
+    /// Optional query to search document boxes by
+    #[garde(skip)]
+    pub query: Option<String>,
+
     /// Number of items to include in the response
     #[garde(skip)]
     pub size: Option<u16>,
