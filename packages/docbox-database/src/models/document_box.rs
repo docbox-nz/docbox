@@ -47,6 +47,21 @@ impl DocumentBox {
         .await
     }
 
+    /// Get the total number of document boxes in the tenant
+    pub async fn total(db: impl DbExecutor<'_>) -> DbResult<i64> {
+        #[derive(FromRow)]
+        struct CountResult {
+            count: i64,
+        }
+
+        let result: CountResult =
+            sqlx::query_as(r#"SELECT COUNT(*) as "count" FROM "docbox_boxes""#)
+                .fetch_one(db)
+                .await?;
+
+        Ok(result.count)
+    }
+
     /// Find a specific document box by scope within a tenant
     pub async fn find_by_scope(
         db: impl DbExecutor<'_>,

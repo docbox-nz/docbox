@@ -18,4 +18,5 @@ pub struct TenantDocumentBoxesRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TenantDocumentBoxesResponse {
     pub results: Vec<DocumentBox>,
+    pub total: i64,
 }

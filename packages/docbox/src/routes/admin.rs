@@ -54,8 +54,14 @@ pub async fn tenant_boxes(
             HttpCommonError::ServerError
         })?;
 
+    let total = DocumentBox::total(&db).await.map_err(|error| {
+        tracing::error!(?error, "failed to query document boxes total");
+        HttpCommonError::ServerError
+    })?;
+
     Ok(Json(TenantDocumentBoxesResponse {
         results: document_boxes,
+        total,
     }))
 }
 
