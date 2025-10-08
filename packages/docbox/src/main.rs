@@ -1,5 +1,6 @@
 use crate::{extensions::max_file_size::MaxFileSizeBytes, middleware::api_key::ApiKeyLayer};
 use axum::{Extension, extract::DefaultBodyLimit, routing::post};
+use axum_server::tls_rustls::RustlsConfig;
 use docbox_core::{
     aws::{SqsClient, aws_config},
     background::{BackgroundTaskData, perform_background_tasks},
@@ -40,9 +41,13 @@ pub mod routes;
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Default server address when not specified
-const DEFAULT_SERVER_ADDRESS: SocketAddr =
+/// Default server address when not specified (HTTP)
+const DEFAULT_SERVER_ADDRESS_HTTP: SocketAddr =
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8080));
+
+/// Default server address when not specified (HTTPS)
+const DEFAULT_SERVER_ADDRESS_HTTPS: SocketAddr =
+    SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 8443));
 
 fn main() -> Result<(), Box<dyn Error>> {
     _ = dotenvy::dotenv();
@@ -172,11 +177,22 @@ async fn server() -> Result<(), Box<dyn Error>> {
         storage: storage_factory.clone(),
     }));
 
+    // Determine whether to use https
+    let use_https = match std::env::var("DOCBOX_USE_HTTPS") {
+        Ok(value) => value.parse::<bool>()?,
+        // Default max file size in bytes (100MB)
+        Err(_) => false,
+    };
+
     // Determine the socket address to bind against
     let server_address = std::env::var("SERVER_ADDRESS")
         .ok()
         .and_then(|value| value.parse::<SocketAddr>().ok())
-        .unwrap_or(DEFAULT_SERVER_ADDRESS);
+        .unwrap_or(if use_https {
+            DEFAULT_SERVER_ADDRESS_HTTPS
+        } else {
+            DEFAULT_SERVER_ADDRESS_HTTP
+        });
 
     // Setup app layers and extension
     let mut app = app
@@ -204,19 +220,60 @@ async fn server() -> Result<(), Box<dyn Error>> {
     #[cfg(debug_assertions)]
     let app = app.layer(tower_http::cors::CorsLayer::very_permissive());
 
-    // Bind the TCP listener for the HTTP server
-    let listener = tokio::net::TcpListener::bind(server_address).await?;
-
     // Log the startup message
     debug!("server started on {server_address}");
 
-    // Serve the app
-    axum::serve(listener, app)
-        // Attach graceful shutdown to the shutdown receiver
-        .with_graceful_shutdown(async move {
+    let handle = axum_server::Handle::default();
+
+    // Handle graceful shutdown on CTRL+C
+    tokio::spawn({
+        let handle = handle.clone();
+        async move {
             _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
+            handle.graceful_shutdown(None);
+        }
+    });
+
+    if use_https {
+        // Determine whether to use https
+        let certificate_path = match std::env::var("DOCBOX_HTTPS_CERTIFICATE_PATH") {
+            Ok(value) => value,
+            Err(_) => "docbox.cert.pem".to_string(),
+        };
+
+        let private_key_path = match std::env::var("DOCBOX_HTTPS_PRIVATE_KEY_PATH") {
+            Ok(value) => value,
+            Err(_) => "docbox.key.pem".to_string(),
+        };
+
+        if rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .is_err()
+        {
+            tracing::error!("failed install default crypto provider");
+            return Err(std::io::Error::other("failed to install default crypto provider").into());
+        }
+
+        let config = match RustlsConfig::from_pem_file(certificate_path, private_key_path).await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::error!(?error, "failed to initialize https config");
+                return Err(error.into());
+            }
+        };
+
+        // Serve the app over HTTPS
+        axum_server::bind_rustls(server_address, config)
+            .handle(handle)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        // Serve the app over HTTPS
+        axum_server::bind(server_address)
+            .handle(handle)
+            .serve(app.into_make_service())
+            .await?;
+    }
 
     Ok(())
 }

@@ -40,8 +40,14 @@ docbox-storage.workspace = true
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }
 
-# HTTP server
+# HTTP server framework
 axum = { version = "=0.8.4", features = ["multipart"] }
+
+# HTTP server implementation
+axum-server = { version = "=0.7.2", features = ["tls-rustls"]}
+
+# Crypto provider
+rustls = { version = "=0.23.32", features = ["aws-lc-rs"] }
 
 # HTTP layers for ratelimiting, CORS, and tracing
 tower-http = { version = "=0.6.6", features = ["limit", "cors", "trace"] }
