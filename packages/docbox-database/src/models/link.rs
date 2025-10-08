@@ -5,7 +5,10 @@ use super::{
 };
 use crate::{
     DbExecutor, DbResult,
-    models::folder::{WithFullPath, WithFullPathScope},
+    models::{
+        folder::{WithFullPath, WithFullPathScope},
+        shared::CountResult,
+    },
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -229,7 +232,7 @@ impl Link {
     ) -> DbResult<Vec<LinkWithScope>> {
         sqlx::query_as(
             r#"
-            SELECT 
+            SELECT
             "link".*,
             "folder"."document_box" AS "scope"
             FROM "docbox_links" AS "link"
@@ -273,21 +276,21 @@ impl Link {
             r#"
             WITH RECURSIVE "folder_hierarchy" AS (
                 SELECT "id", "name", "folder_id", 0 AS "depth"
-                FROM "docbox_links" 
-                WHERE "docbox_links"."id" = $1 
+                FROM "docbox_links"
+                WHERE "docbox_links"."id" = $1
                 UNION ALL (
-                    SELECT 
-                        "folder"."id", 
-                        "folder"."name", 
-                        "folder"."folder_id", 
+                    SELECT
+                        "folder"."id",
+                        "folder"."name",
+                        "folder"."folder_id",
                         "folder_hierarchy"."depth" + 1 as "depth"
-                    FROM "docbox_folders" AS "folder" 
+                    FROM "docbox_folders" AS "folder"
                     INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
                 )
-            ) 
-            CYCLE "id" SET "looped" USING "traversal_path" 
-            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name" 
-            FROM "folder_hierarchy" 
+            )
+            CYCLE "id" SET "looped" USING "traversal_path"
+            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
+            FROM "folder_hierarchy"
             WHERE "folder_hierarchy"."id" <> $1
             ORDER BY "folder_hierarchy"."depth" DESC
         "#,
@@ -332,7 +335,7 @@ impl Link {
         sqlx::query_as(
             r#"
         -- Recursively resolve the link paths for each link creating a JSON array for the path
-        WITH RECURSIVE 
+        WITH RECURSIVE
             "input_links" AS (
                 SELECT link_id, document_box
                 FROM UNNEST($1::text[], $2::uuid[]) AS t(document_box, link_id)
@@ -364,38 +367,38 @@ impl Link {
                 SELECT "link_id", "path", ROW_NUMBER() OVER (PARTITION BY "link_id" ORDER BY "depth" DESC) AS "rn"
                 FROM "folder_hierarchy"
             )
-        SELECT 
-            -- link itself 
+        SELECT
+            -- link itself
             "link".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
             "mu"."image_id" AS "lmb_image_id" ,
             -- link path from path lookup
             "fp"."path" AS "full_path",
             -- Include document box in response
-            "folder"."document_box" AS "document_box" 
+            "folder"."document_box" AS "document_box"
         FROM "docbox_links" AS "link"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "link"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "link"."created_by" = "cu"."id"
         -- Join on the parent folder
         INNER JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "link_id", "created_at" DESC 
-        ) AS "ehl" ON "link"."id" = "ehl"."link_id" 
+            ORDER BY "link_id", "created_at" DESC
+        ) AS "ehl" ON "link"."id" = "ehl"."link_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         -- Join on the resolved folder path
         LEFT JOIN "folder_paths" "fp" ON "link".id = "fp"."link_id" AND "fp".rn = 1
         -- Join on the input files for filtering
@@ -449,36 +452,36 @@ impl Link {
             SELECT "link_id", "path", ROW_NUMBER() OVER (PARTITION BY "link_id" ORDER BY "depth" DESC) AS "rn"
             FROM "folder_hierarchy"
         )
-        SELECT 
-            -- link itself 
+        SELECT
+            -- link itself
             "link".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
             "mu"."image_id" AS "lmb_image_id" ,
             -- link path from path lookup
-            "fp"."path" AS "full_path" 
+            "fp"."path" AS "full_path"
         FROM "docbox_links" AS "link"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "link"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "link"."created_by" = "cu"."id"
         -- Join on the parent folder
         INNER JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "link_id", "created_at" DESC 
-        ) AS "ehl" ON "link"."id" = "ehl"."link_id" 
+            ORDER BY "link_id", "created_at" DESC
+        ) AS "ehl" ON "link"."id" = "ehl"."link_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         -- Join on the resolved folder path
         LEFT JOIN "folder_paths" "fp" ON "link".id = "fp"."link_id" AND "fp".rn = 1
         WHERE "link"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2"#,
@@ -496,32 +499,32 @@ impl Link {
     ) -> DbResult<Vec<LinkWithExtra>> {
         sqlx::query_as(
             r#"
-        SELECT 
+        SELECT
             -- Link itself details
             "link".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
-            "mu"."image_id" AS "lmb_image_id" 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
+            "mu"."image_id" AS "lmb_image_id"
         FROM "docbox_links" AS "link"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "link"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "link"."created_by" = "cu"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN LATERAL (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "link_id", "created_at" DESC 
-        ) AS "ehl" ON "link"."id" = "ehl"."link_id" 
+            ORDER BY "link_id", "created_at" DESC
+        ) AS "ehl" ON "link"."id" = "ehl"."link_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         WHERE "link"."folder_id" = $1"#,
         )
         .bind(parent_id)
@@ -536,39 +539,49 @@ impl Link {
     ) -> DbResult<Option<LinkWithExtra>> {
         sqlx::query_as(
             r#"
-        SELECT 
+        SELECT
             -- Link itself details
             "link".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
-            "mu"."image_id" AS "lmb_image_id" 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
+            "mu"."image_id" AS "lmb_image_id"
         FROM "docbox_links" AS "link"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "link"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "link"."created_by" = "cu"."id"
         -- Join on the parent folder
         INNER JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "link_id", "created_at" DESC 
-        ) AS "ehl" ON "link"."id" = "ehl"."link_id" 
+            ORDER BY "link_id", "created_at" DESC
+        ) AS "ehl" ON "link"."id" = "ehl"."link_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         WHERE "link"."id" = $1 AND "folder"."document_box" = $2"#,
         )
         .bind(link_id)
         .bind(scope)
         .fetch_optional(db)
         .await
+    }
+
+    /// Get the total number of folders in the tenant
+    pub async fn total_count(db: impl DbExecutor<'_>) -> DbResult<i64> {
+        let count_result: CountResult =
+            sqlx::query_as(r#"SELECT COUNT(*) AS "count" FROM "docbox_links""#)
+                .fetch_one(db)
+                .await?;
+
+        Ok(count_result.count)
     }
 }

@@ -14,7 +14,7 @@ use crate::{
     models::{
         document_box::DocumentBoxScopeRawRef,
         folder::{WithFullPath, WithFullPathScope},
-        shared::TotalSizeResult,
+        shared::{CountResult, TotalSizeResult},
     },
 };
 
@@ -743,6 +743,16 @@ impl File {
         .bind(parent_id)
         .fetch_all(db)
         .await
+    }
+
+    /// Get the total number of files in the tenant
+    pub async fn total_count(db: impl DbExecutor<'_>) -> DbResult<i64> {
+        let count_result: CountResult =
+            sqlx::query_as(r#"SELECT COUNT(*) AS "count" FROM "docbox_files""#)
+                .fetch_one(db)
+                .await?;
+
+        Ok(count_result.count)
     }
 
     /// Get the total "size" of files within the current tenant, this does not include

@@ -14,7 +14,7 @@ use super::{
     link::{Link, LinkWithExtra},
     user::{User, UserId},
 };
-use crate::{DbExecutor, DbPool, DbResult};
+use crate::{DbExecutor, DbPool, DbResult, models::shared::CountResult};
 
 pub type FolderId = Uuid;
 
@@ -239,7 +239,7 @@ impl Folder {
         WITH RECURSIVE "folder_hierarchy" AS (
             SELECT "id", "folder_id"
             FROM "docbox_folders"
-            WHERE "docbox_folders"."id" = $1 
+            WHERE "docbox_folders"."id" = $1
             UNION ALL (
                 SELECT
                     "folder"."id",
@@ -269,28 +269,28 @@ impl Folder {
             r#"
         -- Recursively collect all child folders
         WITH RECURSIVE "folder_hierarchy" AS (
-            SELECT "id", "folder_id" 
-            FROM "docbox_folders" 
-            WHERE "docbox_folders"."id" = $1 
+            SELECT "id", "folder_id"
+            FROM "docbox_folders"
+            WHERE "docbox_folders"."id" = $1
             UNION ALL (
-                SELECT 
-                    "folder"."id", 
-                    "folder"."folder_id" 
-                FROM "docbox_folders" AS "folder" 
+                SELECT
+                    "folder"."id",
+                    "folder"."folder_id"
+                FROM "docbox_folders" AS "folder"
                 INNER JOIN "folder_hierarchy" ON "folder"."folder_id" = "folder_hierarchy"."id"
             )
-        ) 
-        CYCLE "id" SET "looped" USING "traversal_path" 
+        )
+        CYCLE "id" SET "looped" USING "traversal_path"
         SELECT * FROM (
-            SELECT  
+            SELECT
                 -- Get counts of child tables
                 COUNT(DISTINCT "file"."id") AS "file_count",
                 COUNT(DISTINCT "link"."id") AS "link_count",
-                COUNT(DISTINCT "folder"."id") AS "folder_count" 
-            FROM "folder_hierarchy" 
+                COUNT(DISTINCT "folder"."id") AS "folder_count"
+            FROM "folder_hierarchy"
             -- Join on collections of files, links and folders
-            LEFT JOIN "docbox_files" AS "file" ON "file"."folder_id" = "folder_hierarchy"."id" 
-            LEFT JOIN "docbox_links" AS "link" ON "link"."folder_id" = "folder_hierarchy"."id" 
+            LEFT JOIN "docbox_files" AS "file" ON "file"."folder_id" = "folder_hierarchy"."id"
+            LEFT JOIN "docbox_links" AS "link" ON "link"."folder_id" = "folder_hierarchy"."id"
             LEFT JOIN "docbox_folders" AS "folder" ON "folder"."folder_id" = "folder_hierarchy"."id"
         ) AS "counts"
         "#,
@@ -317,20 +317,20 @@ impl Folder {
             WITH RECURSIVE "folder_hierarchy" AS (
                 SELECT "id", "name", "folder_id", 0 AS "depth"
                 FROM "docbox_folders"
-                WHERE "docbox_folders"."id" = $1 
+                WHERE "docbox_folders"."id" = $1
                 UNION ALL (
-                    SELECT 
-                        "folder"."id", 
-                        "folder"."name", 
-                        "folder"."folder_id", 
+                    SELECT
+                        "folder"."id",
+                        "folder"."name",
+                        "folder"."folder_id",
                         "folder_hierarchy"."depth" + 1 as "depth"
-                    FROM "docbox_folders" AS "folder" 
+                    FROM "docbox_folders" AS "folder"
                     INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
                 )
-            ) 
-            CYCLE "id" SET "looped" USING "traversal_path" 
-            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name" 
-            FROM "folder_hierarchy" 
+            )
+            CYCLE "id" SET "looped" USING "traversal_path"
+            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
+            FROM "folder_hierarchy"
             WHERE "folder_hierarchy"."id" <> $1
             ORDER BY "folder_hierarchy"."depth" DESC
         "#,
@@ -405,7 +405,7 @@ impl Folder {
         sqlx::query_as(
             r#"
             SELECT * FROM "docbox_folders"
-            WHERE "folder_id" IS NOT NULL 
+            WHERE "folder_id" IS NOT NULL
             ORDER BY "created_at" ASC
             OFFSET $1
             LIMIT $2
@@ -461,9 +461,9 @@ impl Folder {
         sqlx::query(
             r#"
             INSERT INTO "docbox_folders" (
-                "id", "name", "document_box",  "folder_id", 
-                "created_by", "created_at" 
-            ) 
+                "id", "name", "document_box",  "folder_id",
+                "created_by", "created_at"
+            )
             VALUES ($1, $2, $3, $4, $5, $6)
         "#,
         )
@@ -504,7 +504,7 @@ impl Folder {
         sqlx::query_as(
             r#"
         -- Recursively resolve the folder paths for each folder creating a JSON array for the path
-        WITH RECURSIVE 
+        WITH RECURSIVE
             "input_folders" AS (
                 SELECT folder_id, document_box
                 FROM UNNEST($1::text[], $2::uuid[]) AS t(document_box, folder_id)
@@ -536,18 +536,18 @@ impl Folder {
                 SELECT "item_id", "path", ROW_NUMBER() OVER (PARTITION BY "item_id" ORDER BY "depth" DESC) AS "rn"
                 FROM "folder_hierarchy"
             )
-        SELECT 
-            -- folder itself 
+        SELECT
+            -- folder itself
             "folder".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
             "mu"."image_id" AS "lmb_image_id" ,
             -- folder path from path lookup
             "fp"."path" AS "full_path" ,
@@ -555,17 +555,17 @@ impl Folder {
             "folder"."document_box" AS "document_box"
         FROM "docbox_folders" AS "folder"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "folder"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "folder"."created_by" = "cu"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC 
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
+            ORDER BY "folder_id", "created_at" DESC
+        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         -- Join on the resolved folder path
         LEFT JOIN "folder_paths" "fp" ON "folder".id = "fp"."item_id" AND "fp".rn = 1
         -- Join on the input files for filtering
@@ -619,34 +619,34 @@ impl Folder {
             SELECT "item_id", "path", ROW_NUMBER() OVER (PARTITION BY "item_id" ORDER BY "depth" DESC) AS "rn"
             FROM "folder_hierarchy"
         )
-        SELECT 
-            -- folder itself 
+        SELECT
+            -- folder itself
             "folder".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
             "mu"."image_id" AS "lmb_image_id" ,
             -- folder path from path lookup
-            "fp"."path" AS "full_path" 
+            "fp"."path" AS "full_path"
         FROM "docbox_folders" AS "folder"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "folder"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "folder"."created_by" = "cu"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC 
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
+            ORDER BY "folder_id", "created_at" DESC
+        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         -- Join on the resolved folder path
         LEFT JOIN "folder_paths" "fp" ON "folder".id = "fp"."item_id" AND "fp".rn = 1
         WHERE "folder"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2"#,
@@ -664,32 +664,32 @@ impl Folder {
     ) -> DbResult<Option<FolderWithExtra>> {
         sqlx::query_as(
             r#"
-        SELECT 
-            -- Folder itself 
+        SELECT
+            -- Folder itself
             "folder".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
-            "mu"."image_id" AS "lmb_image_id" 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
+            "mu"."image_id" AS "lmb_image_id"
         FROM "docbox_folders" AS "folder"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "folder"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "folder"."created_by" = "cu"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC 
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
+            ORDER BY "folder_id", "created_at" DESC
+        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         WHERE "folder"."id" = $1 AND "folder"."document_box" = $2"#,
         )
         .bind(id)
@@ -704,32 +704,32 @@ impl Folder {
     ) -> DbResult<Vec<FolderWithExtra>> {
         sqlx::query_as(
             r#"
-        SELECT 
-            -- Folder itself 
+        SELECT
+            -- Folder itself
             "folder".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
-            "mu"."image_id" AS "lmb_image_id" 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
+            "mu"."image_id" AS "lmb_image_id"
         FROM "docbox_folders" AS "folder"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "folder"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "folder"."created_by" = "cu"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
             FROM "docbox_edit_history"
             ORDER BY "folder_id", "created_at" DESC
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
+        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         WHERE "folder"."folder_id" = $1"#,
         )
         .bind(parent_id)
@@ -743,36 +743,46 @@ impl Folder {
     ) -> DbResult<Option<FolderWithExtra>> {
         sqlx::query_as(
             r#"
-        SELECT 
-            -- Folder itself 
+        SELECT
+            -- Folder itself
             "folder".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
-            "mu"."image_id" AS "lmb_image_id" 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
+            "mu"."image_id" AS "lmb_image_id"
         FROM "docbox_folders" AS "folder"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "folder"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "folder"."created_by" = "cu"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC 
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id" 
+            ORDER BY "folder_id", "created_at" DESC
+        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         WHERE "folder"."document_box" = $1 AND "folder"."folder_id" IS NULL"#,
         )
         .bind(document_box)
         .fetch_optional(db)
         .await
+    }
+
+    /// Get the total number of folders in the tenant
+    pub async fn total_count(db: impl DbExecutor<'_>) -> DbResult<i64> {
+        let count_result: CountResult =
+            sqlx::query_as(r#"SELECT COUNT(*) AS "count" FROM "docbox_folders""#)
+                .fetch_one(db)
+                .await?;
+
+        Ok(count_result.count)
     }
 }

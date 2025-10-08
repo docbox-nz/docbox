@@ -18,11 +18,14 @@ use docbox_database::{
     models::{
         document_box::{DocumentBox, WithScope},
         file::File,
+        folder::Folder,
+        link::Link,
     },
 };
 use docbox_search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem};
 use docbox_storage::StorageLayerFactory;
 use std::sync::Arc;
+use tokio::join;
 
 pub const ADMIN_TAG: &str = "Admin";
 
@@ -120,12 +123,44 @@ pub async fn tenant_boxes(
 )]
 #[tracing::instrument(skip_all)]
 pub async fn tenant_stats(TenantDb(db): TenantDb) -> HttpResult<TenantStatsResponse> {
-    let file_size = File::total_size(&db).await.map_err(|cause| {
+    let total_files_future = File::total_count(&db);
+    let total_links_future = Link::total_count(&db);
+    let total_folders_future = Folder::total_count(&db);
+    let file_size_future = File::total_size(&db);
+
+    let (total_files, total_links, total_folders, file_size) = join!(
+        total_files_future,
+        total_links_future,
+        total_folders_future,
+        file_size_future
+    );
+
+    let total_files = total_files.map_err(|cause| {
+        tracing::error!(?cause, "failed to query tenant total files");
+        HttpCommonError::ServerError
+    })?;
+
+    let total_links = total_links.map_err(|cause| {
+        tracing::error!(?cause, "failed to query tenant total links");
+        HttpCommonError::ServerError
+    })?;
+
+    let total_folders = total_folders.map_err(|cause| {
+        tracing::error!(?cause, "failed to query tenant total folders");
+        HttpCommonError::ServerError
+    })?;
+
+    let file_size = file_size.map_err(|cause| {
         tracing::error!(?cause, "failed to query tenant files size");
         HttpCommonError::ServerError
     })?;
 
-    Ok(Json(TenantStatsResponse { file_size }))
+    Ok(Json(TenantStatsResponse {
+        total_files,
+        total_folders,
+        total_links,
+        file_size,
+    }))
 }
 
 /// Admin Search

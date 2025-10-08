@@ -27,6 +27,12 @@ pub struct TenantDocumentBoxesResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TenantStatsResponse {
+    /// Total number of files within the document box
+    pub total_files: i64,
+    /// Total number of links within the document box
+    pub total_links: i64,
+    /// Total number of folders within the document box
+    pub total_folders: i64,
     /// Total size of all files within the tenant
     pub file_size: i64,
 }
