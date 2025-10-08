@@ -38,6 +38,8 @@ Files, folders, and links are organized into logical groups called **Document Bo
     - Built in support for scraping OGP metadata, favicons, and other details from links stored within
 - 🏢 Multi-Tenancy
     - Fully isolated per-tenant database design for secure data separation
+- 🔑 HTTPS support
+    - Supported for using HTTPS for server->docbox communication provided by [rustls](https://github.com/rustls/rustls)
 
 ## 📦 Use Cases
 
