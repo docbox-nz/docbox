@@ -11,7 +11,11 @@ use super::{
 };
 use crate::{
     DbExecutor, DbResult,
-    models::folder::{WithFullPath, WithFullPathScope},
+    models::{
+        document_box::DocumentBoxScopeRawRef,
+        folder::{WithFullPath, WithFullPathScope},
+        shared::TotalSizeResult,
+    },
 };
 
 pub type FileId = Uuid;
@@ -175,11 +179,11 @@ impl File {
     ) -> DbResult<Vec<FileWithScope>> {
         sqlx::query_as(
             r#"
-            SELECT 
+            SELECT
             "file".*,
-            "folder"."document_box" AS "scope" 
+            "folder"."document_box" AS "scope"
             FROM "docbox_files" "file"
-            INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id" 
+            INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
             ORDER BY "created_at" ASC
             OFFSET $1
             LIMIT $2
@@ -199,11 +203,11 @@ impl File {
     ) -> DbResult<Vec<FileWithScope>> {
         sqlx::query_as(
             r#"
-            SELECT 
+            SELECT
             "file".*,
-            "folder"."document_box" AS "scope" 
+            "folder"."document_box" AS "scope"
             FROM "docbox_files" "file"
-            INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id" 
+            INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
             WHERE "file"."mime" = $1
             ORDER BY "created_at" ASC
             OFFSET $2
@@ -353,13 +357,13 @@ impl File {
     ) -> DbResult<Vec<FileWithScope>> {
         sqlx::query_as(
             r#"
-            SELECT 
+            SELECT
                 "file".*,
                 "folder"."document_box" AS "scope"
             FROM "docbox_files" AS "file"
             INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
             WHERE "mime" IS IN $1 AND "file"."encrypted" = FALSE
-            ORDER BY "file"."created_at" ASC   
+            ORDER BY "file"."created_at" ASC
             OFFSET $2
             LIMIT $3
         "#,
@@ -401,21 +405,21 @@ impl File {
             r#"
             WITH RECURSIVE "folder_hierarchy" AS (
                 SELECT "id", "name", "folder_id", 0 AS "depth"
-                FROM "docbox_files" 
-                WHERE "docbox_files"."id" = $1 
+                FROM "docbox_files"
+                WHERE "docbox_files"."id" = $1
                 UNION ALL (
-                    SELECT 
-                        "folder"."id", 
-                        "folder"."name", 
-                        "folder"."folder_id", 
+                    SELECT
+                        "folder"."id",
+                        "folder"."name",
+                        "folder"."folder_id",
                         "folder_hierarchy"."depth" + 1 as "depth"
-                    FROM "docbox_folders" AS "folder" 
+                    FROM "docbox_folders" AS "folder"
                     INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
                 )
-            ) 
-            CYCLE "id" SET "looped" USING "traversal_path" 
-            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name" 
-            FROM "folder_hierarchy" 
+            )
+            CYCLE "id" SET "looped" USING "traversal_path"
+            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
+            FROM "folder_hierarchy"
             WHERE "folder_hierarchy"."id" <> $1
             ORDER BY "folder_hierarchy"."depth" DESC
         "#,
@@ -484,36 +488,36 @@ impl File {
             SELECT "file_id", "path", ROW_NUMBER() OVER (PARTITION BY "file_id" ORDER BY "depth" DESC) AS "rn"
             FROM "folder_hierarchy"
         )
-        SELECT 
-            -- File itself 
+        SELECT
+            -- File itself
             "file".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
             "mu"."image_id" AS "lmb_image_id" ,
             -- File path from path lookup
-            "fp"."path" AS "full_path" 
+            "fp"."path" AS "full_path"
         FROM "docbox_files" AS "file"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "file"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "file"."created_by" = "cu"."id"
         -- Join on the parent folder
         INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC 
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id" 
+            ORDER BY "file_id", "created_at" DESC
+        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         -- Join on the resolved folder path
         LEFT JOIN "folder_paths" "fp" ON "file".id = "fp"."file_id" AND "fp".rn = 1
         WHERE "file"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2"#,
@@ -540,7 +544,7 @@ impl File {
         sqlx::query_as(
             r#"
         -- Recursively resolve the file paths for each file creating a JSON array for the path
-        WITH RECURSIVE 
+        WITH RECURSIVE
             "input_files" AS (
                 SELECT file_id, document_box
                 FROM UNNEST($1::text[], $2::uuid[]) AS t(document_box, file_id)
@@ -572,38 +576,38 @@ impl File {
                 SELECT "file_id", "path", ROW_NUMBER() OVER (PARTITION BY "file_id" ORDER BY "depth" DESC) AS "rn"
                 FROM "folder_hierarchy"
             )
-        SELECT 
-            -- File itself 
+        SELECT
+            -- File itself
             "file".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
             "mu"."image_id" AS "lmb_image_id" ,
             -- File path from path lookup
             "fp"."path" AS "full_path",
             -- Include document box in response
-            "folder"."document_box" AS "document_box" 
+            "folder"."document_box" AS "document_box"
         FROM "docbox_files" AS "file"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "file"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "file"."created_by" = "cu"."id"
         -- Join on the parent folder
         INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC 
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id" 
+            ORDER BY "file_id", "created_at" DESC
+        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         -- Join on the resolved folder path
         LEFT JOIN "folder_paths" "fp" ON "file".id = "fp"."file_id" AND "fp".rn = 1
         -- Join on the input files for filtering
@@ -627,34 +631,34 @@ impl File {
     ) -> DbResult<Option<FileWithExtra>> {
         sqlx::query_as(
             r#"
-        SELECT 
-            -- File itself 
+        SELECT
+            -- File itself
             "file".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
-            "mu"."image_id" AS "lmb_image_id" 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
+            "mu"."image_id" AS "lmb_image_id"
         FROM "docbox_files" AS "file"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "file"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "file"."created_by" = "cu"."id"
         -- Join on the parent folder
         INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC 
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id" 
+            ORDER BY "file_id", "created_at" DESC
+        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         WHERE "file"."id" = $1 AND "folder"."document_box" = $2"#,
         )
         .bind(file_id)
@@ -669,32 +673,32 @@ impl File {
     ) -> DbResult<Vec<FileWithExtra>> {
         sqlx::query_as(
             r#"
-        SELECT 
-            -- File itself 
+        SELECT
+            -- File itself
             "file".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
-            "mu"."image_id" AS "lmb_image_id" 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
+            "mu"."image_id" AS "lmb_image_id"
         FROM "docbox_files" AS "file"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "file"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "file"."created_by" = "cu"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC 
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id" 
+            ORDER BY "file_id", "created_at" DESC
+        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         WHERE "file"."folder_id" = $1"#,
         )
         .bind(parent_id)
@@ -708,36 +712,72 @@ impl File {
     ) -> DbResult<Vec<FileWithExtra>> {
         sqlx::query_as(
             r#"
-        SELECT 
-            -- File itself 
+        SELECT
+            -- File itself
             "file".*,
             -- Creator user details
-            "cu"."id" AS "cb_id", 
-            "cu"."name" AS "cb_name", 
-            "cu"."image_id" AS "cb_image_id", 
+            "cu"."id" AS "cb_id",
+            "cu"."name" AS "cb_name",
+            "cu"."image_id" AS "cb_image_id",
             -- Last modified date
-            "ehl"."created_at" AS "last_modified_at", 
+            "ehl"."created_at" AS "last_modified_at",
             -- Last modified user details
-            "mu"."id" AS "lmb_id",  
-            "mu"."name" AS "lmb_name", 
-            "mu"."image_id" AS "lmb_image_id" 
+            "mu"."id" AS "lmb_id",
+            "mu"."name" AS "lmb_name",
+            "mu"."image_id" AS "lmb_image_id"
         FROM "docbox_files" AS "file"
         -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu" 
-            ON "file"."created_by" = "cu"."id" 
+        LEFT JOIN "docbox_users" AS "cu"
+            ON "file"."created_by" = "cu"."id"
         -- Join on the edit history (Latest only)
         LEFT JOIN (
             -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at" 
+            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
             FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC 
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id" 
+            ORDER BY "file_id", "created_at" DESC
+        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
         -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id" 
+        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         WHERE "file"."parent_id" = $1"#,
         )
         .bind(parent_id)
         .fetch_all(db)
         .await
+    }
+
+    /// Get the total "size" of files within the current tenant, this does not include
+    /// the size of generated files
+    pub async fn total_size(db: impl DbExecutor<'_>) -> DbResult<i64> {
+        let size_result: TotalSizeResult = sqlx::query_as(
+            r#"
+            SELECT COALESCE(SUM("file"."size"), 0) AS "total_size"
+            FROM "docbox_files" "file";
+        "#,
+        )
+        .fetch_one(db)
+        .await?;
+
+        Ok(size_result.total_size)
+    }
+
+    /// Get the total "size" of files within a specific scope, this does not include
+    /// the size of generated files
+    pub async fn total_size_within_scope(
+        db: impl DbExecutor<'_>,
+        scope: DocumentBoxScopeRawRef<'_>,
+    ) -> DbResult<i64> {
+        let size_result: TotalSizeResult = sqlx::query_as(
+            r#"
+            SELECT COALESCE(SUM("file"."size"), 0) AS "total_size"
+            FROM "docbox_files" "file"
+            INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
+            WHERE "folder"."document_box" = $1;
+        "#,
+        )
+        .bind(scope)
+        .fetch_one(db)
+        .await?;
+
+        Ok(size_result.total_size)
     }
 }

@@ -3,7 +3,7 @@
 use crate::{
     error::{HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::tenant::{TenantDb, TenantParams, TenantSearch, TenantStorage},
-    models::admin::{TenantDocumentBoxesRequest, TenantDocumentBoxesResponse},
+    models::admin::{TenantDocumentBoxesRequest, TenantDocumentBoxesResponse, TenantStatsResponse},
 };
 use axum::{Extension, Json, http::StatusCode};
 use axum_valid::Garde;
@@ -15,7 +15,10 @@ use docbox_core::{
 };
 use docbox_database::{
     DatabasePoolCache,
-    models::document_box::{DocumentBox, WithScope},
+    models::{
+        document_box::{DocumentBox, WithScope},
+        file::File,
+    },
 };
 use docbox_search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem};
 use docbox_storage::StorageLayerFactory;
@@ -34,7 +37,6 @@ pub const ADMIN_TAG: &str = "Admin";
     responses(
         (status = 201, description = "Searched successfully", body = TenantDocumentBoxesResponse),
         (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
-        (status = 409, description = "Scope already exists", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(TenantParams)
@@ -100,6 +102,30 @@ pub async fn tenant_boxes(
         results: document_boxes,
         total,
     }))
+}
+
+/// Admin Stats
+///
+/// Requests stats about a tenant
+#[utoipa::path(
+    get,
+    operation_id = "admin_tenant_stats",
+    tag = ADMIN_TAG,
+    path = "/admin/tenant-stats",
+    responses(
+        (status = 201, description = "Got stats successfully", body = TenantStatsResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(TenantParams)
+)]
+#[tracing::instrument(skip_all)]
+pub async fn tenant_stats(TenantDb(db): TenantDb) -> HttpResult<TenantStatsResponse> {
+    let file_size = File::total_size(&db).await.map_err(|cause| {
+        tracing::error!(?cause, "failed to query tenant files size");
+        HttpCommonError::ServerError
+    })?;
+
+    Ok(Json(TenantStatsResponse { file_size }))
 }
 
 /// Admin Search

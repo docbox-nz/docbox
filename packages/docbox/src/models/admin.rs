@@ -24,3 +24,9 @@ pub struct TenantDocumentBoxesResponse {
     pub results: Vec<DocumentBox>,
     pub total: i64,
 }
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TenantStatsResponse {
+    /// Total size of all files within the tenant
+    pub file_size: i64,
+}

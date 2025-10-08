@@ -20,9 +20,11 @@ use docbox_core::document_box::{
 };
 use docbox_database::models::{
     document_box::DocumentBox,
+    file::File,
     folder::{self, Folder, FolderWithExtra, ResolvedFolderWithExtra},
 };
 use docbox_search::models::{SearchRequest, SearchResultItem, SearchResultResponse};
+use tokio::join;
 
 pub const DOCUMENT_BOX_TAG: &str = "Document Box";
 
@@ -154,6 +156,7 @@ pub async fn get(
 /// - Total files
 /// - Total links
 /// - Total folders
+/// - Size of all files
 #[utoipa::path(
     get,
     operation_id = "document_box_stats",
@@ -194,17 +197,27 @@ pub async fn stats(
             HttpCommonError::ServerError
         })?;
 
-    let children = Folder::count_children(&db, root.id)
-        .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query document box children count");
-            HttpCommonError::ServerError
-        })?;
+    let children_future = Folder::count_children(&db, root.id);
+    let file_size_future = File::total_size_within_scope(&db, &scope);
+
+    // Load the children count and file sizes in parallel
+    let (children, file_size) = join!(children_future, file_size_future);
+
+    let children = children.map_err(|cause| {
+        tracing::error!(?cause, "failed to query document box children count");
+        HttpCommonError::ServerError
+    })?;
+
+    let file_size = file_size.map_err(|cause| {
+        tracing::error!(?cause, "failed to query document box file size");
+        HttpCommonError::ServerError
+    })?;
 
     Ok(Json(DocumentBoxStats {
         total_files: children.file_count,
         total_links: children.link_count,
         total_folders: children.folder_count,
+        file_size,
     }))
 }
 

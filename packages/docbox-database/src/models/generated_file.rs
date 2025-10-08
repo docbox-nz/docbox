@@ -88,7 +88,7 @@ impl GeneratedFile {
 
         sqlx::query(
             r#"
-            INSERT INTO "docbox_generated_files" 
+            INSERT INTO "docbox_generated_files"
             ("id", "file_id", "mime", "type", "hash", "file_key", "created_at")
             VALUES ($1, $2, $3, $4, $5, $6, $7)
         "#,

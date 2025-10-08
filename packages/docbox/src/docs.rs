@@ -37,6 +37,7 @@ use crate::{
     ),
     paths(
         // Admin routes
+        admin::tenant_stats,
         admin::tenant_boxes,
         admin::search_tenant,
         admin::reprocess_octet_stream_files_tenant,

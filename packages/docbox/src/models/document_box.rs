@@ -118,6 +118,8 @@ pub struct DocumentBoxStats {
     pub total_links: i64,
     /// Total number of folders within the document box
     pub total_folders: i64,
+    /// Total size of the files contained within the document box
+    pub file_size: i64,
 }
 
 #[derive(Debug, Error)]
