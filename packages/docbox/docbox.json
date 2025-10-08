@@ -58,23 +58,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminSearchResultResponse"
+                  "$ref": "#/components/schemas/TenantDocumentBoxesResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Malformed or invalid request not meeting validation requirements",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Scope already exists",
             "content": {
               "application/json": {
                 "schema": {
@@ -310,6 +300,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/tenant-stats": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Stats",
+        "description": "Requests stats about a tenant",
+        "operationId": "admin_tenant_stats",
+        "parameters": [
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Got stats successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantStatsResponse"
                 }
               }
             }
@@ -3339,7 +3381,7 @@
           "Document Box"
         ],
         "summary": "Get document box stats by scope",
-        "description": "Requests stats about a document box using its scope. Provides stats such as:\n- Total files\n- Total links\n- Total folders",
+        "description": "Requests stats about a document box using its scope. Provides stats such as:\n- Total files\n- Total links\n- Total folders\n- Size of all files",
         "operationId": "document_box_stats",
         "parameters": [
           {
@@ -3801,9 +3843,15 @@
         "required": [
           "total_files",
           "total_links",
-          "total_folders"
+          "total_folders",
+          "file_size"
         ],
         "properties": {
+          "file_size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total size of the files contained within the document box"
+          },
           "total_files": {
             "type": "integer",
             "format": "int64",
@@ -4978,6 +5026,14 @@
             "default": null,
             "minimum": 0
           },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional query to search document boxes by",
+            "default": null
+          },
           "size": {
             "type": [
               "integer",
@@ -4987,6 +5043,56 @@
             "description": "Number of items to include in the response",
             "default": null,
             "minimum": 0
+          }
+        }
+      },
+      "TenantDocumentBoxesResponse": {
+        "type": "object",
+        "required": [
+          "results",
+          "total"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentBox"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "TenantStatsResponse": {
+        "type": "object",
+        "required": [
+          "total_files",
+          "total_links",
+          "total_folders",
+          "file_size"
+        ],
+        "properties": {
+          "file_size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total size of all files within the tenant"
+          },
+          "total_files": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of files within the document box"
+          },
+          "total_folders": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of folders within the document box"
+          },
+          "total_links": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of links within the document box"
           }
         }
       },
