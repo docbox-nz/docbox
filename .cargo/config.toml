@@ -1,7 +1,0 @@
-# [build.'cfg(not(target_os = "windows"))']
-# # Build for MUSL target, see README for details
-# target = "x86_64-unknown-linux-musl"
-
-
-# [build.'cfg(target_os = "windows")']
-# target = "x86_64-pc-windows-msvc"
