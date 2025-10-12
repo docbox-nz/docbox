@@ -10,7 +10,6 @@ use axum_valid::Garde;
 use docbox_core::{
     document_box::search_document_box::{ResolvedSearchResult, search_document_boxes_admin},
     files::purge_expired_presigned_tasks::purge_expired_presigned_tasks,
-    processing::ProcessingLayer,
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{
@@ -22,6 +21,7 @@ use docbox_database::{
         link::Link,
     },
 };
+use docbox_processing::ProcessingLayer;
 use docbox_search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem};
 use docbox_storage::StorageLayerFactory;
 use std::sync::Arc;

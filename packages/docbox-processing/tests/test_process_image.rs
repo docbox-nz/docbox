@@ -1,7 +1,15 @@
 use bytes::Bytes;
-use docbox_core::{processing::image::process_image_async, utils::file::get_file_name_ext};
+use docbox_processing::image::process_image_async;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, metadata::Orientation};
 use std::{io::Cursor, path::Path};
+
+/// Extracts the extension portion of a file name
+pub fn get_file_name_ext(name: &str) -> Option<String> {
+    let path = Path::new(name);
+    let ext = path.extension()?;
+    let ext = ext.to_str()?;
+    Some(ext.to_string())
+}
 
 /// Tests that samples of supported image formats can be successfully processed
 #[tokio::test]

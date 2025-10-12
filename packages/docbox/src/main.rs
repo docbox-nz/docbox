@@ -9,13 +9,13 @@ use docbox_core::{
         AppNotificationQueue, NotificationConfig,
         process::{NotificationQueueData, process_notification_queue},
     },
-    processing::{
-        ProcessingLayer,
-        office::{OfficeConverter, OfficeConverterConfig, OfficeProcessingLayer},
-    },
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
+use docbox_processing::{
+    ProcessingLayer,
+    office::{OfficeConverter, OfficeConverterConfig, OfficeProcessingLayer},
+};
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
 use docbox_secrets::{SecretManager, SecretsManagerConfig};
 use docbox_storage::{StorageLayerFactory, StorageLayerFactoryConfig};

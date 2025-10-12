@@ -22,6 +22,9 @@ docbox-core.workspace = true
 # Database access
 docbox-database.workspace = true
 
+# File processing
+docbox-processing.workspace = true
+
 # Search access
 docbox-search = { workspace = true, features = [
     "typesense",

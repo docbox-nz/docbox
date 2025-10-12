@@ -1,3 +1,4 @@
+use super::{ConvertToPdf, PdfConvertError};
 use bytes::Bytes;
 use office_convert_client::{
     OfficeConvertClient, OfficeConvertLoadBalancer, OfficeConverter, RequestError,
@@ -5,8 +6,6 @@ use office_convert_client::{
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-use super::{ConvertToPdf, PdfConvertError};
 
 /// List of supported convertable formats
 pub const CONVERTABLE_FORMATS: &[&str] = &[

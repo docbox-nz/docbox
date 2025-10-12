@@ -1,8 +1,6 @@
-use crate::files::{create_file_key, index_file::store_file_index};
-use crate::processing::{ProcessingError, ProcessingIndexMetadata, ProcessingLayer, process_file};
 use crate::{
     events::{TenantEventMessage, TenantEventPublisher},
-    files::generated::{QueuedUpload, upload_generated_files},
+    files::{create_file_key, generated::upload_generated_files, index_file::store_file_index},
 };
 use bytes::Bytes;
 use docbox_database::models::document_box::DocumentBoxScopeRaw;
@@ -16,14 +14,16 @@ use docbox_database::{
         user::UserId,
     },
 };
+use docbox_processing::{
+    ProcessingConfig, ProcessingError, ProcessingIndexMetadata, ProcessingLayer, QueuedUpload,
+    process_file,
+};
 use docbox_search::{SearchError, TenantSearchIndex};
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use mime::Mime;
-use serde::{Deserialize, Serialize};
 use std::ops::DerefMut;
 use thiserror::Error;
 use tracing::Instrument;
-use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Error messages from this are user-facing so any data included should ensure
@@ -109,20 +109,6 @@ pub struct UploadFile {
     /// Config that can be used when processing for additional
     /// configuration to how the file is processed
     pub processing_config: Option<ProcessingConfig>,
-}
-
-#[derive(Debug, Default, Clone, Deserialize, Serialize, ToSchema)]
-#[serde(default)]
-pub struct ProcessingConfig {
-    /// Email specific processing configuration
-    pub email: Option<EmailProcessingConfig>,
-}
-
-#[derive(Debug, Default, Clone, Deserialize, Serialize, ToSchema)]
-#[serde(default)]
-pub struct EmailProcessingConfig {
-    /// Whether to skip extracting attachments when processing an email
-    pub skip_attachments: Option<bool>,
 }
 
 pub struct UploadedFileData {

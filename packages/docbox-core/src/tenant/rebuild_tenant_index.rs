@@ -8,6 +8,7 @@ use docbox_database::{
         link::{Link, LinkWithScope},
     },
 };
+use docbox_processing::{office::is_pdf_compatible, pdf::split_pdf_text_pages};
 use docbox_search::{
     SearchError, TenantSearchIndex,
     models::{DocumentPage, SearchIndexData, SearchIndexType},
@@ -15,11 +16,8 @@ use docbox_search::{
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
 use itertools::Itertools;
-use pdf_process::text::PAGE_END_CHARACTER;
 use std::{str::FromStr, string::FromUtf8Error};
 use thiserror::Error;
-
-use crate::processing::office::is_pdf_compatible;
 
 #[derive(Debug, Error)]
 pub enum RebuildTenantIndexError {
@@ -338,7 +336,7 @@ pub async fn try_pdf_compatible_document_pages(
         String::from_utf8(text_content).map_err(PdfCompatibleRebuildError::InvalidTextContent)?;
 
     // Split the content back into pages
-    let pages = text_content.split(PAGE_END_CHARACTER);
+    let pages = split_pdf_text_pages(&text_content);
 
     // Create the pages data
     let pages = pages

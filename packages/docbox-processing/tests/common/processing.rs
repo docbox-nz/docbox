@@ -1,4 +1,4 @@
-use docbox_core::processing::{
+use docbox_processing::{
     ProcessingLayer,
     office::{OfficeConverter, OfficeProcessingLayer, convert_server::OfficeConverterServer},
 };

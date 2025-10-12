@@ -3,7 +3,6 @@
 //! Logic for processing notifications from the notification queue
 
 use crate::notifications::{AppNotificationQueue, NotificationQueueMessage};
-use crate::processing::ProcessingLayer;
 use crate::{
     events::EventPublisherFactory,
     files::upload_file_presigned::{CompletePresigned, safe_complete_presigned},
@@ -12,6 +11,7 @@ use docbox_database::{
     DatabasePoolCache,
     models::{folder::Folder, presigned_upload_task::PresignedUploadTask, tenant::Tenant},
 };
+use docbox_processing::ProcessingLayer;
 use docbox_search::SearchIndexFactory;
 use docbox_storage::StorageLayerFactory;
 use std::sync::Arc;

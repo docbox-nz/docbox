@@ -1,12 +1,9 @@
 use crate::{
-    files::generated::QueuedUpload,
-    processing::{
-        ProcessingError, ProcessingOutput,
-        office::convert_server::{
-            OfficeConvertServerConfig, OfficeConvertServerError, is_known_pdf_convertable,
-        },
-        pdf::{is_pdf_file, process_pdf},
+    ProcessingError, ProcessingOutput, QueuedUpload,
+    office::convert_server::{
+        OfficeConvertServerConfig, OfficeConvertServerError, is_known_pdf_convertable,
     },
+    pdf::{is_pdf_file, process_pdf},
 };
 use bytes::Bytes;
 use convert_server::OfficeConverterServer;

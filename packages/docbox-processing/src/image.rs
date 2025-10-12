@@ -1,5 +1,4 @@
-use super::{ProcessingError, ProcessingOutput};
-use crate::files::generated::QueuedUpload;
+use super::{ProcessingError, ProcessingOutput, QueuedUpload};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, ImageResult};

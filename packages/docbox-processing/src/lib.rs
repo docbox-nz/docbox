@@ -1,22 +1,21 @@
 use crate::{
-    files::{generated::QueuedUpload, upload_file::ProcessingConfig},
-    processing::{
-        email::{EmailProcessingError, is_mail_mime, process_email},
-        image::process_image_async,
-        office::{PdfConvertError, process_office},
-        pdf::{GeneratePdfImagesError, process_pdf},
-    },
+    email::{EmailProcessingError, is_mail_mime, process_email},
+    image::process_image_async,
+    office::{PdfConvertError, process_office},
+    pdf::{GeneratePdfImagesError, process_pdf},
 };
 use ::image::{ImageError, ImageFormat};
 use bytes::Bytes;
-use docbox_database::models::file::FileId;
+use docbox_database::models::{file::FileId, generated_file::GeneratedFileType};
 use docbox_search::models::DocumentPage;
 use mime::Mime;
 use office::OfficeProcessingLayer;
 use pdf::is_pdf_file;
 use pdf_process::{PdfInfoError, PdfTextError};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::task::JoinError;
+use utoipa::ToSchema;
 
 pub mod email;
 pub mod html_to_text;
@@ -61,6 +60,33 @@ pub enum ProcessingError {
     /// Failed to join the image processing thread output
     #[error("error waiting for image processing")]
     Threading(#[from] JoinError),
+}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize, ToSchema)]
+#[serde(default)]
+pub struct ProcessingConfig {
+    /// Email specific processing configuration
+    pub email: Option<EmailProcessingConfig>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize, ToSchema)]
+#[serde(default)]
+pub struct EmailProcessingConfig {
+    /// Whether to skip extracting attachments when processing an email
+    pub skip_attachments: Option<bool>,
+}
+
+#[derive(Debug)]
+pub struct QueuedUpload {
+    pub mime: Mime,
+    pub ty: GeneratedFileType,
+    pub bytes: Bytes,
+}
+
+impl QueuedUpload {
+    pub fn new(mime: Mime, ty: GeneratedFileType, bytes: Bytes) -> Self {
+        Self { mime, ty, bytes }
+    }
 }
 
 /// Represents a file that should be created and processed as the

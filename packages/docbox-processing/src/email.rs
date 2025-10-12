@@ -1,7 +1,4 @@
-use crate::{
-    files::{generated::QueuedUpload, upload_file::ProcessingConfig},
-    processing::html_to_text::html_to_text,
-};
+use crate::{ProcessingConfig, QueuedUpload, html_to_text::html_to_text};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;

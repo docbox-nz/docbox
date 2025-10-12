@@ -1,32 +1,17 @@
 //! Business logic for working with generated files
 
 use crate::files::create_generated_file_key;
-use bytes::Bytes;
+use docbox_database::models::{
+    file::FileId,
+    generated_file::{CreateGeneratedFile, GeneratedFile, GeneratedFileId},
+};
+use docbox_processing::QueuedUpload;
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{
     StreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
 };
-use mime::Mime;
 use tracing::{Instrument, debug, error};
-
-use docbox_database::models::{
-    file::FileId,
-    generated_file::{CreateGeneratedFile, GeneratedFile, GeneratedFileId, GeneratedFileType},
-};
-
-#[derive(Debug)]
-pub struct QueuedUpload {
-    pub mime: Mime,
-    pub ty: GeneratedFileType,
-    pub bytes: Bytes,
-}
-
-impl QueuedUpload {
-    pub fn new(mime: Mime, ty: GeneratedFileType, bytes: Bytes) -> Self {
-        Self { mime, ty, bytes }
-    }
-}
 
 pub enum GeneratedFileDeleteResult {
     /// Successful upload of all files

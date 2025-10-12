@@ -3,10 +3,7 @@ use axum::http::StatusCode;
 use axum_typed_multipart::{FieldData, TryFromMultipart};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use docbox_core::{
-    files::upload_file::{ProcessingConfig, UploadFileError},
-    processing::ProcessingError,
-};
+use docbox_core::files::upload_file::UploadFileError;
 use docbox_database::models::{
     file::{FileId, FileWithExtra},
     folder::FolderId,
@@ -14,6 +11,7 @@ use docbox_database::models::{
     presigned_upload_task::PresignedUploadTaskId,
     tasks::TaskId,
 };
+use docbox_processing::{ProcessingConfig, ProcessingError};
 use garde::Validate;
 use mime::Mime;
 use serde::{Deserialize, Serialize};

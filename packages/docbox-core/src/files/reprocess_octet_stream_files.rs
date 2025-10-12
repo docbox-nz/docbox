@@ -3,10 +3,10 @@ use crate::{
         index_file::store_file_index,
         upload_file::{UploadFileError, store_generated_files},
     },
-    processing::{ProcessingError, ProcessingIndexMetadata, ProcessingLayer, process_file},
     utils::file::get_file_name_ext,
 };
 use docbox_database::{DbPool, DbResult, models::file::FileWithScope};
+use docbox_processing::{ProcessingError, ProcessingIndexMetadata, ProcessingLayer, process_file};
 use docbox_search::TenantSearchIndex;
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{StreamExt, future::BoxFuture};

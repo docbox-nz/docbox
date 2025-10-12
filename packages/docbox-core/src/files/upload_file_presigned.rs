@@ -3,11 +3,9 @@ use crate::{
     files::{
         create_file_key,
         upload_file::{
-            ProcessingConfig, UploadFile, UploadFileError, UploadFileState, rollback_upload_file,
-            upload_file,
+            UploadFile, UploadFileError, UploadFileState, rollback_upload_file, upload_file,
         },
     },
-    processing::{ProcessingError, ProcessingLayer},
 };
 use docbox_database::{
     DbErr, DbPool, DbTransaction,
@@ -22,6 +20,7 @@ use docbox_database::{
         user::UserId,
     },
 };
+use docbox_processing::{ProcessingConfig, ProcessingError, ProcessingLayer};
 use docbox_search::TenantSearchIndex;
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use mime::Mime;

@@ -30,10 +30,9 @@ use docbox_core::{
     files::{
         delete_file::delete_file,
         update_file::{UpdateFile, UpdateFileError},
-        upload_file::{ProcessingConfig, UploadFile, UploadedFileData, safe_upload_file},
+        upload_file::{UploadFile, UploadedFileData, safe_upload_file},
         upload_file_presigned::{CreatePresigned, create_presigned_upload},
     },
-    processing::ProcessingLayer,
     utils::file::get_file_name_ext,
 };
 use docbox_database::models::{
@@ -45,6 +44,7 @@ use docbox_database::models::{
     tasks::{TaskStatus, background_task},
     user::User,
 };
+use docbox_processing::{ProcessingConfig, ProcessingLayer};
 use docbox_search::models::{FileSearchRequest, FileSearchResultResponse};
 use mime::Mime;
 use std::{str::FromStr, time::Duration};
@@ -116,9 +116,9 @@ pub async fn upload(
                 HttpCommonError::ServerError
             })?
             .is_some()
-        {
-            return Err(DynHttpError::from(HttpFileError::FileIdInUse));
-        }
+    {
+        return Err(DynHttpError::from(HttpFileError::FileIdInUse));
+    }
 
     let content_type = req.mime.or(req.file.metadata.content_type);
 

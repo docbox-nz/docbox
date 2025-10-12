@@ -1,14 +1,11 @@
 use crate::common::processing::create_processing_layer;
 use bytes::Bytes;
-use docbox_core::{
-    files::upload_file::ProcessingConfig,
-    processing::{
-        ProcessingOutput,
-        email::{EmailEntity, EmailMetadataDocument},
-        process_file,
-    },
-};
 use docbox_database::models::generated_file::GeneratedFileType;
+use docbox_processing::{
+    ProcessingConfig, ProcessingOutput,
+    email::{EmailEntity, EmailMetadataDocument},
+    process_file,
+};
 use std::path::Path;
 
 mod common;

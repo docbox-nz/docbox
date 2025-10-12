@@ -31,6 +31,13 @@ aws-config.workspace = true
 # S3 SDK
 aws-sdk-s3 = "=1.98.0"
 
+# Not used: Used to enable the "byte-stream-poll-next" feature, used for the storage
+# implementation to implement stream
+aws-smithy-types = { version = "=1.3.2", features = [
+    "byte-stream-poll-next",
+    "rt-tokio",
+] }
+
 # Bytes
 bytes.workspace = true
 bytes-utils.workspace = true

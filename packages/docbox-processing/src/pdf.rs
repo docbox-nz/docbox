@@ -1,20 +1,19 @@
+use std::str::Split;
+
 use crate::{
-    files::generated::QueuedUpload,
-    processing::{
-        ProcessingError, ProcessingIndexMetadata, ProcessingOutput, image::create_img_bytes,
-    },
+    ProcessingError, ProcessingIndexMetadata, ProcessingOutput, QueuedUpload,
+    image::create_img_bytes,
 };
 use docbox_database::models::generated_file::GeneratedFileType;
 use docbox_search::models::DocumentPage;
 use futures::TryFutureExt;
 use image::{DynamicImage, ImageError, ImageFormat, ImageResult};
 use mime::Mime;
+pub use pdf_process::text::PAGE_END_CHARACTER;
 use pdf_process::{
     OutputFormat, PdfInfo, PdfInfoArgs, PdfInfoError, PdfRenderError, PdfTextArgs, RenderArgs,
     pdf_info, render_single_page, text_all_pages_split,
 };
-
-pub use pdf_process::text::PAGE_END_CHARACTER;
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -211,4 +210,8 @@ fn generate_pdf_images_variants(cover_page: DynamicImage) -> ImageResult<Generat
         thumbnail_jpeg,
         large_thumbnail_jpeg,
     })
+}
+
+pub fn split_pdf_text_pages(text: &str) -> Split<'_, char> {
+    text.split(PAGE_END_CHARACTER)
 }

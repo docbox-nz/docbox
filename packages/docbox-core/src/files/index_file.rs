@@ -1,5 +1,5 @@
-use crate::processing::ProcessingIndexMetadata;
 use docbox_database::models::{document_box::DocumentBoxScopeRaw, file::File};
+use docbox_processing::ProcessingIndexMetadata;
 use docbox_search::{
     TenantSearchIndex,
     models::{SearchIndexData, SearchIndexType},
