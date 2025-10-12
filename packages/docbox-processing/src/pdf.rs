@@ -1,5 +1,3 @@
-use std::str::Split;
-
 use crate::{
     ProcessingError, ProcessingIndexMetadata, ProcessingOutput, QueuedUpload,
     image::create_img_bytes,
@@ -9,13 +7,38 @@ use docbox_search::models::DocumentPage;
 use futures::TryFutureExt;
 use image::{DynamicImage, ImageError, ImageFormat, ImageResult};
 use mime::Mime;
-pub use pdf_process::text::PAGE_END_CHARACTER;
 use pdf_process::{
     OutputFormat, PdfInfo, PdfInfoArgs, PdfInfoError, PdfRenderError, PdfTextArgs, RenderArgs,
-    pdf_info, render_single_page, text_all_pages_split,
+    pdf_info, render_single_page, text::PAGE_END_CHARACTER, text_all_pages_split,
 };
+use std::str::Split;
 use thiserror::Error;
 use tokio::task::JoinError;
+
+pub struct GeneratedPdfImages {
+    /// Rendered full sized first page
+    pub cover_page_jpeg: Vec<u8>,
+    /// Small 64x64 file thumbnail
+    pub thumbnail_jpeg: Vec<u8>,
+    /// Smaller 385x385 version of first page
+    /// (Not actually 385x385 fits whatever the image aspect ratio inside those dimensions)
+    pub large_thumbnail_jpeg: Vec<u8>,
+}
+
+#[derive(Debug, Error)]
+pub enum GeneratePdfImagesError {
+    /// PDF rendering error
+    #[error("failed to render pdf: {0}")]
+    PdfRender(#[from] PdfRenderError),
+
+    /// Image processing error
+    #[error("error processing image: {0}")]
+    ImageError(#[from] ImageError),
+
+    /// Failed to join the image processing thread output
+    #[error("error waiting for image processing")]
+    Threading(#[from] JoinError),
+}
 
 /// Processes a PDF compatible file producing index data and generated files such as
 /// thumbnails and a converted pdf version
@@ -129,6 +152,7 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
     })
 }
 
+/// Check if the provided mime type is for a PDF
 #[inline]
 pub fn is_pdf_file(mime: &Mime) -> bool {
     if mime.eq(&mime::APPLICATION_PDF) {
@@ -146,38 +170,12 @@ pub fn is_pdf_file(mime: &Mime) -> bool {
 /// Renders the cover page for a PDF file
 async fn render_pdf_cover(pdf_info: &PdfInfo, pdf: &[u8]) -> Result<DynamicImage, PdfRenderError> {
     let args = RenderArgs::default();
-
-    // Render the pdf cover page
     let page = render_single_page(pdf, pdf_info, OutputFormat::Jpeg, 1, &args).await?;
 
     Ok(page)
 }
 
-pub struct GeneratedPdfImages {
-    /// Rendered full sized first page
-    pub cover_page_jpeg: Vec<u8>,
-    /// Small 64x64 file thumbnail
-    pub thumbnail_jpeg: Vec<u8>,
-    /// Smaller 385x385 version of first page
-    /// (Not actually 385x385 fits whatever the image aspect ratio inside those dimensions)
-    pub large_thumbnail_jpeg: Vec<u8>,
-}
-
-#[derive(Debug, Error)]
-pub enum GeneratePdfImagesError {
-    /// PDF rendering error
-    #[error("failed to render pdf: {0}")]
-    PdfRender(#[from] PdfRenderError),
-
-    /// Image processing error
-    #[error("error processing image: {0}")]
-    ImageError(#[from] ImageError),
-
-    /// Failed to join the image processing thread output
-    #[error("error waiting for image processing")]
-    Threading(#[from] JoinError),
-}
-
+/// Asynchronously generate pdf cover image and its variants
 async fn generate_pdf_images_async(
     pdf_info: &PdfInfo,
     pdf: &[u8],
@@ -186,7 +184,16 @@ async fn generate_pdf_images_async(
     let page = render_pdf_cover(pdf_info, pdf).await?;
 
     tracing::debug!("rendering pdf image variants");
-    let result = tokio::task::spawn_blocking(move || generate_pdf_images_variants(page)).await??;
+    let result = generate_pdf_images_variants_async(page).await?;
+    Ok(result)
+}
+
+/// Async wrapper around [generate_pdf_images_variants]
+async fn generate_pdf_images_variants_async(
+    cover_page: DynamicImage,
+) -> Result<GeneratedPdfImages, GeneratePdfImagesError> {
+    let result =
+        tokio::task::spawn_blocking(move || generate_pdf_images_variants(cover_page)).await??;
     Ok(result)
 }
 
@@ -212,6 +219,7 @@ fn generate_pdf_images_variants(cover_page: DynamicImage) -> ImageResult<Generat
     })
 }
 
+/// Split the merged text content of a PDF based on the page end character (Split by page)
 pub fn split_pdf_text_pages(text: &str) -> Split<'_, char> {
     text.split(PAGE_END_CHARACTER)
 }
