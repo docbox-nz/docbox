@@ -28,7 +28,8 @@ pub async fn create_processing_layer() -> (ProcessingLayer, ContainerAsync<Gener
     let host_port = container.get_host_port_ipv4(3000).await.unwrap();
     let client_url = format!("http://{host}:{host_port}");
 
-    let converter_server = OfficeConverterServer::from_addresses([client_url.as_str()]).unwrap();
+    let converter_server =
+        OfficeConverterServer::from_addresses([client_url.as_str()], false).unwrap();
     let converter = OfficeConverter::ConverterServer(converter_server);
 
     let processing = ProcessingLayer {

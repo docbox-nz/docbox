@@ -77,6 +77,7 @@ pub const CONVERTABLE_FORMATS: &[&str] = &[
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OfficeConvertServerConfig {
     pub addresses: Vec<String>,
+    pub use_proxy: bool,
 }
 
 impl OfficeConvertServerConfig {
@@ -88,7 +89,29 @@ impl OfficeConvertServerConfig {
             .map(|value| value.to_string())
             .collect();
 
-        OfficeConvertServerConfig { addresses }
+        // By default the office convert server will ignore the system proxy
+        // since we don't want file conversion to take an extra network hop since
+        // it shouldn't be leaving the private network
+        //
+        // CONVERT_SERVER_USE_PROXY allows this behavior to be disabled
+        let use_proxy = match std::env::var("CONVERT_SERVER_USE_PROXY") {
+            Ok(value) => match value.parse::<bool>() {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::error!(
+                        ?error,
+                        "invalid CONVERT_SERVER_USE_PROXY environment variable, defaulting to false"
+                    );
+                    false
+                }
+            },
+            Err(_) => false,
+        };
+
+        OfficeConvertServerConfig {
+            addresses,
+            use_proxy,
+        }
     }
 }
 
@@ -115,20 +138,27 @@ impl OfficeConverterServer {
     pub fn from_config(
         config: OfficeConvertServerConfig,
     ) -> Result<Self, OfficeConvertServerError> {
-        Self::from_addresses(config.addresses.iter().map(|value| value.as_str()))
+        Self::from_addresses(
+            config.addresses.iter().map(|value| value.as_str()),
+            config.use_proxy,
+        )
     }
 
-    pub fn from_addresses<'a, I>(addresses: I) -> Result<Self, OfficeConvertServerError>
+    pub fn from_addresses<'a, I>(
+        addresses: I,
+        use_proxy: bool,
+    ) -> Result<Self, OfficeConvertServerError>
     where
         I: IntoIterator<Item = &'a str>,
     {
         let mut convert_clients: Vec<OfficeConvertClient> = Vec::new();
+        let mut http_client = Client::builder();
 
-        // Create an HTTP client with no_proxy to disable the system proxy
-        // so that it will only be request over localhost
-        // (Otherwise we will attempt to access the convert server through the proxy which is not able to access it)
-        let http_client = Client::builder()
-            .no_proxy()
+        if !use_proxy {
+            http_client = http_client.no_proxy();
+        }
+
+        let http_client = http_client
             .build()
             .map_err(OfficeConvertServerError::BuildHttpClient)?;
 
