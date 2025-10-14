@@ -1,6 +1,8 @@
 use common::database::create_test_tenant_database;
 use docbox_core::{
-    document_box::create_document_box::{CreateDocumentBox, create_document_box},
+    document_box::create_document_box::{
+        CreateDocumentBox, CreateDocumentBoxError, create_document_box,
+    },
     events::{
         TenantEventMessage, TenantEventPublisher, mpsc::MpscEventPublisher,
         noop::NoopEventPublisher,
@@ -70,7 +72,7 @@ async fn test_create_document_box_duplicate_scope() {
     .unwrap();
 
     // Should fail
-    create_document_box(
+    let error = create_document_box(
         &db,
         &events,
         CreateDocumentBox {
@@ -80,4 +82,6 @@ async fn test_create_document_box_duplicate_scope() {
     )
     .await
     .unwrap_err();
+
+    assert!(matches!(error, CreateDocumentBoxError::ScopeAlreadyExists))
 }
