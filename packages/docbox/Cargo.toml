@@ -26,10 +26,7 @@ docbox-database.workspace = true
 docbox-processing.workspace = true
 
 # Search access
-docbox-search = { workspace = true, features = [
-    "typesense",
-    "opensearch",
-] }
+docbox-search.workspace = true
 
 # Web scraping
 docbox-web-scraper.workspace = true

@@ -65,5 +65,5 @@ testcontainers = { workspace = true, features = ["http_wait"] }
 testcontainers-modules = { workspace = true, features = ["postgres", "minio"] }
 tokio = { workspace = true, features = ["full"] }
 # Enable typesense search backend for testing
-docbox-search = { workspace = true, features = ["typesense"]}
+docbox-search.workspace = true
 mime_guess.workspace = true

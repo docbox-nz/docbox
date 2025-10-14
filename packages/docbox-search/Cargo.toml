@@ -9,12 +9,6 @@ authors.workspace = true
 repository.workspace = true
 readme.workspace = true
 
-[features]
-default = ["opensearch", "typesense", "database"]
-opensearch = ["dep:opensearch"]
-typesense = []
-database = []
-
 [dependencies]
 docbox-database.workspace = true
 docbox-secrets.workspace = true
@@ -49,7 +43,6 @@ itertools.workspace = true
 [dependencies.opensearch]
 version = "=2.3.0"
 default-features = false
-optional = true
 features = ["rustls-tls", "aws-auth"]
 
 [dev-dependencies]
