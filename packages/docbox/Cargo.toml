@@ -42,6 +42,7 @@ docbox-storage.workspace = true
 
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }
+futures.workspace = true
 
 # HTTP server framework
 axum = { version = "=0.8.4", features = ["multipart"] }

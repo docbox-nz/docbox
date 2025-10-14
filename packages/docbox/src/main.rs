@@ -1,4 +1,5 @@
 use crate::{
+    background::{BackgroundTaskData, perform_background_tasks},
     extensions::max_file_size::MaxFileSizeBytes,
     middleware::api_key::ApiKeyLayer,
     notifications::{
@@ -10,7 +11,6 @@ use axum::{Extension, extract::DefaultBodyLimit, routing::post};
 use axum_server::tls_rustls::RustlsConfig;
 use docbox_core::{
     aws::{SqsClient, aws_config},
-    background::{BackgroundTaskData, perform_background_tasks},
     events::{EventPublisherFactory, sqs::SqsEventPublisherFactory},
     tenant::tenant_cache::TenantCache,
 };
@@ -33,6 +33,7 @@ use std::{
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
 
+mod background;
 mod docs;
 mod error;
 mod extensions;

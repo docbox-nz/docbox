@@ -1876,6 +1876,7 @@ dependencies = [
  "docbox-storage",
  "docbox-web-scraper",
  "dotenvy",
+ "futures",
  "garde",
  "mime",
  "mime_guess",

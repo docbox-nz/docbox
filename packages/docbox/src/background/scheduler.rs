@@ -169,9 +169,7 @@ mod test {
     use std::sync::{Arc, Mutex};
     use tokio::{spawn, time::sleep_until};
 
-    use crate::background::scheduler::{SchedulerEventStream, get_nth_interval_instant};
-
-    use super::SchedulerQueueEvent;
+    use super::{SchedulerEventStream, SchedulerQueueEvent, get_nth_interval_instant};
 
     /// Tests that the correct number of events is produced over time
     #[tokio::test]

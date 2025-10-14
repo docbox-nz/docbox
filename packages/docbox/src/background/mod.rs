@@ -1,4 +1,4 @@
-use crate::files::purge_expired_presigned_tasks::safe_purge_expired_presigned_tasks;
+use docbox_core::files::purge_expired_presigned_tasks::safe_purge_expired_presigned_tasks;
 use docbox_database::DatabasePoolCache;
 use docbox_storage::StorageLayerFactory;
 use futures::StreamExt;
