@@ -5,6 +5,7 @@
 //! - [EventPublisherFactory] Factory for building a publisher based on the tenant
 //! - [SqsEventPublisherFactory] SQS based event notifications
 //! - [NoopEventPublisher] No-op publishing for tenants without event targets
+//! - [MpscEventPublisher] In memory channel publisher for tests
 
 use docbox_database::models::tenant::Tenant;
 use docbox_database::models::{

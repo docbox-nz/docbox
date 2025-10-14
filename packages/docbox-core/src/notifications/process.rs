@@ -2,7 +2,7 @@
 //!
 //! Logic for processing notifications from the notification queue
 
-use crate::notifications::{AppNotificationQueue, NotificationQueueMessage};
+use super::{AppNotificationQueue, NotificationQueueMessage};
 use crate::{
     events::EventPublisherFactory,
     files::upload_file_presigned::{CompletePresigned, safe_complete_presigned},
