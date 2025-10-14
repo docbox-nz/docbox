@@ -1,13 +1,11 @@
 use axum::{Extension, Json, http::StatusCode};
-use docbox_core::notifications::{
-    MpscNotificationQueueSender, NotificationQueueMessage, parse_bucket_message,
-};
 
 use crate::{
     VERSION,
     error::{DynHttpError, HttpCommonError},
     extensions::max_file_size::MaxFileSizeBytes,
     models::{document_box::DocumentBoxOptions, utils::DocboxServerResponse},
+    notifications::{MpscNotificationQueueSender, NotificationQueueMessage, parse_bucket_message},
 };
 
 pub const UTILS_TAG: &str = "Utils";

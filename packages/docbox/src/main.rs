@@ -1,14 +1,17 @@
-use crate::{extensions::max_file_size::MaxFileSizeBytes, middleware::api_key::ApiKeyLayer};
+use crate::{
+    extensions::max_file_size::MaxFileSizeBytes,
+    middleware::api_key::ApiKeyLayer,
+    notifications::{
+        AppNotificationQueue, NotificationConfig,
+        process::{NotificationQueueData, process_notification_queue},
+    },
+};
 use axum::{Extension, extract::DefaultBodyLimit, routing::post};
 use axum_server::tls_rustls::RustlsConfig;
 use docbox_core::{
     aws::{SqsClient, aws_config},
     background::{BackgroundTaskData, perform_background_tasks},
     events::{EventPublisherFactory, sqs::SqsEventPublisherFactory},
-    notifications::{
-        AppNotificationQueue, NotificationConfig,
-        process::{NotificationQueueData, process_notification_queue},
-    },
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
@@ -36,6 +39,7 @@ mod extensions;
 mod logging;
 mod middleware;
 mod models;
+mod notifications;
 pub mod routes;
 
 /// The server version extracted from the Cargo.toml

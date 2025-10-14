@@ -44,9 +44,6 @@ aws-config.workspace = true
 # AWS SQS sdk
 aws-sdk-sqs = "=1.76.0"
 
-# URL encoding to decode object key names
-urlencoding = "=2.1.3"
-
 bytes.workspace = true
 
 itertools.workspace = true

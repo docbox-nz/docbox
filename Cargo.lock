@@ -1891,6 +1891,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "urlencoding",
  "utoipa",
  "uuid",
 ]
@@ -1922,7 +1923,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tracing",
- "urlencoding",
  "utoipa",
  "uuid",
 ]

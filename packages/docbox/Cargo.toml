@@ -91,6 +91,9 @@ mime_guess.workspace = true
 
 utoipa.workspace = true
 
+# URL encoding to decode object key names
+urlencoding = "=2.1.3"
+
 sentry = { version = "=0.41.0", default-features = false, features = [
     "backtrace",
     "contexts",

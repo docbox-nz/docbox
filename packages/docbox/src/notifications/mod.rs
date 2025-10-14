@@ -2,12 +2,12 @@
 //!
 //! Notifications queue system handling notifications for the app
 
-use crate::aws::SqsClient;
 mod mpsc;
 mod noop;
 pub mod process;
 mod sqs;
 
+use docbox_core::aws::SqsClient;
 pub use mpsc::MpscNotificationQueueSender;
 
 use serde::Deserialize;

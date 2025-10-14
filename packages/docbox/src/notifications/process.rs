@@ -3,7 +3,7 @@
 //! Logic for processing notifications from the notification queue
 
 use super::{AppNotificationQueue, NotificationQueueMessage};
-use crate::{
+use docbox_core::{
     events::EventPublisherFactory,
     files::upload_file_presigned::{CompletePresigned, safe_complete_presigned},
 };

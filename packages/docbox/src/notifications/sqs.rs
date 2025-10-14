@@ -1,5 +1,5 @@
 use super::{NotificationQueue, NotificationQueueMessage};
-use crate::aws::SqsClient;
+use docbox_core::aws::SqsClient;
 use std::time::Duration;
 use tokio::{spawn, sync::mpsc, time::sleep};
 
