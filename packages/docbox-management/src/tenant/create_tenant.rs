@@ -1,15 +1,18 @@
-use docbox_core::tenant::create_tenant::InitTenantError;
+use std::ops::DerefMut;
+
+use docbox_core::utils::rollback::RollbackGuard;
 use docbox_database::{
     DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
     create::{
         check_database_exists, check_database_role_exists, create_database, create_restricted_role,
     },
+    migrations::apply_tenant_migrations,
     models::tenant::{Tenant, TenantId},
     utils::DatabaseErrorExt,
 };
-use docbox_search::SearchIndexFactory;
+use docbox_search::{SearchError, SearchIndexFactory, TenantSearchIndex};
 use docbox_secrets::{SecretManager, SecretManagerError};
-use docbox_storage::StorageLayerFactory;
+use docbox_storage::{StorageLayerError, StorageLayerFactory};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
@@ -34,14 +37,39 @@ pub enum CreateTenantError {
     #[error("error creating tenant database role: {0}")]
     CreateTenantRole(DbErr),
 
+    /// Database error
+    #[error(transparent)]
+    Database(#[from] DbErr),
+
     #[error("error serializing tenant secret: {0}")]
     SerializeSecret(serde_json::Error),
 
     #[error("failed to create tenant secret: {0}")]
     CreateTenantSecret(SecretManagerError),
 
-    #[error("failed to init tenant: {0}")]
-    CreateTenant(InitTenantError),
+    /// Tenant already exists
+    #[error("tenant already exists")]
+    TenantAlreadyExist,
+
+    /// Failed to create the storage bucket
+    #[error("failed to create tenant storage bucket: {0}")]
+    CreateStorageBucket(StorageLayerError),
+
+    /// Failed to setup the S3 bucket CORS rules
+    #[error("failed to setup s3 notification rules: {0}")]
+    SetupS3Notifications(StorageLayerError),
+
+    /// Failed to setup the storage bucket CORS rules
+    #[error("failed to setup storage origin rules rules: {0}")]
+    SetupStorageOrigins(StorageLayerError),
+
+    /// Failed to create the search index
+    #[error("failed to create tenant search index: {0}")]
+    CreateSearchIndex(SearchError),
+
+    /// Failed to migrate the search index
+    #[error("failed to migrate tenant search index: {0}")]
+    MigrateSearchIndex(SearchError),
 }
 
 /// Request to create a tenant
@@ -116,13 +144,16 @@ pub async fn create_tenant(
         .await
         .map_err(CreateTenantError::ConnectRootDatabase)?;
 
-    // Initialize the tenant
-    let tenant = docbox_core::tenant::create_tenant::create_tenant(
-        &root_db,
-        &tenant_db,
-        search_factory,
-        storage_factory,
-        docbox_core::tenant::create_tenant::CreateTenant {
+    // Enter a database transaction
+    let mut root_transaction = root_db
+        .begin()
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to begin root transaction"))?;
+
+    // Create the tenant
+    let tenant: Tenant = Tenant::create(
+        root_transaction.deref_mut(),
+        docbox_database::models::tenant::CreateTenant {
             id: config.id,
             name: config.name,
             db_name: config.db_name,
@@ -130,13 +161,76 @@ pub async fn create_tenant(
             s3_name: config.storage_bucket_name,
             os_index_name: config.search_index_name,
             event_queue_url: config.event_queue_url,
-            origins: config.storage_cors_origins,
-            s3_queue_arn: config.storage_s3_queue_arn,
             env: config.env,
         },
     )
     .await
-    .map_err(CreateTenantError::CreateTenant)?;
+    .map_err(|err| {
+        if let Some(db_err) = err.as_database_error() {
+            // Handle attempts at a duplicate tenant creation
+            if db_err.is_unique_violation() {
+                return CreateTenantError::TenantAlreadyExist;
+            }
+        }
+
+        CreateTenantError::Database(err)
+    })
+    .inspect_err(|error| tracing::error!(?error, "failed to create tenant"))?;
+
+    // Enter a database transaction
+    let mut tenant_transaction = tenant_db
+        .begin()
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to begin tenant transaction"))?;
+
+    // Setup the tenant database
+    apply_tenant_migrations(
+        &mut root_transaction,
+        &mut tenant_transaction,
+        &tenant,
+        None,
+    )
+    .await
+    .inspect_err(|error| tracing::error!(?error, "failed to create tenant tables"))?;
+
+    // Setup the tenant storage bucket
+    tracing::debug!("creating tenant storage");
+    let storage = create_tenant_storage(
+        &tenant,
+        storage_factory,
+        config.storage_s3_queue_arn,
+        config.storage_cors_origins,
+    )
+    .await?;
+
+    // Setup the tenant search index
+    tracing::debug!("creating tenant search index");
+    let (search, search_rollback) = create_tenant_search(&tenant, search_factory).await?;
+
+    // Apply migrations to search
+    search
+        .apply_migrations(
+            &tenant,
+            &mut root_transaction,
+            &mut tenant_transaction,
+            None,
+        )
+        .await
+        .map_err(CreateTenantError::MigrateSearchIndex)?;
+
+    // Commit database changes
+    tenant_transaction
+        .commit()
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to commit tenant transaction"))?;
+    root_transaction
+        .commit()
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to commit root transaction"))?;
+
+    // Commit search and storage
+    storage.commit();
+    search_rollback.commit();
 
     Ok(tenant)
 }
@@ -245,4 +339,80 @@ pub async fn initialize_tenant_db_secret(
         .map_err(CreateTenantError::CreateTenantSecret)?;
 
     Ok(())
+}
+
+/// Create and setup the tenant storage
+async fn create_tenant_storage(
+    tenant: &Tenant,
+    storage: &StorageLayerFactory,
+    s3_queue_arn: Option<String>,
+    origins: Vec<String>,
+) -> Result<RollbackGuard<impl FnOnce()>, CreateTenantError> {
+    let storage = storage.create_storage_layer(tenant);
+    storage
+        .create_bucket()
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to create tenant bucket"))
+        .map_err(CreateTenantError::CreateStorageBucket)?;
+
+    let rollback = RollbackGuard::new({
+        let storage = storage.clone();
+        move || {
+            tokio::spawn(async move {
+                if let Err(error) = storage.delete_bucket().await {
+                    tracing::error!(?error, "failed to rollback created tenant storage bucket");
+                }
+            });
+        }
+    });
+
+    // Connect the S3 bucket for file upload notifications
+    if let Some(s3_queue_arn) = s3_queue_arn {
+        storage
+            .add_bucket_notifications(&s3_queue_arn)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(?error, "failed to add bucket notification configuration")
+            })
+            .map_err(CreateTenantError::SetupS3Notifications)?;
+    }
+
+    // Setup bucket allowed origins for presigned uploads
+    if !origins.is_empty() {
+        storage
+            .set_bucket_cors_origins(origins)
+            .await
+            .inspect_err(|error| tracing::error!(?error, "failed to add bucket cors rules"))
+            .map_err(CreateTenantError::SetupStorageOrigins)?;
+    }
+
+    Ok(rollback)
+}
+
+/// Create and setup the tenant search index
+async fn create_tenant_search(
+    tenant: &Tenant,
+    search: &SearchIndexFactory,
+) -> Result<(TenantSearchIndex, RollbackGuard<impl FnOnce()>), CreateTenantError> {
+    // Setup the tenant search index
+    let search = search.create_search_index(tenant);
+    search
+        .create_index()
+        .await
+        .map_err(CreateTenantError::CreateSearchIndex)
+        .inspect_err(|error| tracing::error!(?error, "failed to create search index"))?;
+
+    let rollback = RollbackGuard::new({
+        let search = search.clone();
+        move || {
+            // Search was not committed, roll back
+            tokio::spawn(async move {
+                if let Err(error) = search.delete_index().await {
+                    tracing::error!(?error, "failed to rollback created tenant search index");
+                }
+            });
+        }
+    });
+
+    Ok((search, rollback))
 }

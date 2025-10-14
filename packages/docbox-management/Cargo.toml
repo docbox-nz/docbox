@@ -25,6 +25,7 @@ docbox-storage.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+
 # Logging
 tracing.workspace = true
 
@@ -37,4 +38,5 @@ aws-config.workspace = true
 # Random for random password generation
 rand = "=0.8.5"
 
+tokio.workspace = true
 futures.workspace = true
