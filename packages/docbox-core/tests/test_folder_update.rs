@@ -60,6 +60,19 @@ async fn test_update_folder_name_success() {
     .await
     .unwrap();
 
+    // Ensure the folder name is updated in the database
+    {
+        let updated_folder = Folder::find_by_id(&db, &"test".to_string(), folder.id)
+            .await
+            .unwrap()
+            .expect("missing updated folder");
+
+        assert_eq!(
+            updated_folder.name.as_str(),
+            "Other Name Which Should Never Match"
+        );
+    }
+
     // Ensure the name is correctly removed from the index and is not searchable
     {
         let request = SearchRequest {
@@ -180,6 +193,16 @@ async fn test_update_folder_folder_success() {
     )
     .await
     .unwrap();
+
+    // Ensure the folder parent is updated in the database
+    {
+        let updated_folder = Folder::find_by_id(&db, &"test".to_string(), folder.id)
+            .await
+            .unwrap()
+            .expect("missing updated folder");
+
+        assert_eq!(updated_folder.folder_id, Some(new_folder.id));
+    }
 
     // Ensure the folder is no longer apart of the old folder
     {

@@ -63,6 +63,19 @@ async fn test_update_link_name_success() {
     .await
     .unwrap();
 
+    // Ensure the link name is updated in the database
+    {
+        let updated_link = Link::find(&db, &"test".to_string(), link.id)
+            .await
+            .unwrap()
+            .expect("missing updated link");
+
+        assert_eq!(
+            updated_link.name.as_str(),
+            "Other Name Which Should Never Match"
+        );
+    }
+
     // Ensure the name is correctly removed from the index and is not searchable
     {
         let request = SearchRequest {
@@ -157,6 +170,16 @@ async fn test_update_link_value_success() {
     )
     .await
     .unwrap();
+
+    // Ensure the link value is updated in the database
+    {
+        let updated_link = Link::find(&db, &"test".to_string(), link.id)
+            .await
+            .unwrap()
+            .expect("missing updated link");
+
+        assert_eq!(updated_link.value.as_str(), "http://test.com");
+    }
 
     // Ensure the value is correctly removed from the index and is not searchable
     {
@@ -361,6 +384,16 @@ async fn test_update_link_folder_success() {
     .await
     .unwrap();
 
+    // Ensure the link folder id is updated in the database
+    {
+        let updated_link = Link::find(&db, &"test".to_string(), link.id)
+            .await
+            .unwrap()
+            .expect("missing updated link");
+
+        assert_eq!(updated_link.folder_id, new_folder.id);
+    }
+
     // Ensure the link is no longer apart of the old folder
     {
         let request = SearchRequest {
@@ -456,6 +489,6 @@ async fn test_update_link_folder_unknown() {
 
     assert!(
         matches!(err, UpdateLinkError::UnknownTargetFolder),
-        "unknown link should result in a failure"
+        "unknown folder should result in a failure"
     );
 }
