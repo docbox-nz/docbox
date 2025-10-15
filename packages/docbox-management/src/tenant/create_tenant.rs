@@ -166,14 +166,12 @@ pub async fn create_tenant(
     )
     .await
     .map_err(|err| {
-        if let Some(db_err) = err.as_database_error() {
-            // Handle attempts at a duplicate tenant creation
-            if db_err.is_unique_violation() {
-                return CreateTenantError::TenantAlreadyExist;
-            }
+        // Handle attempts at a duplicate tenant creation
+        if err.is_duplicate_record() {
+            CreateTenantError::TenantAlreadyExist
+        } else {
+            CreateTenantError::Database(err)
         }
-
-        CreateTenantError::Database(err)
     })
     .inspect_err(|error| tracing::error!(?error, "failed to create tenant"))?;
 

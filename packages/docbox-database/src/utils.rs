@@ -12,6 +12,8 @@ pub trait DatabaseErrorExt {
     fn is_database_exists(&self) -> bool;
 
     fn is_table_does_not_exist(&self) -> bool;
+
+    fn is_duplicate_record(&self) -> bool;
 }
 
 impl DatabaseErrorExt for &dyn DatabaseError {
@@ -30,6 +32,10 @@ impl DatabaseErrorExt for &dyn DatabaseError {
 
     fn is_table_does_not_exist(&self) -> bool {
         self.is_error_code("42P01" /* Table does not exist */)
+    }
+
+    fn is_duplicate_record(&self) -> bool {
+        self.is_unique_violation()
     }
 }
 
@@ -52,5 +58,10 @@ impl DatabaseErrorExt for DbErr {
     fn is_table_does_not_exist(&self) -> bool {
         self.as_database_error()
             .is_some_and(|error| error.is_table_does_not_exist())
+    }
+
+    fn is_duplicate_record(&self) -> bool {
+        self.as_database_error()
+            .is_some_and(|error| error.is_duplicate_record())
     }
 }
