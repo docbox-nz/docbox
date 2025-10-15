@@ -2,7 +2,7 @@ use super::EventPublisher;
 
 /// No-op event publisher that doesn't send the event anywhere. For
 /// tenants that don't support event publishing
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct NoopEventPublisher;
 
 impl EventPublisher for NoopEventPublisher {
