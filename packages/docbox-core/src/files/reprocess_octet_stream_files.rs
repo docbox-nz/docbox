@@ -1,3 +1,13 @@
+//! # Reprocess application/octet-stream
+//!
+//! This is a migration helper script, used to handle the case where file
+//! types were not known at the time of ingest and were taken in as simply
+//! application/octet-stream files.
+//!
+//! This migration takes all of the files matching that mime type and attempts
+//! to infer the file mime type based on its extension and perform the processing
+//! step to generate its processed variants and update the file mime type
+
 use crate::{
     files::{
         index_file::store_file_index,
