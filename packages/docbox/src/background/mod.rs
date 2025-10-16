@@ -1,10 +1,10 @@
-use docbox_core::files::purge_expired_presigned_tasks::safe_purge_expired_presigned_tasks;
 use docbox_database::DatabasePoolCache;
 use docbox_storage::StorageLayerFactory;
 use futures::StreamExt;
 use scheduler::{SchedulerEventStream, SchedulerQueueEvent};
 use std::sync::Arc;
 
+pub mod purge_expired_presigned_tasks;
 pub mod scheduler;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -30,10 +30,12 @@ pub async fn perform_background_tasks(data: BackgroundTaskData) {
         match event {
             BackgroundEvent::PurgeExpiredPresigned => {
                 tracing::debug!("performing background purge for presigned tasks");
-                tokio::spawn(safe_purge_expired_presigned_tasks(
-                    data.db_cache.clone(),
-                    data.storage.clone(),
-                ));
+                tokio::spawn(
+                    purge_expired_presigned_tasks::safe_purge_expired_presigned_tasks(
+                        data.db_cache.clone(),
+                        data.storage.clone(),
+                    ),
+                );
             }
         }
     }

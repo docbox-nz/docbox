@@ -1,6 +1,7 @@
 //! Admin related access and routes for managing tenants and document boxes
 
 use crate::{
+    background::purge_expired_presigned_tasks::purge_expired_presigned_tasks,
     error::{HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::tenant::{TenantDb, TenantParams, TenantSearch, TenantStorage},
     models::admin::{TenantDocumentBoxesRequest, TenantDocumentBoxesResponse, TenantStatsResponse},
@@ -9,7 +10,6 @@ use axum::{Extension, Json, http::StatusCode};
 use axum_valid::Garde;
 use docbox_core::{
     document_box::search_document_box::{ResolvedSearchResult, search_document_boxes_admin},
-    files::purge_expired_presigned_tasks::purge_expired_presigned_tasks,
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{

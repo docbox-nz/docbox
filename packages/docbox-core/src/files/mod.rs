@@ -6,7 +6,6 @@ use crate::utils::file::{get_file_name_ext, get_mime_ext, make_s3_safe};
 pub mod delete_file;
 pub mod generated;
 pub mod index_file;
-pub mod purge_expired_presigned_tasks;
 pub mod reprocess_octet_stream_files;
 pub mod update_file;
 pub mod upload_file;
