@@ -106,9 +106,15 @@ pub async fn delete_file(
         .map_err(DeleteFileError::DeleteIndex)?;
 
     // Delete the file itself
-    file.delete(db)
+    let result = file
+        .delete(db)
         .await
         .inspect_err(|error| tracing::error!(?error, "failed to delete file from database"))?;
+
+    // Check we actually removed something before emitting an event
+    if result.rows_affected() < 1 {
+        return Ok(());
+    }
 
     // Publish an event
     events.publish_event(TenantEventMessage::FileDeleted(WithScope::new(file, scope)));

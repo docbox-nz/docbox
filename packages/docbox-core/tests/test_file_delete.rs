@@ -4,12 +4,14 @@ use crate::common::{
 };
 use docbox_core::{
     document_box::create_document_box::{CreateDocumentBox, create_document_box},
-    events::TenantEventPublisher,
+    events::{TenantEventPublisher, mpsc::MpscEventPublisher},
     files::{
         delete_file::delete_file,
         upload_file::{UploadFile, safe_upload_file},
     },
 };
+use docbox_database::models::file::File;
+use uuid::Uuid;
 
 mod common;
 
@@ -60,4 +62,59 @@ async fn test_file_delete_success() {
     delete_file(&db, &storage, &search, &events, file, document_box.scope)
         .await
         .unwrap();
+}
+
+/// Tests that deleting a file that doesn't exist should not produce an event
+#[tokio::test]
+async fn test_file_delete_unknown_no_event() {
+    let (_db, db) = create_test_tenant_database().await;
+    let (_search, search) = create_test_tenant_typesense().await;
+    let (_storage, storage) = create_test_tenant_storage().await;
+
+    let (events, mut events_rx) = MpscEventPublisher::new();
+    let events = TenantEventPublisher::Mpsc(events);
+
+    let (document_box, root) = create_document_box(
+        &db,
+        &events,
+        CreateDocumentBox {
+            scope: "test".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Consume creation event
+    _ = events_rx.recv().await.unwrap();
+
+    let fake_file = File {
+        id: Uuid::new_v4(),
+        name: Default::default(),
+        mime: "text/plain".to_string(),
+        folder_id: root.id,
+        hash: "".to_string(),
+        size: 1,
+        encrypted: false,
+        pinned: Default::default(),
+        file_key: "file.txt".to_string(),
+        created_at: Default::default(),
+        created_by: Default::default(),
+        parent_id: None,
+    };
+
+    // Delete the fake file
+    delete_file(
+        &db,
+        &storage,
+        &search,
+        &events,
+        fake_file,
+        document_box.scope,
+    )
+    .await
+    .unwrap();
+
+    // Should have nothing to consume
+    assert!(events_rx.try_recv().is_err());
 }

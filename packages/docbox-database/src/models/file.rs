@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::{postgres::PgRow, prelude::FromRow};
+use sqlx::{
+    postgres::{PgQueryResult, PgRow},
+    prelude::FromRow,
+};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -440,12 +443,11 @@ impl File {
     }
 
     /// Deletes the file
-    pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<()> {
+    pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<PgQueryResult> {
         sqlx::query(r#"DELETE FROM "docbox_files" WHERE "id" = $1"#)
             .bind(self.id)
             .execute(db)
-            .await?;
-        Ok(())
+            .await
     }
 
     /// Finds a collection of files that are all within the same document box, resolves
