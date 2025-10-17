@@ -130,6 +130,9 @@ pub enum DbConnectErr {
 
     #[error(transparent)]
     Db(#[from] DbErr),
+
+    #[error(transparent)]
+    Shared(#[from] Arc<DbConnectErr>),
 }
 
 impl DatabasePoolCache {
@@ -157,6 +160,12 @@ impl DatabasePoolCache {
             .time_to_idle(DB_CACHE_DURATION)
             .max_capacity(50)
             .eviction_policy(EvictionPolicy::tiny_lfu())
+            .eviction_listener(|cache_key: Arc<String>, pool: DbPool, _cause| {
+                tokio::spawn(async move {
+                    tracing::debug!(?cache_key, "database pool is no longer in use, closing");
+                    pool.close().await
+                });
+            })
             .build();
 
         let connect_info_cache = Cache::builder()
@@ -198,12 +207,19 @@ impl DatabasePoolCache {
     async fn get_pool(&self, db_name: &str, secret_name: &str) -> Result<PgPool, DbConnectErr> {
         let cache_key = format!("{db_name}-{secret_name}");
 
-        if let Some(pool) = self.cache.get(&cache_key).await {
-            return Ok(pool);
-        }
+        let pool = self
+            .cache
+            .try_get_with(cache_key, async {
+                tracing::debug!(?db_name, "acquiring database pool");
 
-        let pool = self.create_pool(db_name, secret_name).await?;
-        self.cache.insert(cache_key, pool.clone()).await;
+                let pool = self
+                    .create_pool(db_name, secret_name)
+                    .await
+                    .map_err(Arc::new)?;
+
+                Ok(pool)
+            })
+            .await?;
 
         Ok(pool)
     }
