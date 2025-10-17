@@ -15,7 +15,13 @@ use crate::{
     },
     utils::file::get_file_name_ext,
 };
-use docbox_database::{DbPool, DbResult, models::file::FileWithScope};
+use docbox_database::{
+    DbPool, DbResult,
+    models::{
+        file::{CreateFile, FileWithScope},
+        generated_file::{CreateGeneratedFile, GeneratedFile},
+    },
+};
 use docbox_processing::{ProcessingError, ProcessingIndexMetadata, ProcessingLayer, process_file};
 use docbox_search::TenantSearchIndex;
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
@@ -147,6 +153,7 @@ pub enum ProcessFileError {
     SetMime,
 }
 
+/// TODO: Handle rollback for failure
 pub async fn perform_process_file(
     db: DbPool,
     storage: TenantStorageLayer,
@@ -155,12 +162,6 @@ pub async fn perform_process_file(
     mut file: FileWithScope,
     mime: Mime,
 ) -> Result<(), ProcessFileError> {
-    // Start a database transaction
-    let mut db = db.begin().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to begin transaction");
-        ProcessFileError::BeginTransaction
-    })?;
-
     let bytes = storage
         .get_file(&file.file.file_key)
         .await
@@ -173,39 +174,80 @@ pub async fn perform_process_file(
 
     let mut index_metadata: Option<ProcessingIndexMetadata> = None;
 
-    if let Some(processing_output) = processing_output {
-        // Store the encryption state for encrypted files
-        if processing_output.encrypted {
-            tracing::debug!("marking file as encrypted");
-            file.file = file
-                .file
-                .set_encrypted(db.deref_mut(), true)
-                .await
-                .map_err(|error| {
-                    tracing::error!(?error, "failed to set file as encrypted");
-                    ProcessFileError::SetEncrypted
-                })?;
-        }
+    let file_in = &file.file;
 
+    let created_file = CreateFile {
+        id: file_in.id,
+        parent_id: file_in.parent_id,
+        name: file_in.name.clone(),
+        mime: file_in.mime.to_string(),
+        file_key: file_in.file_key.to_owned(),
+        folder_id: file_in.folder_id,
+        hash: file_in.hash.clone(),
+        size: file_in.size,
+        created_by: file_in.created_by.clone(),
+        created_at: file_in.created_at,
+        encrypted: file_in.encrypted,
+    };
+
+    let mut generated_files: Option<Vec<CreateGeneratedFile>> = None;
+
+    // Get file encryption state
+    let encrypted = processing_output
+        .as_ref()
+        .map(|output| output.encrypted)
+        .unwrap_or_default();
+
+    if let Some(processing_output) = processing_output {
         index_metadata = processing_output.index_metadata;
 
         let mut s3_upload_keys = Vec::new();
 
         tracing::debug!("uploading generated files");
-        store_generated_files(
-            &mut db,
+        let prepared_files = store_generated_files(
             &storage,
-            &file.file,
+            &created_file,
             &mut s3_upload_keys,
             processing_output.upload_queue,
         )
         .await?;
+        generated_files = Some(prepared_files);
     }
 
     // Index the file in the search index
     tracing::debug!("indexing file contents");
-    store_file_index(&search, &file.file, &file.scope, index_metadata).await?;
+    store_file_index(&search, &created_file, &file.scope, index_metadata).await?;
 
+    // Start a database transaction
+    let mut db = db.begin().await.map_err(|cause| {
+        tracing::error!(?cause, "failed to begin transaction");
+        ProcessFileError::BeginTransaction
+    })?;
+
+    // Create generated file records
+    if let Some(creates) = generated_files {
+        for create in creates {
+            GeneratedFile::create(db.deref_mut(), create)
+                .await
+                .map_err(UploadFileError::CreateGeneratedFile)?;
+        }
+    }
+
+    if encrypted {
+        // Mark the file as encrypted
+        tracing::debug!("marking file as encrypted");
+        file.file = file
+            .file
+            .set_encrypted(db.deref_mut(), true)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to set file as encrypted");
+                ProcessFileError::SetEncrypted
+            })?;
+    }
+
+    // Update the file mime type
+    tracing::debug!("updating file mime type");
     file.file = file
         .file
         .set_mime(db.deref_mut(), mime.to_string())

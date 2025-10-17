@@ -2,13 +2,11 @@ use crate::{
     events::TenantEventPublisher,
     files::{
         create_file_key,
-        upload_file::{
-            UploadFile, UploadFileError, UploadFileState, rollback_upload_file, upload_file,
-        },
+        upload_file::{UploadFile, UploadFileError, UploadedFileData, upload_file},
     },
 };
 use docbox_database::{
-    DbErr, DbPool, DbTransaction,
+    DbErr, DbPool,
     models::{
         document_box::DocumentBoxScopeRaw,
         file::FileId,
@@ -25,9 +23,8 @@ use docbox_search::TenantSearchIndex;
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use mime::Mime;
 use serde::Serialize;
-use std::{collections::HashMap, ops::DerefMut, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 use thiserror::Error;
-use tracing::Instrument;
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -40,12 +37,6 @@ pub struct PresignedUploadOutcome {
 
 #[derive(Debug, Error)]
 pub enum PresignedUploadError {
-    #[error("failed to perform operation (start)")]
-    BeginTransaction,
-
-    #[error("failed to perform operation (end)")]
-    CommitTransaction,
-
     /// Error when uploading files
     #[error(transparent)]
     UploadFile(#[from] UploadFileError),
@@ -69,14 +60,6 @@ pub enum PresignedUploadError {
     /// Failed to update the task status
     #[error("failed to update task status")]
     UpdateTaskStatus(DbErr),
-}
-
-/// State keeping track of whats been generated from a file
-/// upload, to help with reverted changes on failure
-#[derive(Default)]
-pub struct PresignedUploadState {
-    /// File upload state
-    file: UploadFileState,
 }
 
 pub struct CreatePresigned {
@@ -197,105 +180,53 @@ pub async fn safe_complete_presigned(
     processing: ProcessingLayer,
     mut complete: CompletePresigned,
 ) -> Result<(), PresignedUploadError> {
-    // Start a database transaction
-    let mut db = db_pool.begin().await.map_err(|error| {
-        tracing::error!(?error, "failed to begin transaction");
-        PresignedUploadError::BeginTransaction
-    })?;
-
-    let mut upload_state = PresignedUploadState::default();
-
     match complete_presigned(
-        &mut db,
+        &db_pool,
         &search,
         &storage,
-        &events,
         &processing,
+        &events,
         &mut complete,
-        &mut upload_state,
     )
     .await
     {
-        Ok(value) => value,
-        Err(error) => {
-            let error_message = error.to_string();
+        Ok(output) => {
+            let status = PresignedTaskStatus::Completed {
+                file_id: output.file.id,
+            };
 
-            let span = tracing::Span::current();
-
-            // Attempt to rollback any allocated resources in the background
-            tokio::spawn(
-                async move {
-                    if let Err(cause) = db.rollback().await {
-                        tracing::error!(?cause, "failed to roll back database transaction");
-                    }
-
-                    // Update the task status
-                    if let Err(cause) = complete
-                        .task
-                        .set_status(
-                            &db_pool,
-                            PresignedTaskStatus::Failed {
-                                error: error_message,
-                            },
-                        )
-                        .await
-                    {
-                        tracing::error!(?cause, "failed to set presigned task status to failure");
-                    }
-
-                    rollback_presigned_upload_file(&search, &storage, upload_state).await;
-                }
-                .instrument(span),
-            );
-
-            return Err(error);
-        }
-    };
-
-    // Commit the transaction
-    if let Err(error) = db.commit().await {
-        tracing::error!(?error, "failed to commit transaction");
-
-        // Update the task status
-        if let Err(cause) = complete
-            .task
-            .set_status(
-                &db_pool,
-                PresignedTaskStatus::Failed {
-                    error: "Internal server error".to_string(),
-                },
-            )
-            .await
-        {
-            tracing::error!(?cause, "failed to set presigned task status to failure");
-        }
-
-        let span = tracing::Span::current();
-
-        // Attempt to rollback any allocated resources in the background
-        tokio::spawn(
-            async move {
-                rollback_presigned_upload_file(&search, &storage, upload_state).await;
+            if let Err(cause) = complete.task.set_status(&db_pool, status).await {
+                tracing::error!(?cause, "failed to set presigned task status");
+                return Err(PresignedUploadError::UpdateTaskStatus(cause));
             }
-            .instrument(span),
-        );
 
-        return Err(PresignedUploadError::CommitTransaction);
+            Ok(())
+        }
+        Err(error) => {
+            tracing::error!(?error, "failed to complete presigned upload");
+            let status = PresignedTaskStatus::Failed {
+                error: error.to_string(),
+            };
+
+            if let Err(cause) = complete.task.set_status(&db_pool, status).await {
+                tracing::error!(?cause, "failed to set presigned task status");
+                return Err(PresignedUploadError::UpdateTaskStatus(cause));
+            }
+
+            Err(error)
+        }
     }
-
-    Ok(())
 }
 
 /// Completes a presigned file upload
 pub async fn complete_presigned(
-    db: &mut DbTransaction<'_>,
+    db: &DbPool,
     search: &TenantSearchIndex,
     storage: &TenantStorageLayer,
-    events: &TenantEventPublisher,
     processing: &ProcessingLayer,
+    events: &TenantEventPublisher,
     complete: &mut CompletePresigned,
-    upload_state: &mut PresignedUploadState,
-) -> Result<(), PresignedUploadError> {
+) -> Result<UploadedFileData, PresignedUploadError> {
     let task = &mut complete.task;
 
     // Load the file from storage
@@ -336,37 +267,6 @@ pub async fn complete_presigned(
     };
 
     // Perform the upload
-    let output = upload_file(
-        db,
-        search,
-        storage,
-        events,
-        processing,
-        upload,
-        &mut upload_state.file,
-    )
-    .await?;
-
-    // Update the task status
-    task.set_status(
-        db.deref_mut(),
-        PresignedTaskStatus::Completed {
-            file_id: output.file.id,
-        },
-    )
-    .await
-    .map_err(PresignedUploadError::UpdateTaskStatus)?;
-
-    Ok(())
-}
-
-/// Performs the process of rolling back a file upload based
-/// on the current upload state
-pub async fn rollback_presigned_upload_file(
-    search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
-    upload_state: PresignedUploadState,
-) {
-    // Revert file state
-    rollback_upload_file(search, storage, upload_state.file).await;
+    let output = upload_file(db, search, storage, processing, events, upload).await?;
+    Ok(output)
 }

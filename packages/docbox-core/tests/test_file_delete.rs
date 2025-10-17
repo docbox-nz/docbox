@@ -7,7 +7,7 @@ use docbox_core::{
     events::{TenantEventPublisher, mpsc::MpscEventPublisher},
     files::{
         delete_file::delete_file,
-        upload_file::{UploadFile, safe_upload_file},
+        upload_file::{UploadFile, upload_file},
     },
 };
 use docbox_database::models::file::File;
@@ -35,12 +35,12 @@ async fn test_file_delete_success() {
     .await
     .unwrap();
 
-    let file = safe_upload_file(
-        db.clone(),
-        search.clone(),
-        storage.clone(),
-        events.clone(),
-        processing.clone(),
+    let file = upload_file(
+        &db,
+        &search,
+        &storage,
+        &processing,
+        &events,
         UploadFile {
             fixed_id: None,
             parent_id: None,

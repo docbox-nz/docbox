@@ -64,28 +64,30 @@ pub struct GeneratedFile {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug)]
 pub struct CreateGeneratedFile {
+    pub id: Uuid,
     pub file_id: FileId,
     pub mime: String,
     pub ty: GeneratedFileType,
     pub hash: String,
     pub file_key: String,
+    pub created_at: DateTime<Utc>,
 }
 
 impl GeneratedFile {
     pub async fn create(
         db: impl DbExecutor<'_>,
         CreateGeneratedFile {
+            id,
             file_id,
             ty,
             hash,
             file_key,
             mime,
+            created_at,
         }: CreateGeneratedFile,
     ) -> DbResult<GeneratedFile> {
-        let id = Uuid::new_v4();
-        let created_at = Utc::now();
-
         sqlx::query(
             r#"
             INSERT INTO "docbox_generated_files"

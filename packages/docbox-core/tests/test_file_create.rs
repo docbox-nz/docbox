@@ -5,7 +5,7 @@ use crate::common::{
 use docbox_core::{
     document_box::create_document_box::{CreateDocumentBox, create_document_box},
     events::TenantEventPublisher,
-    files::upload_file::{UploadFile, safe_upload_file},
+    files::upload_file::{UploadFile, upload_file},
 };
 
 mod common;
@@ -30,12 +30,12 @@ async fn test_file_create_success() {
     .await
     .unwrap();
 
-    safe_upload_file(
-        db.clone(),
-        search,
-        storage,
-        events,
-        processing,
+    upload_file(
+        &db,
+        &search,
+        &storage,
+        &processing,
+        &events,
         UploadFile {
             fixed_id: None,
             parent_id: None,

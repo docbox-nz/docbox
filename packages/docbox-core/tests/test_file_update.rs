@@ -7,7 +7,7 @@ use docbox_core::{
     events::TenantEventPublisher,
     files::{
         update_file::{UpdateFile, UpdateFileError, update_file},
-        upload_file::{UploadFile, safe_upload_file},
+        upload_file::{UploadFile, upload_file},
     },
     folders::create_folder::{CreateFolderData, safe_create_folder},
 };
@@ -37,12 +37,12 @@ async fn test_update_file_name_success() {
     .await
     .unwrap();
 
-    let file = safe_upload_file(
-        db.clone(),
-        search.clone(),
-        storage.clone(),
-        events.clone(),
-        processing.clone(),
+    let file = upload_file(
+        &db,
+        &search,
+        &storage,
+        &processing,
+        &events,
         UploadFile {
             fixed_id: None,
             parent_id: None,
@@ -169,12 +169,12 @@ async fn test_update_file_folder_success() {
     .await
     .unwrap();
 
-    let file = safe_upload_file(
-        db.clone(),
-        search.clone(),
-        storage.clone(),
-        events.clone(),
-        processing.clone(),
+    let file = upload_file(
+        &db,
+        &search,
+        &storage,
+        &processing,
+        &events,
         UploadFile {
             fixed_id: None,
             parent_id: None,
@@ -296,12 +296,12 @@ async fn test_update_file_pinned_success() {
     .await
     .unwrap();
 
-    let file = safe_upload_file(
-        db.clone(),
-        search.clone(),
-        storage.clone(),
-        events.clone(),
-        processing.clone(),
+    let file = upload_file(
+        &db,
+        &search,
+        &storage,
+        &processing,
+        &events,
         UploadFile {
             fixed_id: None,
             parent_id: None,
@@ -366,12 +366,12 @@ async fn test_update_file_folder_unknown_error() {
     .await
     .unwrap();
 
-    let file = safe_upload_file(
-        db.clone(),
-        search.clone(),
-        storage.clone(),
-        events.clone(),
-        processing.clone(),
+    let file = upload_file(
+        &db,
+        &search,
+        &storage,
+        &processing,
+        &events,
         UploadFile {
             fixed_id: None,
             parent_id: None,

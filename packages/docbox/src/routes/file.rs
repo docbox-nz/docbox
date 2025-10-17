@@ -30,7 +30,7 @@ use docbox_core::{
     files::{
         delete_file::delete_file,
         update_file::{UpdateFile, UpdateFileError},
-        upload_file::{UploadFile, UploadedFileData, safe_upload_file},
+        upload_file::{UploadFile, UploadedFileData, upload_file},
         upload_file_presigned::{CreatePresigned, create_presigned_upload},
     },
     utils::file::get_file_name_ext,
@@ -174,7 +174,7 @@ pub async fn upload(
 
     // Handle synchronous request waiting for the task to complete before responding
     if !req.asynchronous.unwrap_or_default() {
-        let data = safe_upload_file(db, search, storage, events, processing, upload)
+        let data = upload_file(&db, &search, &storage, &processing, &events, upload)
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to upload file");
@@ -191,7 +191,7 @@ pub async fn upload(
         db.clone(),
         scope.clone(),
         async move {
-            let result = safe_upload_file(db, search, storage, events, processing, upload)
+            let result = upload_file(&db, &search, &storage, &processing, &events, upload)
                 .await
                 .map_err(|error| {
                     tracing::error!(?error, "failed to upload file");

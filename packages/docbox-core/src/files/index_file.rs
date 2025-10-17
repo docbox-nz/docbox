@@ -1,4 +1,4 @@
-use docbox_database::models::{document_box::DocumentBoxScopeRaw, file::File};
+use docbox_database::models::{document_box::DocumentBoxScopeRaw, file::CreateFile};
 use docbox_processing::ProcessingIndexMetadata;
 use docbox_search::{
     TenantSearchIndex,
@@ -9,7 +9,7 @@ use super::upload_file::UploadFileError;
 
 pub async fn store_file_index(
     search: &TenantSearchIndex,
-    file: &File,
+    file: &CreateFile,
     document_box: &DocumentBoxScopeRaw,
     index_metadata: Option<ProcessingIndexMetadata>,
 ) -> Result<(), UploadFileError> {

@@ -157,9 +157,9 @@ pub struct FileIdWithScope {
 }
 
 pub struct CreateFile {
-    /// Fixed file ID to use instead of a randomly
-    /// generated file ID
-    pub fixed_id: Option<FileId>,
+    /// ID for the file to use
+    pub id: FileId,
+
     /// Optional parent file if the file was created
     /// as the result of another file (i.e. email attachments)
     pub parent_id: Option<FileId>,
@@ -171,6 +171,7 @@ pub struct CreateFile {
     pub size: i32,
     pub file_key: String,
     pub created_by: Option<UserId>,
+    pub created_at: DateTime<Utc>,
     pub encrypted: bool,
 }
 
@@ -298,7 +299,7 @@ impl File {
     pub async fn create(
         db: impl DbExecutor<'_>,
         CreateFile {
-            fixed_id,
+            id,
             parent_id,
             name,
             mime,
@@ -307,12 +308,10 @@ impl File {
             size,
             file_key,
             created_by,
+            created_at,
             encrypted,
         }: CreateFile,
     ) -> DbResult<File> {
-        let id = fixed_id.unwrap_or_else(Uuid::new_v4);
-        let created_at = Utc::now();
-
         sqlx::query(
             r#"INSERT INTO "docbox_files" (
                     "id", "name", "mime", "folder_id", "hash", "size",
