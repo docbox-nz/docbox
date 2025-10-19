@@ -100,6 +100,9 @@ impl TenantStorageLayer {
     }
 
     /// Deletes the tenant storage bucket
+    ///
+    /// In the event that the bucket did not exist before calling this
+    /// function this is treated as an [`Ok`] result
     #[tracing::instrument(skip(self))]
     pub async fn delete_bucket(&self) -> Result<(), StorageLayerError> {
         match self {

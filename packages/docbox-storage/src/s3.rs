@@ -287,9 +287,8 @@ impl StorageLayerImpl for S3StorageLayer {
             // (This is not a failure and indicates the bucket is already deleted)
             if error
                 .as_service_error()
-                .and_then(|err| err.source())
-                .and_then(|source| source.downcast_ref::<aws_sdk_s3::Error>())
-                .is_some_and(|err| matches!(err, aws_sdk_s3::Error::NoSuchBucket(_)))
+                .and_then(|err| err.meta().code())
+                .is_some_and(|code| code == "NoSuchBucket")
             {
                 tracing::debug!("bucket did not exist");
                 return Ok(());
