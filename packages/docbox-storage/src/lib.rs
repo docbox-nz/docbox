@@ -226,9 +226,7 @@ impl Stream for FileStream {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
-        // Pin projection to the underlying stream
-        let stream = unsafe { self.as_mut().map_unchecked_mut(|s| &mut s.stream) };
-        stream.poll_next(cx)
+        self.stream.as_mut().poll_next(cx)
     }
 }
 
