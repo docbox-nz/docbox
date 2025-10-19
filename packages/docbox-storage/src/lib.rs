@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use docbox_database::models::tenant::Tenant;
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::{pin::Pin, time::Duration};
+use std::{fmt::Debug, pin::Pin, time::Duration};
 use thiserror::Error;
 
 pub mod s3;
@@ -228,6 +228,12 @@ pub(crate) trait StorageLayerImpl {
 /// Stream of bytes from a file
 pub struct FileStream {
     pub stream: Pin<Box<dyn Stream<Item = std::io::Result<Bytes>> + Send>>,
+}
+
+impl Debug for FileStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileStream").finish()
+    }
 }
 
 impl Stream for FileStream {
