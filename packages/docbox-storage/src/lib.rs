@@ -169,7 +169,10 @@ impl TenantStorageLayer {
         }
     }
 
-    /// Deletes the S3 file
+    /// Deletes the file with the provided `key`
+    ///
+    /// In the event that the file did not exist before calling this
+    /// function this is treated as an [`Ok`] result
     #[tracing::instrument(skip(self))]
     pub async fn delete_file(&self, key: &str) -> Result<(), StorageLayerError> {
         match self {
