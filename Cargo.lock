@@ -2045,6 +2045,7 @@ dependencies = [
  "chrono",
  "docbox-database",
  "futures",
+ "reqwest",
  "serde",
  "testcontainers",
  "testcontainers-modules",
