@@ -84,6 +84,9 @@ pub enum TenantStorageLayer {
 
 impl TenantStorageLayer {
     /// Creates the tenant storage bucket
+    ///
+    /// In the event that the bucket already exists, this is treated as a
+    /// [`Ok`] result rather than an error
     #[tracing::instrument(skip(self))]
     pub async fn create_bucket(&self) -> Result<(), StorageLayerError> {
         match self {
