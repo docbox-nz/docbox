@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod aws;
 pub mod document_box;
 pub mod events;

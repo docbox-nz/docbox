@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! # Secret manager
 //!
 //! Secret management abstraction with multiple supported backends

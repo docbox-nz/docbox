@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::{
     email::{EmailProcessingError, is_mail_mime, process_email},
     image::process_image_async,

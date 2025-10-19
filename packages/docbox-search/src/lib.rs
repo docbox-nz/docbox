@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use aws_config::SdkConfig;
 use chrono::Utc;
 use docbox_database::{

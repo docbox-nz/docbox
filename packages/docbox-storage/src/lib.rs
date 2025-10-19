@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use aws_config::SdkConfig;
 use aws_sdk_s3::presigning::PresignedRequest;
 use bytes::{Buf, Bytes};

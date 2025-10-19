@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use docbox_secrets::{SecretManager, SecretManagerError};
 use models::tenant::Tenant;
 use moka::{future::Cache, policy::EvictionPolicy};

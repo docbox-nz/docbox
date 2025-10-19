@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::{
     background::{BackgroundTaskData, perform_background_tasks},
     extensions::max_file_size::MaxFileSizeBytes,
