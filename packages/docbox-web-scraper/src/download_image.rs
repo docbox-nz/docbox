@@ -9,6 +9,7 @@ use reqwest::{Url, header::CONTENT_TYPE};
 use thiserror::Error;
 use tracing::{debug, error};
 
+/// Error's that can occur when downloading an image
 #[derive(Debug, Error)]
 pub enum DownloadImageError {
     /// Error making the request
@@ -32,6 +33,7 @@ pub enum DownloadImageError {
     DataUri(DataUriError),
 }
 
+/// URI that has been resolved
 pub enum ResolvedUri<'a> {
     /// Uri is a data URI
     Data(&'a str),
@@ -40,6 +42,8 @@ pub enum ResolvedUri<'a> {
     Absolute(Url),
 }
 
+/// Resolves a URL handling data URI's and ensuring the URLs are
+/// absolute
 pub fn resolve_full_url<'a>(
     base_url: &Url,
     href: &'a str,

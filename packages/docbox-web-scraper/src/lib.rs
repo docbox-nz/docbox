@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! # Docbox Web Scraper
 //!
 //! Web-scraping client for getting website metadata, favicon, ...etc and
@@ -23,8 +25,7 @@ pub use reqwest::Url;
 
 use crate::document::is_allowed_robots_txt;
 
-pub type OgpHttpClient = reqwest::Client;
-
+/// Configuration for the website metadata service
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct WebsiteMetaServiceConfig {
@@ -40,11 +41,11 @@ pub struct WebsiteMetaServiceConfig {
 
     /// Time to wait when attempting to fetch resource before timing out
     ///
-    /// This option is ignored if you manually provide a [reqwest::Client]
+    /// This option is ignored if you manually provide a [`reqwest::Client`]
     pub metadata_connect_timeout: Duration,
     /// Time to wait while downloading a resource before timing out (between each read of data)
     ///
-    /// This option is ignored if you manually provide a [reqwest::Client]
+    /// This option is ignored if you manually provide a [`reqwest::Client`]
     pub metadata_read_timeout: Duration,
 }
 
@@ -143,7 +144,7 @@ impl Default for WebsiteMetaServiceConfig {
 
 /// Service for looking up website metadata and storing a cached value
 pub struct WebsiteMetaService {
-    client: OgpHttpClient,
+    client: reqwest::Client,
     /// Cache for website metadata
     cache: Cache<String, Option<ResolvedWebsiteMetadata>>,
     /// Cache for resolved images will contain [None] for images that failed to load
@@ -189,7 +190,7 @@ impl WebsiteMetaService {
 
     /// Create a web scraper from the provided client
     pub fn from_client(client: reqwest::Client) -> Self {
-        Self::from_client_with_config(client, Default::default())
+        Self::from_client_with_config(client, WebsiteMetaServiceConfig::default())
     }
 
     /// Create a web scraper from the provided config
@@ -315,17 +316,18 @@ impl WebsiteMetaService {
 
                     // Check we are allowed to access the URL if its absolute
                     if let ResolvedUri::Absolute(image_url) = &image_url
-                        && !is_allowed_url::<TokioDomainResolver>(image_url).await {
-                            tracing::warn!("skipping resolve image for disallowed url");
-                            return None;
-                        }
+                        && !is_allowed_url::<TokioDomainResolver>(image_url).await
+                    {
+                        tracing::warn!("skipping resolve image for disallowed url");
+                        return None;
+                    }
 
                     let (bytes, content_type) =
                         download_image_href(&self.client, image_url).await.ok()?;
 
                     Some(ResolvedImage {
-                        bytes,
                         content_type,
+                        bytes,
                     })
                 }
                 .instrument(span),

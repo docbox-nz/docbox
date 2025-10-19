@@ -3,6 +3,7 @@ use bytes::Bytes;
 use mime::Mime;
 use thiserror::Error;
 
+/// Error's that can occur when parsing a data URI
 #[derive(Debug, Error)]
 pub enum DataUriError {
     /// Data URI was malformed in some way

@@ -23,10 +23,11 @@ pub struct WebsiteMetadata {
 #[derive(Debug, Clone)]
 pub struct Favicon {
     pub ty: Mime,
-    pub _sizes: Option<String>,
+    pub sizes: Option<String>,
     pub href: String,
 }
 
+/// State for data extracted from a website document
 #[derive(Default)]
 struct WebsiteDocumentState {
     title: Option<String>,
@@ -37,6 +38,7 @@ struct WebsiteDocumentState {
     favicons: Vec<Favicon>,
 }
 
+/// Errors that could occur when website metadata is loaded
 #[derive(Debug, Error)]
 pub enum WebsiteMetadataError {
     #[error("failed to request resource")]
@@ -52,6 +54,7 @@ pub enum WebsiteMetadataError {
     Parse(WebsiteMetadataParseError),
 }
 
+/// Errors that could occur when parsing the website metadata
 #[derive(Debug, Error)]
 pub enum WebsiteMetadataParseError {
     #[error("failed to parse resource response")]
@@ -101,6 +104,7 @@ pub async fn get_website_metadata(
     parse_website_metadata(&text).map_err(WebsiteMetadataError::Parse)
 }
 
+/// Error's that can occur when attempting to load robots.txt
 #[derive(Debug, Error)]
 pub enum RobotsTxtError {
     #[error("failed to request resource")]
@@ -274,13 +278,10 @@ fn visit_meta_tag<'doc>(state: &mut WebsiteDocumentState, tag: &HTMLTag<'doc>) {
 ///
 /// <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
 /// <link rel="shortcut icon" type="image/x-icon" href="/images/favicon.ico">
-fn visit_link_tag<'doc>(state: &mut WebsiteDocumentState, tag: &HTMLTag<'doc>) {
+fn visit_link_tag(state: &mut WebsiteDocumentState, tag: &HTMLTag<'_>) {
     let attributes = tag.attributes();
 
-    let rel = attributes
-        .get("rel")
-        .flatten()
-        .map(|value| value.as_bytes());
+    let rel = attributes.get("rel").flatten().map(tl::Bytes::as_bytes);
 
     // Only match icon link
     if !matches!(rel, Some(b"icon" | b"shortcut icon")) {
@@ -314,11 +315,7 @@ fn visit_link_tag<'doc>(state: &mut WebsiteDocumentState, tag: &HTMLTag<'doc>) {
         .flatten()
         .map(|value| value.as_utf8_str().to_string());
 
-    state.favicons.push(Favicon {
-        ty,
-        href,
-        _sizes: sizes,
-    })
+    state.favicons.push(Favicon { ty, sizes, href });
 }
 
 #[cfg(test)]
@@ -353,7 +350,7 @@ mod tests {
         let favicon = &metadata.favicons[0];
         assert_eq!(favicon.ty, mime::Mime::from_str("image/x-icon").unwrap());
         assert_eq!(favicon.href, "/favicon.ico");
-        assert_eq!(favicon._sizes, Some("16x16".to_string()));
+        assert_eq!(favicon.sizes, Some("16x16".to_string()));
     }
 
     #[test]
@@ -377,13 +374,13 @@ mod tests {
 
     #[test]
     fn test_parse_website_metadata_missing_tags() {
-        let html = r#"
+        let html = r"
             <html>
                 <head>
                     <!-- Empty head -->
                 </head>
             </html>
-        "#;
+        ";
 
         let metadata = parse_website_metadata(html).expect("Failed to parse metadata");
 
@@ -400,12 +397,12 @@ mod tests {
             Favicon {
                 ty: mime::Mime::from_str("image/png").unwrap(),
                 href: "/favicon.png".to_string(),
-                _sizes: Some("32x32".to_string()),
+                sizes: Some("32x32".to_string()),
             },
             Favicon {
                 ty: mime::Mime::from_str("image/x-icon").unwrap(),
                 href: "/favicon.ico".to_string(),
-                _sizes: Some("16x16".to_string()),
+                sizes: Some("16x16".to_string()),
             },
         ];
 
@@ -419,7 +416,7 @@ mod tests {
         let favicons = vec![Favicon {
             ty: mime::Mime::from_str("image/png").unwrap(),
             href: "/favicon.png".to_string(),
-            _sizes: None,
+            sizes: None,
         }];
 
         let best = determine_best_favicon(&favicons);

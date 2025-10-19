@@ -15,6 +15,7 @@ pub(crate) trait DomainResolver {
     ) -> std::io::Result<impl Iterator<Item = SocketAddr>>;
 }
 
+/// Domain resolver backed by tokio's resolution
 pub struct TokioDomainResolver;
 
 impl DomainResolver for TokioDomainResolver {
@@ -31,7 +32,7 @@ const ALLOWED_SCHEMES: &[&str] = &["http", "https"];
 /// Validates that the provided `url` is valid for the web-scraper
 /// to visit.
 ///
-/// - The URL scheme is in [ALLOW_SCHEMES]
+/// - The URL scheme is in [`ALLOW_SCHEMES`]
 /// - The URL host portion is a domain NOT a IP address
 /// - The resolved IP of the domain is a globally reachable address
 ///
@@ -94,7 +95,7 @@ pub async fn is_allowed_url<D: DomainResolver>(url: &Url) -> bool {
     any_valid
 }
 
-/// Sourced from the unstable rust standard library [Ipv4Addr::is_global]
+/// Sourced from the unstable rust standard library [`Ipv4Addr::is_global`]
 ///
 /// Used to check if the provided IPv4 address is globally reachable
 fn is_ipv4_global(addr: Ipv4Addr) -> bool {
@@ -120,7 +121,7 @@ fn is_ipv4_global(addr: Ipv4Addr) -> bool {
             || addr.is_broadcast())
 }
 
-/// Sourced from the unstable rust standard library [Ipv6Addr::is_global]
+/// Sourced from the unstable rust standard library [`Ipv6Addr::is_global`]
 ///
 /// Used to check if the provided IPv6 address is globally reachable
 fn is_ipv6_global(addr: Ipv6Addr) -> bool {
@@ -175,11 +176,9 @@ mod test {
         ) -> std::io::Result<impl Iterator<Item = std::net::SocketAddr>> {
             match host {
                 // Localhost should always resolve to 127.0.0.1
-                "localhost" => Ok([SocketAddr::V4(SocketAddrV4::new(
-                    Ipv4Addr::new(127, 0, 0, 1),
-                    port,
-                ))]
-                .into_iter()),
+                "localhost" => {
+                    Ok([SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))].into_iter())
+                }
 
                 // Example domains should resolve to the fixed public address that
                 // example.com uses, this is owned by IANA
@@ -190,11 +189,7 @@ mod test {
 
                 // Fake "bad" domains that point to local addresses
                 "local.example.com" | "local.example.org" | "local.example.net" => {
-                    Ok([SocketAddr::V4(SocketAddrV4::new(
-                        Ipv4Addr::new(127, 0, 0, 1),
-                        port,
-                    ))]
-                    .into_iter())
+                    Ok([SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))].into_iter())
                 }
 
                 // Resolve anything else as a public address (Use cloudflare DNS)
