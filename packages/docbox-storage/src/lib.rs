@@ -126,6 +126,9 @@ impl TenantStorageLayer {
     }
 
     /// Create a presigned file download URL
+    ///
+    /// Presigned download creation will succeed even if the requested key
+    /// is not present
     #[tracing::instrument(skip(self))]
     pub async fn create_presigned_download(
         &self,
