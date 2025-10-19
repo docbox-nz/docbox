@@ -61,7 +61,7 @@ async fn test_upload_file_presigned_minio() {
     assert_eq!(contents.as_ref(), b"test");
 }
 
-/// Tests uploading a file using presigned uploads with a duplicate key will override the existing ocvntent
+/// Tests uploading a file using presigned uploads with a duplicate key will override the existing content
 #[tokio::test]
 async fn test_upload_file_duplicate_key_override_minio() {
     let container = test_minio_container().await;
