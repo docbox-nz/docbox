@@ -35,23 +35,35 @@ pub struct WebsiteMetaServiceConfig {
     /// HTTPS proxy to use when making HTTPS metadata requests
     pub https_proxy: Option<String>,
 
-    /// Duration to maintain site metadata for (48h)
+    /// Duration to maintain site metadata for
+    ///
+    /// Default: 48h
     pub metadata_cache_duration: Duration,
     /// Maximum number of site metadata to maintain in the cache
+    ///
+    /// Default: 50
     pub metadata_cache_capacity: u64,
 
-    /// Duration to maintain resolved images for (15min)
+    /// Duration to maintain resolved images for
+    ///
+    /// Default: 15min
     pub image_cache_duration: Duration,
     /// Maximum number of images to maintain in the cache
+    ///
+    /// Default: 5
     pub image_cache_capacity: u64,
 
     /// Time to wait when attempting to fetch resource before timing out
     ///
     /// This option is ignored if you manually provide a [`reqwest::Client`]
+    ///
+    /// Default: 5s
     pub metadata_connect_timeout: Duration,
     /// Time to wait while downloading a resource before timing out (between each read of data)
     ///
     /// This option is ignored if you manually provide a [`reqwest::Client`]
+    ///
+    /// Default: 10s
     pub metadata_read_timeout: Duration,
 }
 
