@@ -152,6 +152,7 @@ pub async fn is_allowed_robots_txt(
     Ok(is_allowed)
 }
 
+/// Parse website metadata contained within the provided HTML content
 pub fn parse_website_metadata(html: &str) -> Result<WebsiteMetadata, WebsiteMetadataParseError> {
     let dom = tl::parse(html, tl::ParserOptions::default())
         .map_err(|_| WebsiteMetadataParseError::Parsing)?;

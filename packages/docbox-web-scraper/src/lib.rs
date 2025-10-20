@@ -55,6 +55,7 @@ pub struct WebsiteMetaServiceConfig {
     pub metadata_read_timeout: Duration,
 }
 
+/// Errors that could occur when loading the configuration
 #[derive(Debug, Error)]
 pub enum WebsiteMetaServiceConfigError {
     #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION must be a number in seconds: {0}")]
@@ -165,11 +166,12 @@ pub struct WebsiteMetaService {
 
 /// Cache key for image cache value types
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ImageCacheKey {
+enum ImageCacheKey {
     Favicon,
     Image,
 }
 
+/// Metadata resolved from a scraped website
 #[derive(Clone, Serialize)]
 pub struct ResolvedWebsiteMetadata {
     pub title: Option<String>,
@@ -298,6 +300,7 @@ impl WebsiteMetaService {
             .await
     }
 
+    /// Resolve the favicon image at the provided URL
     pub async fn resolve_website_favicon(&self, url: &Url) -> Option<ResolvedImage> {
         let website = self.resolve_website(url).await?;
         let favicon = match website.best_favicon {
@@ -315,6 +318,7 @@ impl WebsiteMetaService {
             .await
     }
 
+    /// Resolve the OGP metadata image from the provided URL
     pub async fn resolve_website_image(&self, url: &Url) -> Option<ResolvedImage> {
         let website = self.resolve_website(url).await?;
         let og_image = website.og_image?;
