@@ -42,7 +42,7 @@ tracing.workspace = true
 # AWS Config
 aws-config.workspace = true
 # AWS SQS sdk
-aws-sdk-sqs = "=1.76.0"
+aws-sdk-sqs = "=1.86.0"
 
 bytes.workspace = true
 
