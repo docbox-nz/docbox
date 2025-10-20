@@ -10,6 +10,7 @@ use document::{Favicon, determine_best_favicon, get_website_metadata};
 use download_image::{ResolvedUri, download_image_href, resolve_full_url};
 use mime::Mime;
 use moka::{future::Cache, policy::EvictionPolicy};
+use reqwest::Proxy;
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
 use thiserror::Error;
@@ -29,6 +30,11 @@ use crate::document::is_allowed_robots_txt;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct WebsiteMetaServiceConfig {
+    /// HTTP proxy to use when making HTTP metadata requests
+    pub http_proxy: Option<String>,
+    /// HTTPS proxy to use when making HTTPS metadata requests
+    pub https_proxy: Option<String>,
+
     /// Duration to maintain site metadata for (48h)
     pub metadata_cache_duration: Duration,
     /// Maximum number of site metadata to maintain in the cache
@@ -68,7 +74,11 @@ pub enum WebsiteMetaServiceConfigError {
 impl WebsiteMetaServiceConfig {
     /// Load a website meta service config from its environment variables
     pub fn from_env() -> Result<WebsiteMetaServiceConfig, WebsiteMetaServiceConfigError> {
-        let mut config = WebsiteMetaServiceConfig::default();
+        let mut config = WebsiteMetaServiceConfig {
+            http_proxy: std::env::var("DOCBOX_WEB_SCRAPE_HTTP_PROXY").ok(),
+            https_proxy: std::env::var("DOCBOX_WEB_SCRAPE_HTTPS_PROXY").ok(),
+            ..Default::default()
+        };
 
         if let Ok(metadata_cache_duration) =
             std::env::var("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION")
@@ -132,6 +142,8 @@ impl WebsiteMetaServiceConfig {
 impl Default for WebsiteMetaServiceConfig {
     fn default() -> Self {
         Self {
+            http_proxy: None,
+            https_proxy: None,
             metadata_cache_duration: Duration::from_secs(60 * 60 * 48),
             metadata_cache_capacity: 50,
             image_cache_duration: Duration::from_secs(60 * 15),
@@ -195,7 +207,17 @@ impl WebsiteMetaService {
 
     /// Create a web scraper from the provided config
     pub fn from_config(config: WebsiteMetaServiceConfig) -> reqwest::Result<Self> {
-        let client = reqwest::Client::builder()
+        let mut builder = reqwest::Client::builder();
+
+        if let Some(http_proxy) = config.http_proxy.clone() {
+            builder = builder.proxy(Proxy::http(http_proxy)?);
+        }
+
+        if let Some(https_proxy) = config.https_proxy.clone() {
+            builder = builder.proxy(Proxy::https(https_proxy)?);
+        }
+
+        let client = builder
             .user_agent("DocboxLinkBot")
             .connect_timeout(config.metadata_connect_timeout)
             .read_timeout(config.metadata_read_timeout)
