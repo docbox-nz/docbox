@@ -1,3 +1,13 @@
+//! # S3 Storage Backend
+//!
+//! Storage backend backed by a [S3](https://docs.aws.amazon.com/s3/) compatible storage solution (AWS S3, MinIO, ...etc)
+//!
+//! # Environment Variables
+//!
+//! * `DOCBOX_S3_ENDPOINT` - URL to use when using a custom S3 endpoint
+//! * `DOCBOX_S3_ACCESS_KEY_ID` - Access key ID when using a custom S3 endpoint
+//! * `DOCBOX_S3_ACCESS_KEY_SECRET` - Access key secret when using a custom S3 endpoint
+
 use crate::{FileStream, StorageLayerError, StorageLayerImpl};
 use aws_config::SdkConfig;
 use aws_sdk_s3::{
@@ -24,23 +34,29 @@ use serde::{Deserialize, Serialize};
 use std::{error::Error, time::Duration};
 use thiserror::Error;
 
-pub type S3Client = aws_sdk_s3::Client;
+type S3Client = aws_sdk_s3::Client;
 
+/// Configuration for the S3 storage layer
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct S3StorageLayerFactoryConfig {
+    /// Endpoint to use for requests
     pub endpoint: S3Endpoint,
 }
 
+/// Errors that could occur when loading the S3 storage layer configuration
 #[derive(Debug, Error)]
 pub enum S3StorageLayerFactoryConfigError {
+    /// Using a custom endpoint but didn't specify the access key ID
     #[error("cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_ID")]
     MissingAccessKeyId,
 
+    /// Using a custom endpoint but didn't specify the access key secret
     #[error("cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_SECRET")]
     MissingAccessKeySecret,
 }
 
 impl S3StorageLayerFactoryConfig {
+    /// Load a [S3StorageLayerFactoryConfig] from the current environment
     pub fn from_env() -> Result<Self, S3StorageLayerFactoryConfigError> {
         let endpoint = S3Endpoint::from_env()?;
 
@@ -48,18 +64,25 @@ impl S3StorageLayerFactoryConfig {
     }
 }
 
+/// Endpoint to use for S3 operations
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum S3Endpoint {
+    /// AWS default endpoint
     Aws,
+    /// Custom endpoint (Minio or other compatible)
     Custom {
+        /// Endpoint URL
         endpoint: String,
+        /// Access key ID to use
         access_key_id: String,
+        /// Access key secret to use
         access_key_secret: String,
     },
 }
 
 impl S3Endpoint {
+    /// Load a [S3Endpoint] from the current environment
     pub fn from_env() -> Result<Self, S3StorageLayerFactoryConfigError> {
         match std::env::var("DOCBOX_S3_ENDPOINT") {
             // Using a custom S3 endpoint
@@ -80,6 +103,7 @@ impl S3Endpoint {
     }
 }
 
+/// Storage layer factory backend by a S3 compatible service
 #[derive(Clone)]
 pub struct S3StorageLayerFactory {
     /// Client to access S3
@@ -87,6 +111,7 @@ pub struct S3StorageLayerFactory {
 }
 
 impl S3StorageLayerFactory {
+    /// Create a [S3StorageLayerFactory] from a config
     pub fn from_config(aws_config: &SdkConfig, config: S3StorageLayerFactoryConfig) -> Self {
         let client = match config.endpoint {
             S3Endpoint::Aws => {
@@ -120,14 +145,13 @@ impl S3StorageLayerFactory {
         Self { client }
     }
 
+    /// Create a [S3StorageLayer] for the provided `bucket_name`
     pub fn create_storage_layer(&self, bucket_name: String) -> S3StorageLayer {
-        S3StorageLayer {
-            client: self.client.clone(),
-            bucket_name,
-        }
+        S3StorageLayer::new(self.client.clone(), bucket_name)
     }
 }
 
+/// Storage layer backend by a S3 compatible service
 #[derive(Clone)]
 pub struct S3StorageLayer {
     /// Client to access S3
@@ -138,7 +162,8 @@ pub struct S3StorageLayer {
 }
 
 impl S3StorageLayer {
-    pub fn new(client: S3Client, bucket_name: String) -> Self {
+    /// Create a new S3 storage layer from the client and bucket name
+    fn new(client: S3Client, bucket_name: String) -> Self {
         Self {
             client,
             bucket_name,
@@ -510,11 +535,13 @@ impl StorageLayerImpl for S3StorageLayer {
     }
 }
 
+/// File stream based on the AWS [ByteStream] type
 pub struct AwsFileStream {
     inner: ByteStream,
 }
 
 impl AwsFileStream {
+    /// Get the underlying stream
     pub fn into_inner(self) -> ByteStream {
         self.inner
     }

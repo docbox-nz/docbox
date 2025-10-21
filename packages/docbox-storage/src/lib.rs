@@ -1,4 +1,14 @@
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
+//! # Storage
+//!
+//! Docbox storage backend abstraction, handles abstracting the task of working with file
+//! storage to allow for multiple backends and easier testing.
+//!
+//! # Environment Variables
+//!
+//! See [s3] this is currently the only available backend for storage
 
 use aws_config::SdkConfig;
 use aws_sdk_s3::presigning::PresignedRequest;
@@ -13,12 +23,16 @@ use thiserror::Error;
 
 pub mod s3;
 
+/// Configuration for a storage layer factory
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum StorageLayerFactoryConfig {
+    /// Config for a S3 backend
     S3(s3::S3StorageLayerFactoryConfig),
 }
 
+/// Errors that could occur when loading the storage layer factory
+/// configuration from the environment
 #[derive(Debug, Error)]
 pub enum StorageLayerFactoryConfigError {
     /// Error from the S3 layer config
@@ -27,6 +41,7 @@ pub enum StorageLayerFactoryConfigError {
 }
 
 impl StorageLayerFactoryConfig {
+    /// Load the configuration from the current environment variables
     pub fn from_env() -> Result<Self, StorageLayerFactoryConfigError> {
         s3::S3StorageLayerFactoryConfig::from_env()
             .map(Self::S3)
@@ -34,11 +49,15 @@ impl StorageLayerFactoryConfig {
     }
 }
 
+/// Storage layer factory for creating storage layer instances
+/// with some underlying backend implementation
 #[derive(Clone)]
 pub enum StorageLayerFactory {
+    /// S3 storage backend
     S3(s3::S3StorageLayerFactory),
 }
 
+/// Errors that can occur when using a storage layer
 #[derive(Debug, Error)]
 pub enum StorageLayerError {
     /// Error from the S3 layer
@@ -57,6 +76,7 @@ impl From<s3::S3StorageError> for StorageLayerError {
 }
 
 impl StorageLayerFactory {
+    /// Create a [StorageLayerFactory] from the provided config
     pub fn from_config(aws_config: &SdkConfig, config: StorageLayerFactoryConfig) -> Self {
         match config {
             StorageLayerFactoryConfig::S3(config) => {
@@ -65,6 +85,7 @@ impl StorageLayerFactory {
         }
     }
 
+    /// Create a new storage layer from the factory
     pub fn create_storage_layer(&self, tenant: &Tenant) -> TenantStorageLayer {
         match self {
             StorageLayerFactory::S3(s3) => {
@@ -76,6 +97,7 @@ impl StorageLayerFactory {
     }
 }
 
+/// Storage layer for a tenant with different underlying backends
 #[derive(Clone)]
 pub enum TenantStorageLayer {
     /// Storage layer backed by S3
@@ -230,6 +252,7 @@ pub(crate) trait StorageLayerImpl {
 
 /// Stream of bytes from a file
 pub struct FileStream {
+    /// Underlying stream
     pub stream: Pin<Box<dyn Stream<Item = std::io::Result<Bytes>> + Send>>,
 }
 
