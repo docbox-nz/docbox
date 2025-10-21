@@ -1,5 +1,5 @@
 use docbox_processing::{
-    ProcessingLayer,
+    ProcessingLayer, ProcessingLayerConfig,
     office::{OfficeConverter, OfficeProcessingLayer, convert_server::OfficeConverterServer},
 };
 use testcontainers::{
@@ -34,6 +34,7 @@ pub async fn create_processing_layer() -> (ProcessingLayer, ContainerAsync<Gener
 
     let processing = ProcessingLayer {
         office: OfficeProcessingLayer { converter },
+        config: ProcessingLayerConfig::default(),
     };
 
     (processing, container)

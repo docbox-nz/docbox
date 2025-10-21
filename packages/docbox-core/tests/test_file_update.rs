@@ -23,7 +23,7 @@ async fn test_update_file_name_success() {
     let (_db, db) = create_test_tenant_database().await;
     let (_search, search) = create_test_tenant_typesense().await;
     let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer().await;
+    let (processing, _processing) = create_processing_layer(Default::default()).await;
 
     let events = TenantEventPublisher::Noop(Default::default());
     let (document_box, root) = create_document_box(
@@ -142,7 +142,7 @@ async fn test_update_file_folder_success() {
     let (_db, db) = create_test_tenant_database().await;
     let (_search, search) = create_test_tenant_typesense().await;
     let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer().await;
+    let (processing, _processing) = create_processing_layer(Default::default()).await;
 
     let events = TenantEventPublisher::Noop(Default::default());
     let (document_box, root) = create_document_box(
@@ -282,7 +282,7 @@ async fn test_update_file_pinned_success() {
     let (_db, db) = create_test_tenant_database().await;
     let (_search, search) = create_test_tenant_typesense().await;
     let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer().await;
+    let (processing, _processing) = create_processing_layer(Default::default()).await;
 
     let events = TenantEventPublisher::Noop(Default::default());
     let (document_box, root) = create_document_box(
@@ -352,7 +352,7 @@ async fn test_update_file_folder_unknown_error() {
     let (_db, db) = create_test_tenant_database().await;
     let (_search, search) = create_test_tenant_typesense().await;
     let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer().await;
+    let (processing, _processing) = create_processing_layer(Default::default()).await;
 
     let events = TenantEventPublisher::Noop(Default::default());
     let (document_box, root) = create_document_box(

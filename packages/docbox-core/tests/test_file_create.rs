@@ -16,7 +16,7 @@ async fn test_file_create_success() {
     let (_db, db) = create_test_tenant_database().await;
     let (_search, search) = create_test_tenant_typesense().await;
     let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer().await;
+    let (processing, _processing) = create_processing_layer(Default::default()).await;
 
     let events = TenantEventPublisher::Noop(Default::default());
     let (document_box, root) = create_document_box(

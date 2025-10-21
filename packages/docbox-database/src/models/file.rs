@@ -156,6 +156,7 @@ pub struct FileIdWithScope {
     pub scope: DocumentBoxScopeRaw,
 }
 
+#[derive(Debug)]
 pub struct CreateFile {
     /// ID for the file to use
     pub id: FileId,

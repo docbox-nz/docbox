@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use std::num::ParseIntError;
+
 use crate::{
     email::{EmailProcessingError, is_mail_mime, process_email},
     image::process_image_async,
@@ -69,6 +71,13 @@ pub enum ProcessingError {
 pub struct ProcessingConfig {
     /// Email specific processing configuration
     pub email: Option<EmailProcessingConfig>,
+
+    /// Maximum number of times to unpack a file. When unpacking
+    /// things like email attachments, these are recursively this
+    /// limits the number of nested unpacking that can occur.
+    ///
+    /// Default: 1 (Unpack Only the immediate children)
+    pub max_unpack_iterations: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize, ToSchema)]
@@ -130,6 +139,45 @@ pub struct ProcessingIndexMetadata {
 #[derive(Clone)]
 pub struct ProcessingLayer {
     pub office: OfficeProcessingLayer,
+    pub config: ProcessingLayerConfig,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct ProcessingLayerConfig {
+    /// Maximum number of times to unpack a file. When unpacking
+    /// things like email attachments, these are recursively this
+    /// limits the number of nested unpacking that can occur.
+    ///
+    /// This is the maximum allowed iterations on the server level,
+    /// requests can specify a custom amount but this amount is
+    /// capped to this value
+    ///
+    /// Default: 1 (Unpack Only the immediate children)
+    pub max_unpack_iterations: Option<usize>,
+}
+
+#[derive(Debug, Error)]
+pub enum ProcessingLayerConfigError {
+    /// Value provided for max unpack iterations was invalid
+    #[error("invalid DOCBOX_MAX_FILE_UNPACK_ITERATIONS value must be a number")]
+    InvalidMaxIterations(ParseIntError),
+}
+
+impl ProcessingLayerConfig {
+    pub fn from_env() -> Result<ProcessingLayerConfig, ProcessingLayerConfigError> {
+        let max_unpack_iterations = std::env::var("DOCBOX_MAX_FILE_UNPACK_ITERATIONS")
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<usize>()
+                    .map_err(ProcessingLayerConfigError::InvalidMaxIterations)
+            })
+            .transpose()?;
+
+        Ok(ProcessingLayerConfig {
+            max_unpack_iterations,
+        })
+    }
 }
 
 /// Processes a file returning the generated processing output

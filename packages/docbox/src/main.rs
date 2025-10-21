@@ -18,7 +18,7 @@ use docbox_core::{
 };
 use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
 use docbox_processing::{
-    ProcessingLayer,
+    ProcessingLayer, ProcessingLayerConfig,
     office::{OfficeConverter, OfficeConverterConfig, OfficeProcessingLayer},
 };
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
@@ -97,9 +97,13 @@ async fn server() -> Result<(), Box<dyn Error>> {
     let converter_config = OfficeConverterConfig::from_env();
     let converter = OfficeConverter::from_config(converter_config)?;
 
+    // Load the config for the processing layer
+    let processing_layer_config = ProcessingLayerConfig::from_env()?;
+
     // Setup processing layer
     let processing = ProcessingLayer {
         office: OfficeProcessingLayer { converter },
+        config: processing_layer_config,
     };
 
     // Create website scraping service

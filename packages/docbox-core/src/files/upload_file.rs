@@ -118,6 +118,7 @@ pub struct UploadFile {
     pub processing_config: Option<ProcessingConfig>,
 }
 
+#[derive(Debug)]
 pub struct UploadedFileData {
     /// The uploaded file itself
     pub file: File,
@@ -139,15 +140,15 @@ pub async fn upload_file(
     let mut upload_state = UploadFileState::default();
 
     // Perform the creation of resources and processing
-    let data = match upload_file_inner(search, storage, processing, upload, &mut upload_state).await
-    {
-        Ok(value) => value,
-        Err(error) => {
-            tracing::error!(?error, "failed to complete inner file processing");
-            background_rollback_upload_file(search.clone(), storage.clone(), upload_state);
-            return Err(error);
-        }
-    };
+    let data =
+        match upload_file_inner(search, storage, processing, upload, &mut upload_state, 0).await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::error!(?error, "failed to complete inner file processing");
+                background_rollback_upload_file(search.clone(), storage.clone(), upload_state);
+                return Err(error);
+            }
+        };
 
     // Persist records to the database
     let mut db = db.begin().await.map_err(|error| {
@@ -197,6 +198,7 @@ pub fn publish_file_creation_events(
     }
 }
 
+#[derive(Debug)]
 pub struct PreparedUploadData {
     /// Main file record to create
     file: CreateFile,
@@ -224,7 +226,16 @@ async fn upload_file_inner(
     processing: &ProcessingLayer,
     upload: UploadFile,
     upload_state: &mut UploadFileState,
+    iteration: usize,
 ) -> Result<PreparedUploadData, UploadFileError> {
+    let server_max_iterations = processing.config.max_unpack_iterations.unwrap_or(1);
+    let max_iterations = upload
+        .processing_config
+        .as_ref()
+        .and_then(|value| value.max_unpack_iterations)
+        .unwrap_or(1)
+        .min(server_max_iterations);
+
     // Determine if we need to upload and what the file key is
     let (s3_upload, file_key) = match upload.file_key.as_ref() {
         // Already have a file key, don't want to upload
@@ -277,32 +288,41 @@ async fn upload_file_inner(
         .await?;
         generated_files = Some(prepared_files);
 
-        // Process additional files
-        for additional_file in processing_output.additional_files {
-            let upload = UploadFile {
-                parent_id: Some(file_record.id),
-                fixed_id: additional_file.fixed_id,
-                folder_id: upload.folder_id,
-                document_box: upload.document_box.clone(),
-                name: additional_file.name,
-                mime: additional_file.mime,
-                file_bytes: additional_file.bytes,
-                created_by: upload.created_by.clone(),
-                file_key: None,
-                processing_config: upload.processing_config.clone(),
-            };
+        let next_iteration = iteration + 1;
+        if next_iteration > max_iterations {
+            tracing::debug!(
+                ?iteration,
+                "additional files were present but exceeded the max unpacking iteration for this request"
+            );
+        } else {
+            // Process additional files
+            for additional_file in processing_output.additional_files {
+                let upload = UploadFile {
+                    parent_id: Some(file_record.id),
+                    fixed_id: additional_file.fixed_id,
+                    folder_id: upload.folder_id,
+                    document_box: upload.document_box.clone(),
+                    name: additional_file.name,
+                    mime: additional_file.mime,
+                    file_bytes: additional_file.bytes,
+                    created_by: upload.created_by.clone(),
+                    file_key: None,
+                    processing_config: upload.processing_config.clone(),
+                };
 
-            // Process the child file (Additional file outputs are ignored)
-            let output = Box::pin(upload_file_inner(
-                search,
-                storage,
-                processing,
-                upload,
-                upload_state,
-            ))
-            .await?;
+                // Process the child file (Additional file outputs are ignored)
+                let output = Box::pin(upload_file_inner(
+                    search,
+                    storage,
+                    processing,
+                    upload,
+                    upload_state,
+                    next_iteration,
+                ))
+                .await?;
 
-            additional_files.push(output);
+                additional_files.push(output);
+            }
         }
     }
 

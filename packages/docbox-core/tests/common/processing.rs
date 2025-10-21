@@ -1,5 +1,5 @@
 use docbox_processing::{
-    ProcessingLayer,
+    ProcessingLayer, ProcessingLayerConfig,
     office::{OfficeConverter, OfficeProcessingLayer, convert_server::OfficeConverterServer},
 };
 use testcontainers::{
@@ -13,7 +13,9 @@ use testcontainers::{
 /// Marked with #[allow(dead_code)] as it is used by tests but
 /// rustc doesn't believe us
 #[allow(dead_code)]
-pub async fn create_processing_layer() -> (ProcessingLayer, ContainerAsync<GenericImage>) {
+pub async fn create_processing_layer(
+    config: ProcessingLayerConfig,
+) -> (ProcessingLayer, ContainerAsync<GenericImage>) {
     let container = GenericImage::new("jacobtread/office-convert-server", "0.2.2")
         .with_exposed_port(3000.tcp())
         .with_wait_for(WaitFor::seconds(5))
@@ -34,6 +36,7 @@ pub async fn create_processing_layer() -> (ProcessingLayer, ContainerAsync<Gener
 
     let processing = ProcessingLayer {
         office: OfficeProcessingLayer { converter },
+        config,
     };
 
     (processing, container)
