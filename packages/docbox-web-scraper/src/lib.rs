@@ -1,9 +1,21 @@
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 //! # Docbox Web Scraper
 //!
 //! Web-scraping client for getting website metadata, favicon, ...etc and
 //! maintaining an internal cache
+//!
+//! ## Environment Variables
+//!
+//! * `DOCBOX_WEB_SCRAPE_HTTP_PROXY` - Proxy server address to use for HTTP requests
+//! * `DOCBOX_WEB_SCRAPE_HTTPS_PROXY` - Proxy server address to use for HTTPS requests
+//! * `DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION` - Time before cached metadata is considered expired
+//! * `DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY` - Maximum amount of metadata to cache at once
+//! * `DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT` - Timeout when connecting while scraping
+//! * `DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT` - Timeout when reading responses from scraping
+//! * `DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION` - Time before cached images are considered expired
+//! * `DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY` - Maximum images to cache at once
 
 use bytes::Bytes;
 use document::{Favicon, determine_best_favicon, get_website_metadata};
@@ -70,16 +82,22 @@ pub struct WebsiteMetaServiceConfig {
 /// Errors that could occur when loading the configuration
 #[derive(Debug, Error)]
 pub enum WebsiteMetaServiceConfigError {
+    /// Provided cache duration was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION must be a number in seconds: {0}")]
     InvalidMetadataCacheDuration(<u64 as FromStr>::Err),
+    /// Provided cache capacity was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY must be a number: {0}")]
     InvalidMetadataCacheCapacity(<u64 as FromStr>::Err),
+    /// Provided connect timeout was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT must be a number in seconds: {0}")]
     InvalidMetadataConnectTimeout(<u64 as FromStr>::Err),
+    /// Provided read timeout was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT must be a number in seconds")]
     InvalidMetadataReadTimeout(<u64 as FromStr>::Err),
+    /// Provided image cache duration was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION must be a number in seconds")]
     InvalidImageCacheDuration(<u64 as FromStr>::Err),
+    /// Provided image cache capacity was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY must be a number")]
     InvalidImageCacheCapacity(<u64 as FromStr>::Err),
 }
@@ -186,8 +204,13 @@ enum ImageCacheKey {
 /// Metadata resolved from a scraped website
 #[derive(Clone, Serialize)]
 pub struct ResolvedWebsiteMetadata {
+    /// Title of the website from the `<title/>` element
     pub title: Option<String>,
+
+    /// OGP title of the website
     pub og_title: Option<String>,
+
+    /// OGP metadata description of the website
     pub og_description: Option<String>,
 
     /// Best determined image
@@ -203,7 +226,9 @@ pub struct ResolvedWebsiteMetadata {
 /// contents are now know and the content type as well
 #[derive(Debug, Clone)]
 pub struct ResolvedImage {
+    /// Content type of the image
     pub content_type: Mime,
+    /// Byte contents of the resolved image
     pub bytes: Bytes,
 }
 
