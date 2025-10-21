@@ -14,6 +14,7 @@ use std::{collections::HashMap, convert::Infallible, fmt::Debug};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
+/// Secrets manager backed by memory
 #[derive(Clone, Deserialize, Serialize)]
 pub struct MemorySecretManagerConfig {
     /// Collection of secrets to include
@@ -24,13 +25,17 @@ pub struct MemorySecretManagerConfig {
     pub default: Option<String>,
 }
 
+/// Errors that could occur with the memory secrets manager config loaded
+/// from the current environment
 #[derive(Debug, Error)]
 pub enum MemorySecretManagerConfigError {
+    /// Failed to parse the secrets env variable
     #[error("failed to parse DOCBOX_SECRET_MANAGER_MEMORY_SECRETS")]
     ParseSecrets,
 }
 
 impl MemorySecretManagerConfig {
+    /// Load a [MemorySecretManagerConfigError] from the current environment
     pub fn from_env() -> Result<Self, MemorySecretManagerConfigError> {
         let default = std::env::var("DOCBOX_SECRET_MANAGER_MEMORY_DEFAULT").ok();
         let secrets = match std::env::var("DOCBOX_SECRET_MANAGER_MEMORY_SECRETS") {
@@ -59,6 +64,7 @@ pub struct MemorySecretManager {
 }
 
 impl MemorySecretManager {
+    /// Create a new memory secret manager from the provided values
     pub fn new(data: HashMap<String, Secret>, default: Option<Secret>) -> Self {
         Self {
             data: Mutex::new(data),
@@ -67,6 +73,7 @@ impl MemorySecretManager {
     }
 }
 
+/// Memory secret manager cannot fail
 pub type MemorySecretError = Infallible;
 
 impl SecretManagerImpl for MemorySecretManager {

@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 //! # Secret manager
 //!
@@ -9,6 +10,10 @@
 //! * `DOCBOX_SECRET_MANAGER` - Which secret manager to use ("aws", "json", "memory")
 //!
 //! See individual secret manager module documentation for individual environment variables
+//!
+//! - [aws]
+//! - [json]
+//! - [memory]
 
 use aws_config::SdkConfig;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -18,6 +23,7 @@ pub mod aws;
 pub mod json;
 pub mod memory;
 
+/// Configuration for a secrets manager
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SecretsManagerConfig {
@@ -31,10 +37,14 @@ pub enum SecretsManagerConfig {
     Aws,
 }
 
+/// Errors that could occur with a secrets manager config
 #[derive(Debug, Error)]
 pub enum SecretsManagerConfigError {
+    /// Error from the memory secrets manager config
     #[error(transparent)]
     Memory(memory::MemorySecretManagerConfigError),
+
+    /// Error from the JSON secrets manager config
     #[error(transparent)]
     Json(json::JsonSecretManagerConfigError),
 }
@@ -55,11 +65,15 @@ impl SecretsManagerConfig {
     }
 }
 
-/// Secret manager backed by some underlying
-/// secret manager implementation
+/// Secret manager backed by some underlying secret manager implementation
 pub enum SecretManager {
+    /// AWS backed secret manager
     Aws(aws::AwsSecretManager),
+
+    /// In-memory secret manager
     Memory(memory::MemorySecretManager),
+
+    /// Encrypted JSON backed secret manager
     Json(json::JsonSecretManager),
 }
 
@@ -156,17 +170,22 @@ impl SecretManager {
     }
 }
 
+/// Errors that could occur when using a secrets manager
 #[derive(Debug, Error)]
 pub enum SecretManagerError {
+    /// In-memory secrets manager errors
     #[error(transparent)]
     Memory(memory::MemorySecretError),
 
+    /// JSON secrets manager errors
     #[error(transparent)]
     Json(Box<json::JsonSecretError>),
 
+    /// AWS secrets manager errors
     #[error(transparent)]
     Aws(Box<aws::AwsSecretError>),
 
+    /// Error parsing a secret from JSON
     #[error("failed to parse secret JSON")]
     ParseSecret,
 }
@@ -183,6 +202,7 @@ impl From<aws::AwsSecretError> for SecretManagerError {
     }
 }
 
+/// Secret stored in a secrets manager
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Secret {
     /// Secret stored as a [String]

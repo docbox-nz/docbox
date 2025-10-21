@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug, io, path::PathBuf};
 use thiserror::Error;
 
+/// Config for the JSON secret manager
 #[derive(Clone, Deserialize, Serialize)]
 pub struct JsonSecretManagerConfig {
     /// Encryption key to use
@@ -25,10 +26,14 @@ pub struct JsonSecretManagerConfig {
     pub path: PathBuf,
 }
 
+/// Errors that could occur when loading a [JsonSecretManager] from the
+/// current environment
 #[derive(Debug, Error)]
 pub enum JsonSecretManagerConfigError {
+    /// Missing the encryption key
     #[error("missing DOCBOX_SECRET_MANAGER_KEY secret key to access store")]
     MissingKey,
+    /// Missing the path to the file
     #[error("missing DOCBOX_SECRET_MANAGER_PATH file path to access store")]
     MissingPath,
 }
@@ -56,7 +61,7 @@ impl JsonSecretManagerConfig {
     }
 }
 
-// Local encrypted JSON based secret manager
+/// Local encrypted JSON based secret manager
 pub struct JsonSecretManager {
     path: PathBuf,
     key: SecretString,
@@ -69,23 +74,37 @@ struct SecretFile {
     secrets: HashMap<String, String>,
 }
 
+/// Errors that could occur when working with the JSON
+/// based secret manager
 #[derive(Debug, Error)]
 pub enum JsonSecretError {
+    /// Failed to read the secrets file
     #[error("failed to read secrets")]
     ReadFile(io::Error),
+
+    /// Failed to write the secrets file
     #[error("failed to write secrets")]
     WriteFile(io::Error),
+
+    /// Failed to decrypt the secrets file
     #[error("failed to decrypt secrets")]
     Decrypt(age::DecryptError),
+
+    /// Failed to encrypt the secrets file
     #[error("failed to encrypt secrets")]
     Encrypt(age::EncryptError),
+
+    /// Failed to deserialize the contents of the secrets file
     #[error("failed to deserialize secrets")]
     Deserialize(serde_json::Error),
+
+    /// Failed to serialize the contents of the secrets file
     #[error("failed to serialize secrets")]
     Serialize(serde_json::Error),
 }
 
 impl JsonSecretManager {
+    /// Create a JSON secrets manager from the provided `config`
     pub fn from_config(config: JsonSecretManagerConfig) -> Self {
         let key = SecretString::from(config.key);
 

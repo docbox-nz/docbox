@@ -17,31 +17,42 @@ use aws_sdk_secretsmanager::{
 use std::fmt::Debug;
 use thiserror::Error;
 
-pub type SecretsManagerClient = aws_sdk_secretsmanager::Client;
+type SecretsManagerClient = aws_sdk_secretsmanager::Client;
 
+/// AWS secrets manager backed secrets
 pub struct AwsSecretManager {
     client: SecretsManagerClient,
 }
 
 impl AwsSecretManager {
+    /// Create a [AwsSecretManager] from a [SdkConfig]
     pub fn from_sdk_config(aws_config: &SdkConfig) -> Self {
         let client = SecretsManagerClient::new(aws_config);
         Self::new(client)
     }
 
+    /// Create a [AwsSecretManager] from a [SecretsManagerClient]
     pub fn new(client: SecretsManagerClient) -> Self {
         Self { client }
     }
 }
 
+/// Errors that could occur when working with AWS secret manager
 #[derive(Debug, Error)]
 pub enum AwsSecretError {
+    /// Failed to get a secret value
     #[error("failed to get secret value")]
     GetSecretValue(SdkError<GetSecretValueError>),
+
+    /// Failed to create a secret
     #[error("failed to create secret")]
     CreateSecret(SdkError<CreateSecretError>),
+
+    /// Failed to delete a secret
     #[error("failed to delete secret")]
     DeleteSecret(SdkError<DeleteSecretError>),
+
+    /// Failed to update a secret
     #[error("failed to update secret")]
     UpdateSecret(SdkError<UpdateSecretError>),
 }
