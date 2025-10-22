@@ -25,6 +25,20 @@ pub async fn check_database_exists(db: &DbPool, db_name: &str) -> DbResult<bool>
     Ok(result.is_some())
 }
 
+/// Check if a table with the provided `table_name` exists
+pub async fn check_database_table_exists(db: &DbPool, table_name: &str) -> DbResult<bool> {
+    let result = sqlx::query(
+        "SELECT 1 FROM pg_catalog.pg_tables
+        WHERE schemaname = 'public'
+          AND tablename  = $1",
+    )
+    .bind(table_name)
+    .fetch_optional(db)
+    .await?;
+
+    Ok(result.is_some())
+}
+
 /// Check if a database role with the provided `role_name` exists
 pub async fn check_database_role_exists(db: &DbPool, role_name: &str) -> DbResult<bool> {
     let result = sqlx::query("SELECT 1 FROM pg_roles WHERE rolname = $1")
@@ -42,23 +56,6 @@ pub async fn check_database_role_exists(db: &DbPool, role_name: &str) -> DbResul
 pub async fn delete_database(db: &DbPool, db_name: &str) -> DbResult<()> {
     let sql = format!(r#"DROP DATABASE "{db_name}";"#);
     sqlx::raw_sql(&sql).execute(db).await?;
-
-    Ok(())
-}
-
-/// Setup the tenants table in the main docbox database
-pub async fn create_tenants_table(db: &DbPool) -> DbResult<()> {
-    sqlx::raw_sql(include_str!(
-        "./migrations/root/m1_create_tenants_table.sql"
-    ))
-    .execute(db)
-    .await?;
-
-    sqlx::raw_sql(include_str!(
-        "./migrations/root/m2_create_tenant_migrations_table.sql"
-    ))
-    .execute(db)
-    .await?;
 
     Ok(())
 }

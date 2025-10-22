@@ -19,7 +19,6 @@ use crate::{
 };
 use docbox_database::{
     DatabasePoolCache, DbPool,
-    migrations::apply_tenant_migration,
     models::{
         document_box::{DocumentBoxScopeRaw, DocumentBoxScopeRawRef},
         file::FileId,
@@ -485,7 +484,7 @@ WITH
             .ok_or(DatabaseSearchError::MigrationNotFound)?;
 
         // Apply the migration
-        apply_tenant_migration(t, name, migration)
+        docbox_database::migrations::apply_migration(t, name, migration)
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to apply migration");

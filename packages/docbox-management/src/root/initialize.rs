@@ -1,7 +1,11 @@
-use crate::{database::DatabaseProvider, password::random_password};
+use crate::{
+    database::DatabaseProvider,
+    password::random_password,
+    root::migrate_root::{MigrateRootError, migrate_root},
+};
 use docbox_database::{
     DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
-    create::{create_database, create_restricted_role, create_tenants_table},
+    create::{create_database, create_restricted_role},
     models::tenant::Tenant,
     sqlx::types::Uuid,
     utils::DatabaseErrorExt,
@@ -23,6 +27,9 @@ pub enum InitializeError {
 
     #[error("error connecting to root database: {0}")]
     ConnectRootDatabase(DbErr),
+
+    #[error("error migrating root database: {0}")]
+    MigrateRoot(MigrateRootError),
 
     #[error("error creating root database role: {0}")]
     CreateRootRole(DbErr),
@@ -86,10 +93,10 @@ pub async fn initialize(
     initialize_root_secret(secrets, root_secret_name, root_role_name, &root_password).await?;
     tracing::info!("created database secret");
 
-    // Initialize the docbox database
-    create_tenants_table(&db_docbox)
+    // Migrate the root database
+    migrate_root(db_provider, None)
         .await
-        .map_err(InitializeError::CreateTenantsTable)?;
+        .map_err(InitializeError::MigrateRoot)?;
 
     Ok(())
 }
@@ -110,9 +117,9 @@ pub async fn initialize_root_database(
         && !err
             .as_database_error()
             .is_some_and(|err| err.code().is_some_and(|code| code.to_string().eq("42P04")))
-        {
-            return Err(InitializeError::CreateRootDatabase(err));
-        }
+    {
+        return Err(InitializeError::CreateRootDatabase(err));
+    }
 
     // Connect to the docbox database
     let db_docbox = db_provider

@@ -1,6 +1,7 @@
 use crate::{
     DbExecutor, DbResult, DbTransaction,
     models::{
+        root_migration::{CreateRootMigration, RootMigration},
         tenant::Tenant,
         tenant_migration::{CreateTenantMigration, TenantMigration},
     },
@@ -8,7 +9,18 @@ use crate::{
 use chrono::Utc;
 use std::ops::DerefMut;
 
-const TENANT_MIGRATIONS: &[(&str, &str)] = &[
+pub const ROOT_MIGRATIONS: &[(&str, &str)] = &[
+    (
+        "m1_create_tenants_table",
+        include_str!("./root/m1_create_tenants_table.sql"),
+    ),
+    (
+        "m2_create_tenant_migrations_table",
+        include_str!("./root/m2_create_tenant_migrations_table.sql"),
+    ),
+];
+
+pub const TENANT_MIGRATIONS: &[(&str, &str)] = &[
     (
         "m1_create_users_table",
         include_str!("./tenant/m1_create_users_table.sql"),
@@ -51,6 +63,17 @@ const TENANT_MIGRATIONS: &[(&str, &str)] = &[
     ),
 ];
 
+/// Initialize the table used for root migration tracking
+///
+/// (Must be performed before normal migrations can happen otherwise tracking will fail)
+pub async fn initialize_root_migrations(db: impl DbExecutor<'_>) -> DbResult<()> {
+    sqlx::raw_sql(include_str!("./root/m0_create_root_migrations_table.sql"))
+        .execute(db)
+        .await?;
+
+    Ok(())
+}
+
 /// Get all pending migrations for a tenant that have not been applied yet
 pub async fn get_pending_tenant_migrations(
     db: impl DbExecutor<'_>,
@@ -59,6 +82,24 @@ pub async fn get_pending_tenant_migrations(
     let migrations = TenantMigration::find_by_tenant(db, tenant.id, &tenant.env).await?;
 
     let pending = TENANT_MIGRATIONS
+        .iter()
+        .filter(|(migration_name, _migration)| {
+            // Skip already applied migrations
+            !migrations
+                .iter()
+                .any(|migration| migration.name.eq(migration_name))
+        })
+        .map(|(migration_name, _migration)| migration_name.to_string())
+        .collect();
+
+    Ok(pending)
+}
+
+/// Get all pending migrations for the root that have not been applied yet
+pub async fn get_pending_root_migrations(db: impl DbExecutor<'_>) -> DbResult<Vec<String>> {
+    let migrations = RootMigration::all(db).await?;
+
+    let pending = ROOT_MIGRATIONS
         .iter()
         .filter(|(migration_name, _migration)| {
             // Skip already applied migrations
@@ -102,7 +143,7 @@ pub async fn apply_tenant_migrations(
         }
 
         // Apply the migration
-        apply_tenant_migration(t, migration_name, migration).await?;
+        apply_migration(t, migration_name, migration).await?;
 
         // Store the applied migration
         TenantMigration::create(
@@ -110,6 +151,49 @@ pub async fn apply_tenant_migrations(
             CreateTenantMigration {
                 tenant_id: tenant.id,
                 env: tenant.env.clone(),
+                name: migration_name.to_string(),
+                applied_at: Utc::now(),
+            },
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+/// Applies migrations to the root, only applies migrations that
+/// haven't already been applied
+///
+/// Optionally filtered to a specific migration through `target_migration_name`
+pub async fn apply_root_migrations(
+    root_t: &mut DbTransaction<'_>,
+    target_migration_name: Option<&str>,
+) -> DbResult<()> {
+    let migrations = RootMigration::all(root_t.deref_mut()).await?;
+
+    for (migration_name, migration) in ROOT_MIGRATIONS {
+        // If targeting a specific migration only apply the target one
+        if target_migration_name
+            .is_some_and(|target_migration_name| target_migration_name.ne(*migration_name))
+        {
+            continue;
+        }
+
+        // Skip already applied migrations
+        if migrations
+            .iter()
+            .any(|migration| migration.name.eq(migration_name))
+        {
+            continue;
+        }
+
+        // Apply the migration
+        apply_migration(root_t, migration_name, migration).await?;
+
+        // Store the applied migration
+        RootMigration::create(
+            root_t.deref_mut(),
+            CreateRootMigration {
                 name: migration_name.to_string(),
                 applied_at: Utc::now(),
             },
@@ -135,14 +219,14 @@ pub async fn force_apply_tenant_migrations(
             continue;
         }
 
-        apply_tenant_migration(t, migration_name, migration).await?;
+        apply_migration(t, migration_name, migration).await?;
     }
 
     Ok(())
 }
 
-/// Apply a migration to the specific tenant database
-pub async fn apply_tenant_migration(
+/// Apply a migration to the specific database
+pub async fn apply_migration(
     db: &mut DbTransaction<'_>,
     migration_name: &str,
     migration: &str,

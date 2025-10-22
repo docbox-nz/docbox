@@ -5,6 +5,7 @@ pub mod folder;
 pub mod generated_file;
 pub mod link;
 pub mod presigned_upload_task;
+pub mod root_migration;
 pub mod search;
 pub mod shared;
 pub mod tasks;
