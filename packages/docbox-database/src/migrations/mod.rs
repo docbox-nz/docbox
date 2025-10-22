@@ -18,6 +18,10 @@ pub const ROOT_MIGRATIONS: &[(&str, &str)] = &[
         "m2_create_tenant_migrations_table",
         include_str!("./root/m2_create_tenant_migrations_table.sql"),
     ),
+    (
+        "m3_create_storage_bucket_index",
+        include_str!("./root/m3_create_storage_bucket_index.sql"),
+    ),
 ];
 
 pub const TENANT_MIGRATIONS: &[(&str, &str)] = &[
