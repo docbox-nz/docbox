@@ -9,6 +9,7 @@ pub use sqlx::{
     PgPool, Postgres, Transaction,
     postgres::{PgConnectOptions, PgPoolOptions},
 };
+use std::num::ParseIntError;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -49,8 +50,44 @@ pub struct DatabasePoolCacheConfig {
     pub host: String,
     pub port: u16,
     pub root_secret_name: String,
-    /// Max number of active connections per database pool (Default: 100)
+
+    /// Max number of active connections per tenant database pool
+    ///
+    /// This is the maximum number of connections that should be allocated
+    /// for performing all queries against each specific tenant.
+    ///
+    /// Ensure a reasonable amount of connections are allocated but make
+    /// sure that the `max_connections` * your number of tenants stays
+    /// within the limits for your database
+    ///
+    /// Default: 10
     pub max_connections: Option<u32>,
+
+    /// Max number of active connections per "docbox" database pool
+    ///
+    /// This is the maximum number of connections that should be allocated
+    /// for performing queries like:
+    /// - Listing tenants
+    /// - Getting tenant details
+    ///
+    /// These pools are often short lived and complete their queries very fast
+    /// and thus don't need a huge amount of resources allocated to them
+    ///
+    /// Default: 2
+    pub max_connections_root: Option<u32>,
+
+    /// Timeout before a acquiring a database connection is considered
+    /// a failure
+    ///
+    /// Default: 60s
+    pub acquire_timeout: Option<u64>,
+
+    /// If a connection has been idle for this duration the connection
+    /// will be closed and released back to the database for other
+    /// consumers
+    ///
+    /// Default: 30min
+    pub idle_timeout: Option<u64>,
 }
 
 #[derive(Debug, Error)]
@@ -63,6 +100,10 @@ pub enum DatabasePoolCacheConfigError {
     InvalidDatabasePort,
     #[error("missing DOCBOX_DB_CREDENTIAL_NAME environment variable")]
     MissingDatabaseSecretName,
+    #[error("invalid DOCBOX_DB_IDLE_TIMEOUT environment variable")]
+    InvalidIdleTimeout(ParseIntError),
+    #[error("invalid DOCBOX_DB_ACQUIRE_TIMEOUT environment variable")]
+    InvalidAcquireTimeout(ParseIntError),
 }
 
 impl DatabasePoolCacheConfig {
@@ -80,11 +121,36 @@ impl DatabasePoolCacheConfig {
         let max_connections: Option<u32> = std::env::var("DOCBOX_DB_MAX_CONNECTIONS")
             .ok()
             .and_then(|value| value.parse().ok());
+        let max_connections_root: Option<u32> = std::env::var("DOCBOX_DB_MAX_ROOT_CONNECTIONS")
+            .ok()
+            .and_then(|value| value.parse().ok());
+
+        let acquire_timeout: Option<u64> = match std::env::var("DOCBOX_DB_ACQUIRE_TIMEOUT") {
+            Ok(value) => Some(
+                value
+                    .parse::<u64>()
+                    .map_err(DatabasePoolCacheConfigError::InvalidAcquireTimeout)?,
+            ),
+            Err(_) => None,
+        };
+
+        let idle_timeout: Option<u64> = match std::env::var("DOCBOX_DB_IDLE_TIMEOUT") {
+            Ok(value) => Some(
+                value
+                    .parse::<u64>()
+                    .map_err(DatabasePoolCacheConfigError::InvalidIdleTimeout)?,
+            ),
+            Err(_) => None,
+        };
+
         Ok(DatabasePoolCacheConfig {
             host: db_host,
             port: db_port,
             root_secret_name: db_root_secret_name,
             max_connections,
+            max_connections_root,
+            acquire_timeout,
+            idle_timeout,
         })
     }
 }
@@ -111,8 +177,13 @@ pub struct DatabasePoolCache {
     /// Secrets manager access to load credentials
     secrets_manager: Arc<SecretManager>,
 
-    /// Max connections per database pool
+    /// Max connections per tenant database pool
     max_connections: u32,
+    /// Max connections per root database pool
+    max_connections_root: u32,
+
+    acquire_timeout: Duration,
+    idle_timeout: Duration,
 }
 
 /// Username and password for a specific database
@@ -142,22 +213,6 @@ impl DatabasePoolCache {
         config: DatabasePoolCacheConfig,
         secrets_manager: Arc<SecretManager>,
     ) -> Self {
-        Self::new(
-            config.host,
-            config.port,
-            config.root_secret_name,
-            secrets_manager,
-            config.max_connections,
-        )
-    }
-
-    pub fn new(
-        host: String,
-        port: u16,
-        root_secret_name: String,
-        secrets_manager: Arc<SecretManager>,
-        max_connections: Option<u32>,
-    ) -> Self {
         let cache = Cache::builder()
             .time_to_idle(DB_CACHE_DURATION)
             .max_capacity(50)
@@ -177,13 +232,16 @@ impl DatabasePoolCache {
             .build();
 
         Self {
-            host,
-            port,
-            root_secret_name,
+            host: config.host,
+            port: config.port,
+            root_secret_name: config.root_secret_name,
             cache,
             connect_info_cache,
             secrets_manager,
-            max_connections: max_connections.unwrap_or(100),
+            max_connections: config.max_connections.unwrap_or(10),
+            max_connections_root: config.max_connections_root.unwrap_or(2),
+            idle_timeout: Duration::from_secs(config.idle_timeout.unwrap_or(60 * 30)),
+            acquire_timeout: Duration::from_secs(config.acquire_timeout.unwrap_or(60)),
         }
     }
 
@@ -269,10 +327,17 @@ impl DatabasePoolCache {
             .password(&credentials.password)
             .database(db_name);
 
+        let max_connections = match db_name {
+            ROOT_DATABASE_NAME => self.max_connections_root,
+            _ => self.max_connections,
+        };
+
         match PgPoolOptions::new()
-            .max_connections(self.max_connections)
+            .max_connections(max_connections)
             // Slightly larger acquire timeout for times when lots of files are being processed
-            .acquire_timeout(Duration::from_secs(60))
+            .acquire_timeout(self.acquire_timeout)
+            // Close any connections that have been idle for more than 30min
+            .idle_timeout(self.idle_timeout)
             .connect_with(options)
             .await
         {
