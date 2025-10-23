@@ -1,4 +1,4 @@
-use crate::database::DatabaseProvider;
+use crate::database::{DatabaseProvider, close_pool_on_drop};
 use docbox_database::{
     DbErr, ROOT_DATABASE_NAME,
     models::{tenant::Tenant, tenant_migration::TenantMigration},
@@ -23,6 +23,8 @@ pub async fn get_pending_tenant_search_migrations(
 ) -> Result<Vec<String>, GetPendingTenantMigrationsError> {
     // Connect to the root database
     let root_db = db_provider.connect(ROOT_DATABASE_NAME).await?;
+    let _guard = close_pool_on_drop(&root_db);
+
     let applied_migrations =
         TenantMigration::find_by_tenant(&root_db, tenant.id, &tenant.env).await?;
     let search = search_factory.create_search_index(tenant);

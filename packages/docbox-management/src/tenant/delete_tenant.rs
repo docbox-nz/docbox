@@ -1,4 +1,4 @@
-use crate::database::DatabaseProvider;
+use crate::database::{DatabaseProvider, close_pool_on_drop};
 use docbox_core::{
     document_box::delete_document_box::{DeleteDocumentBoxError, delete_document_box},
     events::{EventPublisherFactory, TenantEventPublisher},
@@ -99,6 +99,8 @@ pub async fn delete_tenant(
         .connect(ROOT_DATABASE_NAME)
         .await
         .map_err(DeleteTenantError::Database)?;
+    let _guard = close_pool_on_drop(&db_docbox);
+
     let tenant = Tenant::find_by_id(&db_docbox, config.tenant_id, &config.env)
         .await
         .map_err(DeleteTenantError::Database)?
@@ -206,6 +208,8 @@ async fn delete_tenant_contents(
             return Err(DeleteTenantError::Database(error));
         }
     };
+
+    let _guard = close_pool_on_drop(&tenant_db);
 
     // Iterate document boxes in batches of 100 and begin removing them
     loop {

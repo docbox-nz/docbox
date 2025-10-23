@@ -1,5 +1,5 @@
 use crate::{
-    database::DatabaseProvider,
+    database::{DatabaseProvider, close_pool_on_drop},
     tenant::{
         MigrateTenantsOutcome, TenantTarget,
         migrate_tenant::{MigrateTenantError, migrate_tenant},
@@ -46,6 +46,8 @@ pub async fn migrate_tenants(
         .connect(ROOT_DATABASE_NAME)
         .await
         .map_err(MigrateTenantsError::ConnectRootDatabase)?;
+
+    let _guard = close_pool_on_drop(&root_db);
 
     let tenants = Tenant::all(&root_db)
         .await

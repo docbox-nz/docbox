@@ -209,7 +209,7 @@ async fn server() -> Result<(), Box<dyn Error>> {
     let mut app = app
         .layer(Extension(search_index_factory))
         .layer(Extension(storage_factory))
-        .layer(Extension(db_cache))
+        .layer(Extension(db_cache.clone()))
         .layer(Extension(website_meta_service))
         .layer(Extension(event_publisher_factory))
         .layer(Extension(processing))
@@ -242,6 +242,8 @@ async fn server() -> Result<(), Box<dyn Error>> {
         async move {
             _ = tokio::signal::ctrl_c().await;
             handle.graceful_shutdown(None);
+
+            db_cache.close_all().await;
         }
     });
 

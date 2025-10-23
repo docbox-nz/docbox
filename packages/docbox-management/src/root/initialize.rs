@@ -1,5 +1,5 @@
 use crate::{
-    database::DatabaseProvider,
+    database::{DatabaseProvider, close_pool_on_drop},
     password::random_password,
     root::migrate_root::{MigrateRootError, migrate_root},
 };
@@ -60,6 +60,10 @@ pub async fn is_initialized(db_provider: &impl DatabaseProvider) -> DbResult<boo
         }
     };
 
+    tracing::debug!("root is initialized");
+
+    let _guard = close_pool_on_drop(&db);
+
     // Then query the table for a non-existent tenant to make sure its setup correctly
     if let Err(error) = Tenant::find_by_id(&db, Uuid::nil(), "__DO_NOT_USE").await {
         if error.is_table_does_not_exist() {
@@ -69,6 +73,8 @@ pub async fn is_initialized(db_provider: &impl DatabaseProvider) -> DbResult<boo
 
         return Err(error);
     }
+
+    tracing::debug!("tenant table is setup");
 
     Ok(true)
 }
@@ -81,6 +87,7 @@ pub async fn initialize(
     root_secret_name: &str,
 ) -> Result<(), InitializeError> {
     let db_docbox = initialize_root_database(db_provider).await?;
+    let _guard = close_pool_on_drop(&db_docbox);
 
     let root_role_name = "docbox_config_api";
     let root_password = random_password(30);
@@ -111,6 +118,8 @@ pub async fn initialize_root_database(
         .connect(TEMP_SETUP_DATABASE)
         .await
         .map_err(InitializeError::ConnectPostgres)?;
+
+    let _guard = close_pool_on_drop(&db_root);
 
     // Create the tenant database
     if let Err(err) = create_database(&db_root, ROOT_DATABASE_NAME).await

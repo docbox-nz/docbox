@@ -1,4 +1,4 @@
-use crate::database::DatabaseProvider;
+use crate::database::{DatabaseProvider, close_pool_on_drop};
 use docbox_database::{
     DbErr, ROOT_DATABASE_NAME,
     create::check_database_table_exists,
@@ -37,6 +37,8 @@ pub async fn migrate_root(
         .connect(ROOT_DATABASE_NAME)
         .await
         .map_err(MigrateRootError::ConnectRootDatabase)?;
+
+    let _guard = close_pool_on_drop(&root_db);
 
     // Check if the migrations table has been initialized
     // (Table did not exist before v0.4.0)

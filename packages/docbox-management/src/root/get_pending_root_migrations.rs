@@ -1,4 +1,4 @@
-use crate::database::DatabaseProvider;
+use crate::database::{DatabaseProvider, close_pool_on_drop};
 use docbox_database::{
     DbResult, ROOT_DATABASE_NAME, create::check_database_table_exists, migrations::ROOT_MIGRATIONS,
 };
@@ -9,6 +9,7 @@ pub async fn get_pending_root_migrations(
     db_provider: &impl DatabaseProvider,
 ) -> DbResult<Vec<String>> {
     let root_db = db_provider.connect(ROOT_DATABASE_NAME).await?;
+    let _guard = close_pool_on_drop(&root_db);
 
     // Check if the migrations table has been initialized, this did not exist before v0.4.0
     // in this case return all the migrations as they will all need to run before this as the

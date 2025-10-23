@@ -17,7 +17,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
 
-use crate::{database::DatabaseProvider, password::random_password};
+use crate::{
+    database::{DatabaseProvider, close_pool_on_drop},
+    password::random_password,
+};
 
 /// Errors that can occur when creating a tenant
 #[derive(Debug, Error)]
@@ -116,6 +119,7 @@ pub async fn create_tenant(
     // Create tenant database
     let tenant_db = initialize_tenant_database(db_provider, &config.db_name).await?;
     tracing::info!("created tenant database");
+    let _guard = close_pool_on_drop(&tenant_db);
 
     // Generate password for the database role
     let db_role_password = random_password(30);
@@ -143,6 +147,8 @@ pub async fn create_tenant(
         .connect(ROOT_DATABASE_NAME)
         .await
         .map_err(CreateTenantError::ConnectRootDatabase)?;
+
+    let _guard = close_pool_on_drop(&root_db);
 
     // Enter a database transaction
     let mut root_transaction = root_db
@@ -242,6 +248,8 @@ pub async fn is_tenant_database_existing(
 ) -> DbResult<bool> {
     // Connect to the "postgres" database to use while creating the tenant database
     let db_postgres = db_provider.connect("postgres").await?;
+    let _guard = close_pool_on_drop(&db_postgres);
+
     check_database_exists(&db_postgres, db_name).await
 }
 
@@ -258,6 +266,8 @@ pub async fn initialize_tenant_database(
         .connect("postgres")
         .await
         .map_err(CreateTenantError::ConnectPostgres)?;
+
+    let _guard = close_pool_on_drop(&db_postgres);
 
     // Create the tenant database
     if let Err(error) = create_database(&db_postgres, db_name).await
@@ -284,6 +294,9 @@ pub async fn is_tenant_database_role_existing(
 ) -> DbResult<bool> {
     // Connect to the "postgres" database to use while creating the tenant database
     let db_postgres = db_provider.connect("postgres").await?;
+
+    let _guard = close_pool_on_drop(&db_postgres);
+
     check_database_role_exists(&db_postgres, role_name).await
 }
 

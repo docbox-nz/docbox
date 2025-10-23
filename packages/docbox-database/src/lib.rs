@@ -205,6 +205,15 @@ impl DatabasePoolCache {
         self.connect_info_cache.invalidate_all();
     }
 
+    /// Close all connections in the pool and invalidate the cache
+    pub async fn close_all(&self) {
+        for (_, value) in self.cache.iter() {
+            value.close().await;
+        }
+
+        self.flush().await;
+    }
+
     /// Obtains a database pool connection to the database with the provided name
     async fn get_pool(&self, db_name: &str, secret_name: &str) -> Result<PgPool, DbConnectErr> {
         let cache_key = format!("{db_name}-{secret_name}");

@@ -1,4 +1,4 @@
-use crate::database::DatabaseProvider;
+use crate::database::{DatabaseProvider, close_pool_on_drop};
 use docbox_database::{
     DbErr, ROOT_DATABASE_NAME, migrations::apply_tenant_migrations, models::tenant::Tenant,
 };
@@ -34,11 +34,15 @@ pub async fn migrate_tenant(
         .await
         .map_err(MigrateTenantError::ConnectRootDatabase)?;
 
+    let _root_guard = close_pool_on_drop(&root_db);
+
     // Connect to the tenant database
     let tenant_db = db_provider
         .connect(&tenant.db_name)
         .await
         .map_err(MigrateTenantError::ConnectTenantDatabase)?;
+
+    let _tenant_guard = close_pool_on_drop(&tenant_db);
 
     // Start transactions
     let mut root_t = root_db
