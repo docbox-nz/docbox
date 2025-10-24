@@ -8,10 +8,6 @@ authors.workspace = true
 repository.workspace = true
 readme.workspace = true
 
-[features]
-# Mock header values, used for browser local testing
-mock-browser = []
-
 [dependencies]
 # Environment variables
 dotenvy = "=0.15.7"

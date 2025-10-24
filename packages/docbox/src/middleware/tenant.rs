@@ -63,11 +63,6 @@ pub async fn tenant_auth_middleware(
 }
 
 pub fn get_tenant_env(headers: &HeaderMap) -> Result<String, ExtractTenantError> {
-    #[cfg(feature = "mock-browser")]
-    {
-        return Ok("Development".to_string());
-    }
-
     match headers.get(TENANT_ENV_HEADER) {
         Some(value) => value
             .to_str()
@@ -105,12 +100,6 @@ pub async fn extract_tenant(
     db_cache: &DatabasePoolCache,
     tenant_cache: &TenantCache,
 ) -> Result<Tenant, DynHttpError> {
-    #[cfg(feature = "mock-browser")]
-    let tenant_id = uuid::uuid!("e3bab7bd-07a5-4b81-be38-e4790e80c0d1");
-    #[cfg(feature = "mock-browser")]
-    let env = "Development";
-
-    #[cfg(not(feature = "mock-browser"))]
     let tenant_id: Uuid = match headers.get(TENANT_ID_HEADER) {
         Some(value) => {
             let value_str = value
@@ -126,7 +115,6 @@ pub async fn extract_tenant(
         None => return Err(ExtractTenantError::MissingTenantId.into()),
     };
 
-    #[cfg(not(feature = "mock-browser"))]
     let env = get_tenant_env(headers)?;
 
     let db = db_cache.get_root_pool().await.map_err(|cause| {

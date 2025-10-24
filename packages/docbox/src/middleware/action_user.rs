@@ -73,11 +73,7 @@ where
 {
     type Rejection = DynHttpError;
 
-    #[cfg_attr(feature = "mock-browser", allow(unreachable_code))]
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        #[cfg(feature = "mock-browser")]
-        return Ok(mock_action_user());
-
         let id = match parts.headers.get(USER_ID_HEADER) {
             Some(value) => {
                 let value_str = value.to_str().map_err(|_| InvalidUserId)?;
@@ -102,13 +98,4 @@ where
 
         Ok(ActionUser(Some(ActionUserData { id, name, image_id })))
     }
-}
-
-#[cfg(feature = "mock-browser")]
-fn mock_action_user() -> ActionUser {
-    ActionUser(Some(ActionUserData {
-        id: "06d709f9-6fa2-41e4-89df-e07490500804".to_string(),
-        name: Some("Jacob".to_string()),
-        image_id: Some("uploads/test".to_string()),
-    }))
 }
