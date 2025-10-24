@@ -50,7 +50,7 @@ pub async fn delete_document_box(
             .inspect_err(|error| tracing::error!(?error, "failed to delete bucket root folder"))
             .map_err(DeleteDocumentBoxError::FailedToDeleteRoot)?;
     } else {
-        tracing::warn!("failed to delete document box");
+        tracing::warn!("document box root folder did not exist");
     }
 
     // Delete document box
