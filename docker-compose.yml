@@ -78,6 +78,7 @@ services:
             - docbox
 
     # S3 compatible server
+    # arn: arn:minio:sqs::primary:webhook
     minio:
         image: minio/minio:latest
         container_name: minio
