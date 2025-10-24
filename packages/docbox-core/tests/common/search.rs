@@ -56,18 +56,8 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
 
     // This will absolutely fail if you try and use it, but we don't we only provide it because
     // its required due to the possibility of a database search backend in the real app
-    let db_cache = DatabasePoolCache::from_config(
-        DatabasePoolCacheConfig {
-            host: "null".to_string(),
-            port: 0,
-            root_secret_name: "test/test".to_string(),
-            max_connections: None,
-            max_connections_root: None,
-            acquire_timeout: None,
-            idle_timeout: None,
-        },
-        secrets.clone(),
-    );
+    let db_cache =
+        DatabasePoolCache::from_config(DatabasePoolCacheConfig::default(), secrets.clone());
 
     let index =
         SearchIndexFactory::from_config(&aws_config, secrets, Arc::new(db_cache), config).unwrap();
