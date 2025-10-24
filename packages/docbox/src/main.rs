@@ -281,7 +281,7 @@ async fn server() -> Result<(), Box<dyn Error>> {
             .serve(app.into_make_service())
             .await?;
     } else {
-        // Serve the app over HTTPS
+        // Serve the app over HTTP
         axum_server::bind(server_address)
             .handle(handle)
             .serve(app.into_make_service())
