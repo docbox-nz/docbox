@@ -5,7 +5,7 @@
 //!
 //! Intended for AWS hosted environments
 
-use crate::{Secret, SecretManagerError, SecretManagerImpl};
+use crate::{Secret, SecretManagerError, SecretManagerImpl, SetSecretOutcome};
 use aws_config::SdkConfig;
 use aws_sdk_secretsmanager::{
     error::SdkError,
@@ -20,6 +20,7 @@ use thiserror::Error;
 type SecretsManagerClient = aws_sdk_secretsmanager::Client;
 
 /// AWS secrets manager backed secrets
+#[derive(Clone)]
 pub struct AwsSecretManager {
     client: SecretsManagerClient,
 }
@@ -81,7 +82,11 @@ impl SecretManagerImpl for AwsSecretManager {
         Ok(None)
     }
 
-    async fn set_secret(&self, name: &str, value: &str) -> Result<(), SecretManagerError> {
+    async fn set_secret(
+        &self,
+        name: &str,
+        value: &str,
+    ) -> Result<SetSecretOutcome, SecretManagerError> {
         let error = match self
             .client
             .create_secret()
@@ -90,7 +95,7 @@ impl SecretManagerImpl for AwsSecretManager {
             .send()
             .await
         {
-            Ok(_) => return Ok(()),
+            Ok(_) => return Ok(SetSecretOutcome::Created),
             Err(err) => err,
         };
 
@@ -112,7 +117,7 @@ impl SecretManagerImpl for AwsSecretManager {
                     AwsSecretError::UpdateSecret(error)
                 })?;
 
-            return Ok(());
+            return Ok(SetSecretOutcome::Updated);
         }
 
         tracing::error!(?error, "failed to create secret");

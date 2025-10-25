@@ -66,6 +66,7 @@ impl SecretsManagerConfig {
 }
 
 /// Secret manager backed by some underlying secret manager implementation
+#[derive(Clone)]
 pub enum SecretManager {
     /// AWS backed secret manager
     Aws(aws::AwsSecretManager),
@@ -75,6 +76,15 @@ pub enum SecretManager {
 
     /// Encrypted JSON backed secret manager
     Json(json::JsonSecretManager),
+}
+
+/// Outcome from setting a secret
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetSecretOutcome {
+    /// Fresh secret was created
+    Created,
+    /// Secret with the same name was updated
+    Updated,
 }
 
 impl SecretManager {
@@ -122,7 +132,11 @@ impl SecretManager {
     ///
     /// Will create a new secret if the secret does not already exist
     #[tracing::instrument(skip(self))]
-    pub async fn set_secret(&self, name: &str, value: &str) -> Result<(), SecretManagerError> {
+    pub async fn set_secret(
+        &self,
+        name: &str,
+        value: &str,
+    ) -> Result<SetSecretOutcome, SecretManagerError> {
         tracing::debug!(?name, "writing secret");
         match self {
             SecretManager::Aws(inner) => inner.set_secret(name, value).await,
@@ -216,7 +230,11 @@ pub enum Secret {
 pub(crate) trait SecretManagerImpl: Send + Sync {
     async fn get_secret(&self, name: &str) -> Result<Option<Secret>, SecretManagerError>;
 
-    async fn set_secret(&self, name: &str, value: &str) -> Result<(), SecretManagerError>;
+    async fn set_secret(
+        &self,
+        name: &str,
+        value: &str,
+    ) -> Result<SetSecretOutcome, SecretManagerError>;
 
     async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError>;
 }

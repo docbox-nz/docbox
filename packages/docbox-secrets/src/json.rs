@@ -10,11 +10,12 @@
 //! * `DOCBOX_SECRET_MANAGER_KEY` - Specifies the encryption key to use
 //! * `DOCBOX_SECRET_MANAGER_PATH` - Path to the encrypted JSON file
 
-use crate::{Secret, SecretManagerError, SecretManagerImpl};
+use crate::{Secret, SecretManagerError, SecretManagerImpl, SetSecretOutcome};
 use age::secrecy::SecretString;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt::Debug, io, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, io, path::PathBuf, sync::Arc};
 use thiserror::Error;
+use tokio::sync::RwLock;
 
 /// Config for the JSON secret manager
 #[derive(Clone, Deserialize, Serialize)]
@@ -62,7 +63,14 @@ impl JsonSecretManagerConfig {
 }
 
 /// Local encrypted JSON based secret manager
+#[derive(Clone)]
 pub struct JsonSecretManager {
+    /// RwLock is used to ensure any concurrent operations
+    /// are synchronized
+    inner: Arc<RwLock<JsonSecretManagerInner>>,
+}
+
+struct JsonSecretManagerInner {
     path: PathBuf,
     key: SecretString,
 }
@@ -109,11 +117,15 @@ impl JsonSecretManager {
         let key = SecretString::from(config.key);
 
         Self {
-            path: config.path,
-            key,
+            inner: Arc::new(RwLock::new(JsonSecretManagerInner {
+                path: config.path,
+                key,
+            })),
         }
     }
+}
 
+impl JsonSecretManagerInner {
     async fn read_file(&self) -> Result<SecretFile, JsonSecretError> {
         let bytes = tokio::fs::read(&self.path).await.map_err(|error| {
             tracing::error!(?error, "failed to read secrets file");
@@ -134,7 +146,7 @@ impl JsonSecretManager {
         Ok(file)
     }
 
-    async fn write_file(&self, file: SecretFile) -> Result<(), JsonSecretError> {
+    async fn write_file(&mut self, file: SecretFile) -> Result<(), JsonSecretError> {
         let bytes = serde_json::to_string(&file).map_err(|error| {
             tracing::error!(?error, "failed to serialize secrets file");
             JsonSecretError::Serialize(error)
@@ -159,7 +171,8 @@ impl JsonSecretManager {
 
 impl SecretManagerImpl for JsonSecretManager {
     async fn get_secret(&self, name: &str) -> Result<Option<Secret>, SecretManagerError> {
-        let file = match self.read_file().await {
+        let inner = &*self.inner.read().await;
+        let file = match inner.read_file().await {
             Ok(value) => value,
             Err(_) => return Ok(None),
         };
@@ -168,23 +181,33 @@ impl SecretManagerImpl for JsonSecretManager {
         Ok(secret.map(|value| Secret::String(value.clone())))
     }
 
-    async fn set_secret(&self, name: &str, value: &str) -> Result<(), SecretManagerError> {
-        let mut secrets = if self.path.exists() {
-            self.read_file().await?
+    async fn set_secret(
+        &self,
+        name: &str,
+        value: &str,
+    ) -> Result<SetSecretOutcome, SecretManagerError> {
+        let inner = &mut *self.inner.write().await;
+        let mut secrets = if inner.path.exists() {
+            inner.read_file().await?
         } else {
             SecretFile {
                 secrets: Default::default(),
             }
         };
 
-        secrets.secrets.insert(name.to_string(), value.to_string());
-        self.write_file(secrets).await?;
-        Ok(())
+        let previous = secrets.secrets.insert(name.to_string(), value.to_string());
+        inner.write_file(secrets).await?;
+        Ok(if previous.is_some() {
+            SetSecretOutcome::Updated
+        } else {
+            SetSecretOutcome::Created
+        })
     }
 
     async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
-        let mut secrets = if self.path.exists() {
-            self.read_file().await?
+        let inner = &mut *self.inner.write().await;
+        let mut secrets = if inner.path.exists() {
+            inner.read_file().await?
         } else {
             SecretFile {
                 secrets: Default::default(),
@@ -192,7 +215,7 @@ impl SecretManagerImpl for JsonSecretManager {
         };
 
         secrets.secrets.remove(name);
-        self.write_file(secrets).await?;
+        inner.write_file(secrets).await?;
         Ok(())
     }
 }

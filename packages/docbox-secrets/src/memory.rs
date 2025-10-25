@@ -8,11 +8,11 @@
 //! * `DOCBOX_SECRET_MANAGER_MEMORY_DEFAULT` - Optional default secret value to provide when missing the secret
 //! * `DOCBOX_SECRET_MANAGER_MEMORY_SECRETS` - JSON encoded hashmap of available secrets
 
-use crate::{Secret, SecretManagerError, SecretManagerImpl};
+use crate::{Secret, SecretManagerError, SecretManagerImpl, SetSecretOutcome};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, convert::Infallible, fmt::Debug};
+use std::{collections::HashMap, convert::Infallible, fmt::Debug, sync::Arc};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 /// Secrets manager backed by memory
 #[derive(Clone, Deserialize, Serialize)]
@@ -57,9 +57,14 @@ impl Debug for MemorySecretManagerConfig {
 }
 
 /// In-memory secret manager
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MemorySecretManager {
-    data: Mutex<HashMap<String, Secret>>,
+    inner: Arc<RwLock<MemorySecretManagerInner>>,
+}
+
+#[derive(Default)]
+struct MemorySecretManagerInner {
+    data: HashMap<String, Secret>,
     default: Option<Secret>,
 }
 
@@ -67,8 +72,7 @@ impl MemorySecretManager {
     /// Create a new memory secret manager from the provided values
     pub fn new(data: HashMap<String, Secret>, default: Option<Secret>) -> Self {
         Self {
-            data: Mutex::new(data),
-            default,
+            inner: Arc::new(RwLock::new(MemorySecretManagerInner { data, default })),
         }
     }
 }
@@ -78,27 +82,39 @@ pub type MemorySecretError = Infallible;
 
 impl SecretManagerImpl for MemorySecretManager {
     async fn get_secret(&self, name: &str) -> Result<Option<super::Secret>, SecretManagerError> {
-        if let Some(value) = self.data.lock().await.get(name) {
+        let inner = &*self.inner.read().await;
+
+        if let Some(value) = inner.data.get(name) {
             return Ok(Some(value.clone()));
         }
 
-        if let Some(value) = self.default.as_ref() {
+        if let Some(value) = inner.default.as_ref() {
             return Ok(Some(value.clone()));
         }
 
         Ok(None)
     }
 
-    async fn set_secret(&self, name: &str, value: &str) -> Result<(), SecretManagerError> {
-        self.data
-            .lock()
+    async fn set_secret(
+        &self,
+        name: &str,
+        value: &str,
+    ) -> Result<SetSecretOutcome, SecretManagerError> {
+        let previous = self
+            .inner
+            .write()
             .await
+            .data
             .insert(name.to_string(), Secret::String(value.to_string()));
-        Ok(())
+        Ok(if previous.is_some() {
+            SetSecretOutcome::Updated
+        } else {
+            SetSecretOutcome::Created
+        })
     }
 
     async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
-        self.data.lock().await.remove(name);
+        self.inner.write().await.data.remove(name);
         Ok(())
     }
 }
