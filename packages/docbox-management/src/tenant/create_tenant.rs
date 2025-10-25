@@ -12,7 +12,7 @@ use docbox_database::{
 };
 use docbox_search::{SearchError, SearchIndexFactory, TenantSearchIndex};
 use docbox_secrets::{SecretManager, SecretManagerError};
-use docbox_storage::{StorageLayerError, StorageLayerFactory};
+use docbox_storage::{CreateBucketOutcome, StorageLayerError, StorageLayerFactory};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
@@ -46,6 +46,10 @@ pub enum CreateTenantError {
 
     #[error("error serializing tenant secret: {0}")]
     SerializeSecret(serde_json::Error),
+
+    /// The chosen database secret name is already in use
+    #[error("failed to create tenant secret: secret name already exists")]
+    SecretAlreadyExists,
 
     #[error("failed to create tenant secret: {0}")]
     CreateTenantSecret(SecretManagerError),
@@ -133,7 +137,7 @@ pub async fn create_tenant(
     .await?;
     tracing::info!("created tenant user");
 
-    initialize_tenant_db_secret(
+    let secret_rollback = initialize_tenant_db_secret(
         secrets,
         &config.db_secret_name,
         &config.db_role_name,
@@ -235,6 +239,7 @@ pub async fn create_tenant(
     // Commit search and storage
     storage.commit();
     search_rollback.commit();
+    secret_rollback.commit();
 
     Ok(tenant)
 }
@@ -314,6 +319,8 @@ pub async fn initialize_tenant_db_role(
         .await
         .map_err(CreateTenantError::CreateTenantRole)?;
 
+    // TODO: ROLLBACK GUARD, DROP CREATED ROLE IF AND ONLY IF IT WAS CREATED BY US
+
     Ok(())
 }
 
@@ -337,7 +344,17 @@ pub async fn initialize_tenant_db_secret(
     secret_name: &str,
     role_name: &str,
     role_password: &str,
-) -> Result<(), CreateTenantError> {
+) -> Result<RollbackGuard<impl FnOnce() + use<>>, CreateTenantError> {
+    // Ensure the secret does not already exist, we don't want to override it
+    if secrets
+        .get_secret(secret_name)
+        .await
+        .map_err(CreateTenantError::CreateTenantSecret)?
+        .is_some()
+    {
+        return Err(CreateTenantError::SecretAlreadyExists);
+    }
+
     let secret_value = serde_json::to_string(&json!({
         "username": role_name,
         "password": role_password
@@ -349,7 +366,20 @@ pub async fn initialize_tenant_db_secret(
         .await
         .map_err(CreateTenantError::CreateTenantSecret)?;
 
-    Ok(())
+    // Rollback guard to delete the secret on failure
+    let rollback = RollbackGuard::new({
+        let secrets = secrets.clone();
+        let secret_name = secret_name.to_string();
+        move || {
+            tokio::spawn(async move {
+                if let Err(error) = secrets.delete_secret(&secret_name).await {
+                    tracing::error!(?error, "failed to rollback tenant secret");
+                }
+            });
+        }
+    });
+
+    Ok(rollback)
 }
 
 /// Create and setup the tenant storage
@@ -360,7 +390,7 @@ async fn create_tenant_storage(
     origins: Vec<String>,
 ) -> Result<RollbackGuard<impl FnOnce()>, CreateTenantError> {
     let storage = storage.create_storage_layer(tenant);
-    storage
+    let outcome = storage
         .create_bucket()
         .await
         .inspect_err(|error| tracing::error!(?error, "failed to create tenant bucket"))
@@ -369,6 +399,12 @@ async fn create_tenant_storage(
     let rollback = RollbackGuard::new({
         let storage = storage.clone();
         move || {
+            // Don't try and rollback the bucket if it already existed
+            // (The bucket may existing out of user error)
+            if matches!(outcome, CreateBucketOutcome::Existing) {
+                return;
+            }
+
             tokio::spawn(async move {
                 if let Err(error) = storage.delete_bucket().await {
                     tracing::error!(?error, "failed to rollback created tenant storage bucket");
