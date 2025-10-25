@@ -52,7 +52,7 @@ pub async fn create_test_tenant_typesense() -> (ContainerAsync<GenericImage>, Te
     });
 
     let aws_config = aws_config().await;
-    let secrets = Arc::new(SecretManager::Memory(MemorySecretManager::default()));
+    let secrets = SecretManager::Memory(MemorySecretManager::default());
 
     // This will absolutely fail if you try and use it, but we don't we only provide it because
     // its required due to the possibility of a database search backend in the real app

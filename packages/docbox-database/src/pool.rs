@@ -270,7 +270,7 @@ pub struct DatabasePoolCache {
     connect_info_cache: Cache<String, DbSecrets>,
 
     /// Secrets manager access to load credentials
-    secrets_manager: Arc<SecretManager>,
+    secrets_manager: SecretManager,
 
     /// Max connections per tenant database pool
     max_connections: u32,
@@ -304,10 +304,7 @@ pub enum DbConnectErr {
 }
 
 impl DatabasePoolCache {
-    pub fn from_config(
-        config: DatabasePoolCacheConfig,
-        secrets_manager: Arc<SecretManager>,
-    ) -> Self {
+    pub fn from_config(config: DatabasePoolCacheConfig, secrets_manager: SecretManager) -> Self {
         let cache_duration = Duration::from_secs(config.cache_duration.unwrap_or(60 * 60 * 48));
         let credentials_cache_duration =
             Duration::from_secs(config.credentials_cache_duration.unwrap_or(60 * 60 * 12));

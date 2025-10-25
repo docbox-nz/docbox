@@ -80,7 +80,7 @@ pub struct TypesenseIndexFactory {
 
 impl TypesenseIndexFactory {
     pub fn from_config(
-        secrets: Arc<SecretManager>,
+        secrets: SecretManager,
         config: TypesenseSearchConfig,
     ) -> Result<Self, TypesenseIndexFactoryError> {
         let api_key_provider = match (config.api_key, config.api_key_secret_name) {

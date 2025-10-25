@@ -118,7 +118,6 @@ async fn server() -> Result<(), Box<dyn Error>> {
     // Create secrets manager
     let secrets_config = SecretsManagerConfig::from_env()?;
     let secrets = SecretManager::from_config(&aws_config, secrets_config);
-    let secrets = Arc::new(secrets);
 
     // Load database credentials
     let db_pool_config = DatabasePoolCacheConfig::from_env()?;

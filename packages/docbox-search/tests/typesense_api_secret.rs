@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use docbox_search::{SearchIndexFactory, TypesenseIndexFactory, TypesenseSearchConfig};
 use docbox_secrets::{Secret, SecretManager, memory::MemorySecretManager};
@@ -39,7 +39,7 @@ async fn test_typesense_api_secret() {
         None,
     );
 
-    let secrets = Arc::new(SecretManager::Memory(memory));
+    let secrets = SecretManager::Memory(memory);
 
     let search = TypesenseIndexFactory::from_config(secrets, config)
         .map(SearchIndexFactory::Typesense)

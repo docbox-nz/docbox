@@ -2,7 +2,6 @@ use docbox_search::{
     SearchIndexFactory, TypesenseApiKey, TypesenseIndexFactory, TypesenseSearchConfig,
 };
 use docbox_secrets::{SecretManager, memory::MemorySecretManager};
-use std::sync::Arc;
 use testcontainers::{
     GenericImage, ImageExt,
     core::{IntoContainerPort, WaitFor, wait::HttpWaitStrategy},
@@ -41,7 +40,7 @@ pub async fn test_search_factory(container: &ContainerAsync<GenericImage>) -> Se
         api_key_secret_name: None,
     };
 
-    let secrets = Arc::new(SecretManager::Memory(MemorySecretManager::default()));
+    let secrets = SecretManager::Memory(MemorySecretManager::default());
 
     TypesenseIndexFactory::from_config(secrets, config)
         .map(SearchIndexFactory::Typesense)

@@ -95,7 +95,7 @@ impl SearchIndexFactory {
     /// Create a search index factory from the provided `config`
     pub fn from_config(
         aws_config: &SdkConfig,
-        secrets: Arc<SecretManager>,
+        secrets: SecretManager,
         db: Arc<DatabasePoolCache>,
         config: SearchIndexFactoryConfig,
     ) -> Result<Self, SearchIndexFactoryError> {
