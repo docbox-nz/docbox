@@ -8,7 +8,7 @@
 //! * `DOCBOX_S3_ACCESS_KEY_ID` - Access key ID when using a custom S3 endpoint
 //! * `DOCBOX_S3_ACCESS_KEY_SECRET` - Access key secret when using a custom S3 endpoint
 
-use crate::{FileStream, StorageLayerError, StorageLayerImpl};
+use crate::{CreateBucketOutcome, FileStream, StorageLayerError, StorageLayerImpl};
 use aws_config::SdkConfig;
 use aws_sdk_s3::{
     config::Credentials,
@@ -239,7 +239,7 @@ pub enum S3StorageError {
 }
 
 impl StorageLayerImpl for S3StorageLayer {
-    async fn create_bucket(&self) -> Result<(), StorageLayerError> {
+    async fn create_bucket(&self) -> Result<CreateBucketOutcome, StorageLayerError> {
         let bucket_region = self
             .client
             .config()
@@ -268,14 +268,14 @@ impl StorageLayerImpl for S3StorageLayer {
             // Bucket has already been created
             if already_exists {
                 tracing::debug!("bucket already exists");
-                return Ok(());
+                return Ok(CreateBucketOutcome::Existing);
             }
 
             tracing::error!(?error, "failed to create bucket");
             return Err(S3StorageError::CreateBucket(error).into());
         }
 
-        Ok(())
+        Ok(CreateBucketOutcome::New)
     }
 
     async fn bucket_exists(&self) -> Result<bool, StorageLayerError> {

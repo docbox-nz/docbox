@@ -104,13 +104,22 @@ pub enum TenantStorageLayer {
     S3(s3::S3StorageLayer),
 }
 
+/// Outcome from creating a bucket
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreateBucketOutcome {
+    /// Fresh bucket was created
+    New,
+    /// Bucket with the same name already exists
+    Existing,
+}
+
 impl TenantStorageLayer {
     /// Creates the tenant storage bucket
     ///
     /// In the event that the bucket already exists, this is treated as a
     /// [`Ok`] result rather than an error
     #[tracing::instrument(skip(self))]
-    pub async fn create_bucket(&self) -> Result<(), StorageLayerError> {
+    pub async fn create_bucket(&self) -> Result<CreateBucketOutcome, StorageLayerError> {
         match self {
             TenantStorageLayer::S3(layer) => layer.create_bucket().await,
         }
@@ -216,7 +225,7 @@ impl TenantStorageLayer {
 
 /// Internal trait defining required async implementations for a storage backend
 pub(crate) trait StorageLayerImpl {
-    async fn create_bucket(&self) -> Result<(), StorageLayerError>;
+    async fn create_bucket(&self) -> Result<CreateBucketOutcome, StorageLayerError>;
 
     async fn bucket_exists(&self) -> Result<bool, StorageLayerError>;
 
