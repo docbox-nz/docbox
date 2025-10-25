@@ -26,18 +26,23 @@ use crate::{
 /// Errors that can occur when creating a tenant
 #[derive(Debug, Error)]
 pub enum CreateTenantError {
+    /// Failed to connect to the temporary database
     #[error("error connecting to 'postgres' database: {0}")]
     ConnectPostgres(DbErr),
 
+    /// Failed to create the tenant root database
     #[error("error creating tenant database: {0}")]
     CreateTenantDatabase(DbErr),
 
+    /// Failed to connect to the created tenant database
     #[error("error connecting to tenant database: {0}")]
     ConnectTenantDatabase(DbErr),
 
+    /// Failed to connect to the root database
     #[error("error connecting to root database: {0}")]
     ConnectRootDatabase(DbErr),
 
+    /// Failed to create the tenant rol
     #[error("error creating tenant database role: {0}")]
     CreateTenantRole(DbErr),
 
@@ -45,6 +50,7 @@ pub enum CreateTenantError {
     #[error(transparent)]
     Database(#[from] DbErr),
 
+    /// Failed to serialize the secret
     #[error("error serializing tenant secret: {0}")]
     SerializeSecret(serde_json::Error),
 
@@ -52,6 +58,7 @@ pub enum CreateTenantError {
     #[error("failed to create tenant secret: secret name already exists")]
     SecretAlreadyExists,
 
+    /// Failed to create the secret
     #[error("failed to create tenant secret: {0}")]
     CreateTenantSecret(SecretManagerError),
 

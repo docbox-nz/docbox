@@ -218,7 +218,11 @@ pub enum S3StorageError {
     QueueConfig,
 
     /// Failed to setup a notification queue on the bucket
-    #[error("failed to add bucket notification queue")]
+    ///
+    /// This error is allowed to expose the inner error details as
+    /// it is only used by the management layer and these errors are
+    /// helpful for management
+    #[error("failed to add bucket notification queue: {0}")]
     PutBucketNotification(SdkError<PutBucketNotificationConfigurationError>),
 
     /// Failed to make the cors config or rules
@@ -226,7 +230,11 @@ pub enum S3StorageError {
     CreateCorsConfig,
 
     /// Failed to put the bucket cors config
-    #[error("failed to set bucket cors rules")]
+    ///
+    /// This error is allowed to expose the inner error details as
+    /// it is only used by the management layer and these errors are
+    /// helpful for management
+    #[error("failed to set bucket cors rules: {0}")]
     PutBucketCors(SdkError<PutBucketCorsError>),
 
     /// Failed to delete a file object
