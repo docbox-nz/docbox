@@ -95,6 +95,11 @@ impl SecretManagerImpl for MemorySecretManager {
         Ok(None)
     }
 
+    async fn has_secret(&self, name: &str) -> Result<bool, SecretManagerError> {
+        let inner = &*self.inner.read().await;
+        Ok(inner.data.contains_key(name))
+    }
+
     async fn set_secret(
         &self,
         name: &str,

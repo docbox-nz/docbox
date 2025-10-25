@@ -118,6 +118,9 @@ impl SecretManager {
     }
 
     /// Get a secret by `name`
+    ///
+    /// When using the memory secret manager this may return a default value, other secret
+    /// managers will only return the actual secret
     #[tracing::instrument(skip(self))]
     pub async fn get_secret(&self, name: &str) -> Result<Option<Secret>, SecretManagerError> {
         tracing::debug!(?name, "reading secret");
@@ -125,6 +128,20 @@ impl SecretManager {
             SecretManager::Aws(inner) => inner.get_secret(name).await,
             SecretManager::Memory(inner) => inner.get_secret(name).await,
             SecretManager::Json(inner) => inner.get_secret(name).await,
+        }
+    }
+
+    /// Check if a secret exists by `name`
+    ///
+    /// For the in-memory secret manager this will not return true unless the secret
+    /// actually exists (Unlike [SecretManager::get_secret] which can return the default)
+    #[tracing::instrument(skip(self))]
+    pub async fn has_secret(&self, name: &str) -> Result<bool, SecretManagerError> {
+        tracing::debug!(?name, "reading secret");
+        match self {
+            SecretManager::Aws(inner) => inner.has_secret(name).await,
+            SecretManager::Memory(inner) => inner.has_secret(name).await,
+            SecretManager::Json(inner) => inner.has_secret(name).await,
         }
     }
 
@@ -229,6 +246,8 @@ pub enum Secret {
 /// Internal trait defining required async implementations for a secret manager
 pub(crate) trait SecretManagerImpl: Send + Sync {
     async fn get_secret(&self, name: &str) -> Result<Option<Secret>, SecretManagerError>;
+
+    async fn has_secret(&self, name: &str) -> Result<bool, SecretManagerError>;
 
     async fn set_secret(
         &self,

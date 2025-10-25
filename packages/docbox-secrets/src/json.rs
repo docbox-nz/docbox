@@ -181,6 +181,10 @@ impl SecretManagerImpl for JsonSecretManager {
         Ok(secret.map(|value| Secret::String(value.clone())))
     }
 
+    async fn has_secret(&self, name: &str) -> Result<bool, SecretManagerError> {
+        self.get_secret(name).await.map(|value| value.is_some())
+    }
+
     async fn set_secret(
         &self,
         name: &str,
