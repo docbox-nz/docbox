@@ -1,7 +1,7 @@
-use crate::common::processing::create_processing_layer;
+use crate::common::processing::{test_office_convert_server_container, test_processing_layer};
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
-use docbox_processing::{ProcessingError, ProcessingOutput, process_file};
+use docbox_processing::{ProcessingError, ProcessingLayerConfig, ProcessingOutput, process_file};
 use std::path::Path;
 
 mod common;
@@ -145,8 +145,10 @@ async fn test_process_doc_encrypted() {
 /// Test processing a corrupted Word Document (.docx) file
 #[tokio::test]
 async fn test_process_docx_corrupted() {
+    let container = test_office_convert_server_container().await;
     // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
+    let processing_layer =
+        test_processing_layer(&container, ProcessingLayerConfig::default()).await;
 
     // Get the sample file
     let samples_path = Path::new("tests/samples/documents");
@@ -297,8 +299,11 @@ async fn test_process_xls_encrypted() {
 }
 
 async fn process_sample_file(sample_file: &str) -> Option<ProcessingOutput> {
+    let container = test_office_convert_server_container().await;
+
     // Create the processing layer
-    let (processing_layer, _container) = create_processing_layer().await;
+    let processing_layer =
+        test_processing_layer(&container, ProcessingLayerConfig::default()).await;
 
     // Get the sample file
     let samples_path = Path::new("tests/samples/documents");

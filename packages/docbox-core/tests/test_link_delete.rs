@@ -1,4 +1,4 @@
-use crate::common::{database::create_test_tenant_database, search::create_test_tenant_typesense};
+use crate::common::{database::test_tenant_db, tenant::test_tenant, typesense::test_tenant_search};
 use docbox_core::{
     document_box::create_document_box::{CreateDocumentBox, create_document_box},
     events::{TenantEventMessage, TenantEventPublisher, mpsc::MpscEventPublisher},
@@ -16,8 +16,11 @@ mod common;
 /// Tests that a link can be deleted successfully
 #[tokio::test]
 async fn test_delete_link_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
     let (document_box, root) = create_document_box(
@@ -118,8 +121,11 @@ async fn test_delete_link_success() {
 /// produce any events
 #[tokio::test]
 async fn test_delete_unknown_link() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
     let (document_box, root) = create_document_box(

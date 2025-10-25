@@ -1,9 +1,5 @@
 use std::str::FromStr;
 
-use crate::common::{
-    database::create_test_tenant_database, processing::create_processing_layer,
-    search::create_test_tenant_typesense, storage::create_test_tenant_storage,
-};
 use docbox_core::{
     document_box::create_document_box::{CreateDocumentBox, create_document_box},
     events::TenantEventPublisher,
@@ -11,16 +7,29 @@ use docbox_core::{
 };
 use docbox_processing::{ProcessingConfig, ProcessingLayerConfig};
 
+use crate::common::{
+    database::test_tenant_db,
+    minio::test_tenant_storage,
+    processing::{test_office_convert_server_container, test_processing_layer},
+    tenant::test_tenant,
+    typesense::test_tenant_search,
+};
+
 mod common;
 
 /// Default limiting should ensure that an email with multiple nested layers of packing
 /// should only unpack the first layer (Immediate attachments)
 #[tokio::test]
 async fn test_email_unpack_limiting_defaults() {
-    let (_db, db) = create_test_tenant_database().await;
-    let (_search, search) = create_test_tenant_typesense().await;
-    let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer(Default::default()).await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
+
+    let converter_container = test_office_convert_server_container().await;
+    let processing =
+        test_processing_layer(&converter_container, ProcessingLayerConfig::default()).await;
 
     let events = TenantEventPublisher::Noop(Default::default());
     let (document_box, root) = create_document_box(
@@ -70,13 +79,21 @@ async fn test_email_unpack_limiting_defaults() {
 /// Increasing the limit to 2 should allow the nested email to be unpacked
 #[tokio::test]
 async fn test_email_unpack_limiting_increased_limit_2() {
-    let (_db, db) = create_test_tenant_database().await;
-    let (_search, search) = create_test_tenant_typesense().await;
-    let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer(ProcessingLayerConfig {
-        max_unpack_iterations: Some(2),
-    })
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
+
+    let converter_container = test_office_convert_server_container().await;
+    let processing = test_processing_layer(
+        &converter_container,
+        ProcessingLayerConfig {
+            max_unpack_iterations: Some(2),
+        },
+    )
     .await;
+
     let events = TenantEventPublisher::Noop(Default::default());
     let (document_box, root) = create_document_box(
         &db,
@@ -126,13 +143,21 @@ async fn test_email_unpack_limiting_increased_limit_2() {
 /// Increasing the limit to 3 should allow both of the nested emails to be unpacked
 #[tokio::test]
 async fn test_email_unpack_limiting_increased_limit_3() {
-    let (_db, db) = create_test_tenant_database().await;
-    let (_search, search) = create_test_tenant_typesense().await;
-    let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer(ProcessingLayerConfig {
-        max_unpack_iterations: Some(3),
-    })
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
+
+    let converter_container = test_office_convert_server_container().await;
+    let processing = test_processing_layer(
+        &converter_container,
+        ProcessingLayerConfig {
+            max_unpack_iterations: Some(3),
+        },
+    )
     .await;
+
     let events = TenantEventPublisher::Noop(Default::default());
     let (document_box, root) = create_document_box(
         &db,
@@ -185,12 +210,19 @@ async fn test_email_unpack_limiting_increased_limit_3() {
 /// Tests that when the unpacking limit is zero that no additional files are produced
 #[tokio::test]
 async fn test_email_unpack_limiting_zero() {
-    let (_db, db) = create_test_tenant_database().await;
-    let (_search, search) = create_test_tenant_typesense().await;
-    let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer(ProcessingLayerConfig {
-        max_unpack_iterations: Some(0),
-    })
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
+
+    let converter_container = test_office_convert_server_container().await;
+    let processing = test_processing_layer(
+        &converter_container,
+        ProcessingLayerConfig {
+            max_unpack_iterations: Some(0),
+        },
+    )
     .await;
 
     let events = TenantEventPublisher::Noop(Default::default());
@@ -238,12 +270,19 @@ async fn test_email_unpack_limiting_zero() {
 /// that no additional files are produced
 #[tokio::test]
 async fn test_email_unpack_limiting_zero_request() {
-    let (_db, db) = create_test_tenant_database().await;
-    let (_search, search) = create_test_tenant_typesense().await;
-    let (_storage, storage) = create_test_tenant_storage().await;
-    let (processing, _processing) = create_processing_layer(ProcessingLayerConfig {
-        max_unpack_iterations: None,
-    })
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
+
+    let converter_container = test_office_convert_server_container().await;
+    let processing = test_processing_layer(
+        &converter_container,
+        ProcessingLayerConfig {
+            max_unpack_iterations: None,
+        },
+    )
     .await;
 
     let events = TenantEventPublisher::Noop(Default::default());

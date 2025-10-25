@@ -10,15 +10,18 @@ use docbox_database::models::folder::Folder;
 use docbox_search::models::{SearchIndexType, SearchRequest};
 use uuid::Uuid;
 
-use crate::common::{database::create_test_tenant_database, search::create_test_tenant_typesense};
+use crate::common::{database::test_tenant_db, tenant::test_tenant, typesense::test_tenant_search};
 
 mod common;
 
 /// Tests that a folder name can be updated successfully
 #[tokio::test]
 async fn test_update_folder_name_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (document_box, root) = create_document_box(
         &db,
@@ -123,8 +126,11 @@ async fn test_update_folder_name_success() {
 /// Tests that a folder can be moved to another folder
 #[tokio::test]
 async fn test_update_folder_folder_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (document_box, root) = create_document_box(
         &db,
@@ -250,8 +256,11 @@ async fn test_update_folder_folder_success() {
 /// Tests that a folder pinned state can be updated
 #[tokio::test]
 async fn test_update_folder_pinned_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (document_box, root) = create_document_box(
         &db,
@@ -327,8 +336,11 @@ async fn test_update_folder_pinned_success() {
 /// Tests that a folder cannot be moved to an unknown folder
 #[tokio::test]
 async fn test_update_folder_folder_unknown() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (_document_box, root) = create_document_box(
         &db,
@@ -381,8 +393,11 @@ async fn test_update_folder_folder_unknown() {
 /// Tests that a folder cannot be moved into itself
 #[tokio::test]
 async fn test_update_folder_folder_self() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (_document_box, root) = create_document_box(
         &db,
@@ -435,8 +450,11 @@ async fn test_update_folder_folder_self() {
 /// Tests that a root folder cannot be updated
 #[tokio::test]
 async fn test_update_folder_folder_root() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (_document_box, root) = create_document_box(
         &db,

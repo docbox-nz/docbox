@@ -639,11 +639,13 @@ impl SearchIndex for TypesenseIndex {
             .await
             .map_err(|error| {
                 tracing::error!(?error, "failed to delete data by scope (request)");
+                eprintln!("{error:?}");
                 TypesenseSearchError::DeleteDocuments
             })?
             .error_for_status()
             .map_err(|error| {
                 tracing::error!(?error, "failed to delete data by scope (response)");
+                eprintln!("{error:?}");
                 TypesenseSearchError::DeleteDocuments
             })?;
         Ok(())

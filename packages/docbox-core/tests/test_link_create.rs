@@ -5,15 +5,18 @@ use docbox_core::{
 };
 use docbox_search::models::{SearchIndexType, SearchRequest};
 
-use crate::common::{database::create_test_tenant_database, search::create_test_tenant_typesense};
+use crate::common::{database::test_tenant_db, tenant::test_tenant, typesense::test_tenant_search};
 
 mod common;
 
 /// Tests that a link can be created successfully
 #[tokio::test]
 async fn test_create_link_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
     let (document_box, root) = create_document_box(

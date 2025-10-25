@@ -1,4 +1,5 @@
 pub mod database;
+pub mod minio;
 pub mod processing;
-pub mod search;
-pub mod storage;
+pub mod tenant;
+pub mod typesense;

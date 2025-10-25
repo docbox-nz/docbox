@@ -1,4 +1,4 @@
-use common::database::create_test_tenant_database;
+use crate::common::database::test_tenant_db;
 use docbox_core::{
     document_box::create_document_box::{
         CreateDocumentBox, CreateDocumentBoxError, create_document_box,
@@ -14,7 +14,8 @@ mod common;
 /// Creating a document box that doesn't exist should succeed
 #[tokio::test]
 async fn test_create_document_box_success() {
-    let (_container, db) = create_test_tenant_database().await;
+    let (db, _db_container) = test_tenant_db().await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     create_document_box(
         &db,
@@ -31,7 +32,8 @@ async fn test_create_document_box_success() {
 /// Creating a document box should emit a creation event
 #[tokio::test]
 async fn test_create_document_box_success_event() {
-    let (_container, db) = create_test_tenant_database().await;
+    let (db, _db_container) = test_tenant_db().await;
+
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
     let (document_box, _root) = create_document_box(
@@ -56,7 +58,8 @@ async fn test_create_document_box_success_event() {
 /// produce an error
 #[tokio::test]
 async fn test_create_document_box_duplicate_scope() {
-    let (_container, db) = create_test_tenant_database().await;
+    let (db, _db_container) = test_tenant_db().await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
 
     // Should succeed

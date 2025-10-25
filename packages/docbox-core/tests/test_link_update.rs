@@ -11,15 +11,18 @@ use docbox_database::models::link::Link;
 use docbox_search::models::{SearchIndexType, SearchRequest};
 use uuid::Uuid;
 
-use crate::common::{database::create_test_tenant_database, search::create_test_tenant_typesense};
+use crate::common::{database::test_tenant_db, tenant::test_tenant, typesense::test_tenant_search};
 
 mod common;
 
 /// Tests that a link name can be updated successfully
 #[tokio::test]
 async fn test_update_link_name_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (document_box, root) = create_document_box(
         &db,
@@ -126,8 +129,11 @@ async fn test_update_link_name_success() {
 /// Tests that a link value can be updated successfully
 #[tokio::test]
 async fn test_update_link_value_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (document_box, root) = create_document_box(
         &db,
@@ -231,8 +237,11 @@ async fn test_update_link_value_success() {
 /// Tests that a link pinned state can be updated successfully
 #[tokio::test]
 async fn test_update_link_pinned_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (document_box, root) = create_document_box(
         &db,
@@ -311,8 +320,11 @@ async fn test_update_link_pinned_success() {
 /// Tests that a link can be moved to another folder
 #[tokio::test]
 async fn test_update_link_folder_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (document_box, root) = create_document_box(
         &db,
@@ -440,8 +452,11 @@ async fn test_update_link_folder_success() {
 /// Tests that a link cannot be moved to an unknown folder
 #[tokio::test]
 async fn test_update_link_folder_unknown() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+
     let events = TenantEventPublisher::Noop(NoopEventPublisher);
     let (_document_box, root) = create_document_box(
         &db,

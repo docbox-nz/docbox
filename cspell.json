@@ -64,6 +64,8 @@
     "utoipa",
     "wordpro",
     "wordprocessingml",
-    "tsvector"
+    "tsvector",
+    "typesensedev",
+    "tmpfs"
   ]
 }

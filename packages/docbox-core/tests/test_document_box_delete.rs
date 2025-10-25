@@ -1,5 +1,7 @@
-use crate::common::{search::create_test_tenant_typesense, storage::create_test_tenant_storage};
-use common::database::create_test_tenant_database;
+use crate::common::{
+    database::test_tenant_db, minio::test_tenant_storage, tenant::test_tenant,
+    typesense::test_tenant_search,
+};
 use docbox_core::{
     document_box::{
         create_document_box::{CreateDocumentBox, create_document_box},
@@ -13,9 +15,11 @@ mod common;
 
 #[tokio::test]
 async fn test_delete_document_box() {
-    let (_container, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
-    let (_container_storage, storage) = create_test_tenant_storage().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
 
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
@@ -53,9 +57,11 @@ async fn test_delete_document_box() {
 
 #[tokio::test]
 async fn test_delete_unknown_document_box() {
-    let (_container, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
-    let (_container_storage, storage) = create_test_tenant_storage().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
 
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
@@ -77,9 +83,11 @@ async fn test_delete_unknown_document_box() {
 /// within the document box
 #[tokio::test]
 async fn test_delete_document_box_deletes_children() {
-    let (_container, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
-    let (_container_storage, storage) = create_test_tenant_storage().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
 
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);

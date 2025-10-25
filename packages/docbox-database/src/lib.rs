@@ -9,7 +9,7 @@ pub use pool::{
 /// SQLx re-exports for other projects
 pub use sqlx::{
     self, PgExecutor as DbExecutor, PgPool, Postgres, Transaction,
-    postgres::{PgConnectOptions, PgPoolOptions, PgSslMode},
+    postgres::{PgConnectOptions, PgPoolOptions},
 };
 
 pub mod create;

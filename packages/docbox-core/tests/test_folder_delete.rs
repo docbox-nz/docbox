@@ -11,8 +11,8 @@ use docbox_search::models::SearchRequest;
 use uuid::Uuid;
 
 use crate::common::{
-    database::create_test_tenant_database, search::create_test_tenant_typesense,
-    storage::create_test_tenant_storage,
+    database::test_tenant_db, minio::test_tenant_storage, tenant::test_tenant,
+    typesense::test_tenant_search,
 };
 
 mod common;
@@ -20,9 +20,12 @@ mod common;
 /// Tests that a folder can be deleted successfully
 #[tokio::test]
 async fn test_delete_folder_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
-    let (_container_storage, storage) = create_test_tenant_storage().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
+
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
     let (document_box, root) = create_document_box(
@@ -104,9 +107,12 @@ async fn test_delete_folder_success() {
 /// its children will also be deleted
 #[tokio::test]
 async fn test_delete_folder_children_success() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
-    let (_container_storage, storage) = create_test_tenant_storage().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
+
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
     let (document_box, root) = create_document_box(
@@ -207,9 +213,12 @@ async fn test_delete_folder_children_success() {
 /// produce any events
 #[tokio::test]
 async fn test_delete_unknown_folder() {
-    let (_container_db, db) = create_test_tenant_database().await;
-    let (_container_search, search) = create_test_tenant_typesense().await;
-    let (_container_storage, storage) = create_test_tenant_storage().await;
+    let tenant = test_tenant();
+
+    let (db, _db_container) = test_tenant_db().await;
+    let (search, _search_container) = test_tenant_search(&tenant).await;
+    let (storage, _storage_container) = test_tenant_storage(&tenant).await;
+
     let (events, mut events_rx) = MpscEventPublisher::new();
     let events = TenantEventPublisher::Mpsc(events);
     let (_document_box, _root) = create_document_box(
