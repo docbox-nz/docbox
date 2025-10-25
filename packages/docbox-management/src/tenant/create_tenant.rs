@@ -1,10 +1,8 @@
-use std::ops::DerefMut;
-
-use docbox_core::utils::rollback::RollbackGuard;
 use docbox_database::{
     DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
     create::{
         check_database_exists, check_database_role_exists, create_database, create_restricted_role,
+        delete_database, delete_role,
     },
     migrations::apply_tenant_migrations,
     models::tenant::{Tenant, TenantId},
@@ -12,9 +10,12 @@ use docbox_database::{
 };
 use docbox_search::{SearchError, SearchIndexFactory, TenantSearchIndex};
 use docbox_secrets::{SecretManager, SecretManagerError};
-use docbox_storage::{CreateBucketOutcome, StorageLayerError, StorageLayerFactory};
+use docbox_storage::{
+    CreateBucketOutcome, StorageLayerError, StorageLayerFactory, TenantStorageLayer,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::ops::DerefMut;
 use thiserror::Error;
 
 use crate::{
@@ -112,6 +113,85 @@ pub struct CreateTenantConfig {
     pub event_queue_url: Option<String>,
 }
 
+/// Data required to rollback the failed creation of a tenant
+#[derive(Default)]
+struct CreateTenantRollbackData {
+    search_index: Option<TenantSearchIndex>,
+    storage: Option<TenantStorageLayer>,
+    secret: Option<(SecretManager, String)>,
+    database: Option<String>,
+    db_role: Option<String>,
+}
+
+impl CreateTenantRollbackData {
+    async fn rollback(&mut self, db_provider: &impl DatabaseProvider) {
+        // Rollback search index
+        if let Some(search_index) = self.search_index.take()
+            && let Err(error) = search_index.delete_index().await
+        {
+            tracing::error!(?error, "failed to rollback created tenant search index");
+        }
+
+        // Rollback storage
+        if let Some(storage) = self.storage.take()
+            && let Err(error) = storage.delete_bucket().await
+        {
+            tracing::error!(?error, "failed to rollback created tenant storage bucket");
+        }
+
+        // Rollback secrets
+        if let Some((secrets, secret_name)) = self.secret.take()
+            && let Err(error) = secrets.delete_secret(&secret_name).await
+        {
+            tracing::error!(?error, "failed to rollback tenant secret");
+        }
+
+        // Handle operations requiring a root database
+        let db_name = self.database.take();
+        let db_role_name = self.db_role.take();
+        if db_name.is_some() || db_role_name.is_some() {
+            match db_provider.connect("postgres").await {
+                Ok(db_postgres) => {
+                    // Rollback the database
+                    if let Some(db_name) = db_name
+                        && let Err(error) = delete_database(&db_postgres, &db_name).await
+                    {
+                        tracing::error!(?error, "failed to rollback tenant database");
+                    }
+
+                    // Rollback the database role
+                    if let Some(db_role_name) = db_role_name
+                        && let Err(error) = delete_role(&db_postgres, &db_role_name).await
+                    {
+                        tracing::error!(?error, "failed to rollback tenant db role name");
+                    }
+
+                    db_postgres.close().await;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        ?error,
+                        "failed to rollback tenant database, unable to acquire postgres database"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Handles the process of creating a new docbox tenant
+///
+/// Performs:
+/// - Create tenant database
+/// - Create tenant database role
+/// - Store a secret with the tenant database role credentials
+/// - Add the tenant to the docbox database
+/// - Run migrations on the tenant database
+/// - Create and setup the tenant storage bucket
+/// - Create and setup the tenant search index
+/// - Run search index migrations
+///
+/// On failure any created resources will be rolled back
 #[tracing::instrument(skip_all, fields(?config))]
 pub async fn create_tenant(
     db_provider: &impl DatabaseProvider,
@@ -120,10 +200,57 @@ pub async fn create_tenant(
     secrets: &SecretManager,
     config: CreateTenantConfig,
 ) -> Result<Tenant, CreateTenantError> {
-    // Create tenant database
-    let tenant_db = initialize_tenant_database(db_provider, &config.db_name).await?;
-    tracing::info!("created tenant database");
-    let _guard = close_pool_on_drop(&tenant_db);
+    let mut rollback = CreateTenantRollbackData::default();
+
+    match create_tenant_inner(
+        db_provider,
+        search_factory,
+        storage_factory,
+        secrets,
+        config,
+        &mut rollback,
+    )
+    .await
+    {
+        Ok(value) => Ok(value),
+        Err(error) => {
+            // Rollback the failure
+            rollback.rollback(db_provider).await;
+            Err(error)
+        }
+    }
+}
+
+#[tracing::instrument(skip_all, fields(?config))]
+async fn create_tenant_inner(
+    db_provider: &impl DatabaseProvider,
+    search_factory: &SearchIndexFactory,
+    storage_factory: &StorageLayerFactory,
+    secrets: &SecretManager,
+    config: CreateTenantConfig,
+    rollback: &mut CreateTenantRollbackData,
+) -> Result<Tenant, CreateTenantError> {
+    let (tenant_db, _tenant_db_guard) = {
+        // Connect to the "postgres" database to use while creating the tenant database
+        let db_postgres = db_provider
+            .connect("postgres")
+            .await
+            .map_err(CreateTenantError::ConnectPostgres)?;
+        let _postgres_guard = close_pool_on_drop(&db_postgres);
+
+        // Create tenant database
+        initialize_tenant_database(&db_postgres, &config.db_name, rollback).await?;
+        tracing::info!("created tenant database");
+
+        // Connect to the tenant database
+        let tenant_db = db_provider
+            .connect(&config.db_name)
+            .await
+            .map_err(CreateTenantError::ConnectTenantDatabase)?;
+
+        let tenant_db_guard = close_pool_on_drop(&tenant_db);
+        (tenant_db, tenant_db_guard)
+    };
 
     // Generate password for the database role
     let db_role_password = random_password(30);
@@ -133,15 +260,17 @@ pub async fn create_tenant(
         &config.db_name,
         &config.db_role_name,
         &db_role_password,
+        rollback,
     )
     .await?;
     tracing::info!("created tenant user");
 
-    let secret_rollback = initialize_tenant_db_secret(
+    initialize_tenant_db_secret(
         secrets,
         &config.db_secret_name,
         &config.db_role_name,
         &db_role_password,
+        rollback,
     )
     .await?;
     tracing::info!("created tenant database secret");
@@ -203,17 +332,18 @@ pub async fn create_tenant(
 
     // Setup the tenant storage bucket
     tracing::debug!("creating tenant storage");
-    let storage = create_tenant_storage(
+    create_tenant_storage(
         &tenant,
         storage_factory,
         config.storage_s3_queue_arn,
         config.storage_cors_origins,
+        rollback,
     )
     .await?;
 
     // Setup the tenant search index
     tracing::debug!("creating tenant search index");
-    let (search, search_rollback) = create_tenant_search(&tenant, search_factory).await?;
+    let search = create_tenant_search(&tenant, search_factory, rollback).await?;
 
     // Apply migrations to search
     search
@@ -236,11 +366,6 @@ pub async fn create_tenant(
         .await
         .inspect_err(|error| tracing::error!(?error, "failed to commit root transaction"))?;
 
-    // Commit search and storage
-    storage.commit();
-    search_rollback.commit();
-    secret_rollback.commit();
-
     Ok(tenant)
 }
 
@@ -261,33 +386,26 @@ pub async fn is_tenant_database_existing(
 /// Initializes the creation of a tenant database, if the database
 /// already exists that silently passes. Returns a [DbPool] to the
 /// tenant database
-#[tracing::instrument(skip(db_provider))]
-pub async fn initialize_tenant_database(
-    db_provider: &impl DatabaseProvider,
+#[tracing::instrument(skip(db_postgres, rollback))]
+async fn initialize_tenant_database(
+    db_postgres: &DbPool,
     db_name: &str,
-) -> Result<DbPool, CreateTenantError> {
-    // Connect to the "postgres" database to use while creating the tenant database
-    let db_postgres = db_provider
-        .connect("postgres")
-        .await
-        .map_err(CreateTenantError::ConnectPostgres)?;
+    rollback: &mut CreateTenantRollbackData,
+) -> Result<(), CreateTenantError> {
+    let already_exists = match create_database(db_postgres, db_name).await {
+        // We created the database
+        Ok(_) => false,
+        // Database already exists
+        Err(error) if error.is_database_exists() => true,
+        // Other database error
+        Err(error) => return Err(CreateTenantError::CreateTenantDatabase(error)),
+    };
 
-    let _guard = close_pool_on_drop(&db_postgres);
-
-    // Create the tenant database
-    if let Err(error) = create_database(&db_postgres, db_name).await
-        && !error.is_database_exists()
-    {
-        return Err(CreateTenantError::CreateTenantDatabase(error));
+    if !already_exists {
+        rollback.database = Some(db_name.to_string());
     }
 
-    // Connect to the tenant database
-    let tenant_db = db_provider
-        .connect(db_name)
-        .await
-        .map_err(CreateTenantError::ConnectTenantDatabase)?;
-
-    Ok(tenant_db)
+    Ok(())
 }
 
 /// Helper to check if a tenant database role already exists
@@ -307,19 +425,20 @@ pub async fn is_tenant_database_role_existing(
 
 /// Initializes a tenant db role that the docbox API will use when accessing
 /// the tenant databases
-#[tracing::instrument(skip(db, role_password))]
-pub async fn initialize_tenant_db_role(
+#[tracing::instrument(skip(db, role_password, rollback))]
+async fn initialize_tenant_db_role(
     db: &DbPool,
     db_name: &str,
     role_name: &str,
     role_password: &str,
+    rollback: &mut CreateTenantRollbackData,
 ) -> Result<(), CreateTenantError> {
     // Setup the restricted root db role
     create_restricted_role(db, db_name, role_name, role_password)
         .await
         .map_err(CreateTenantError::CreateTenantRole)?;
 
-    // TODO: ROLLBACK GUARD, DROP CREATED ROLE IF AND ONLY IF IT WAS CREATED BY US
+    rollback.db_role = Some(role_name.to_string());
 
     Ok(())
 }
@@ -338,19 +457,19 @@ pub async fn is_tenant_database_role_secret_existing(
 }
 
 /// Initializes and stores the secret for the tenant database access
-#[tracing::instrument(skip(secrets, role_password))]
-pub async fn initialize_tenant_db_secret(
+#[tracing::instrument(skip(secrets, role_password, rollback))]
+async fn initialize_tenant_db_secret(
     secrets: &SecretManager,
     secret_name: &str,
     role_name: &str,
     role_password: &str,
-) -> Result<RollbackGuard<impl FnOnce() + use<>>, CreateTenantError> {
+    rollback: &mut CreateTenantRollbackData,
+) -> Result<(), CreateTenantError> {
     // Ensure the secret does not already exist, we don't want to override it
     if secrets
-        .get_secret(secret_name)
+        .has_secret(secret_name)
         .await
         .map_err(CreateTenantError::CreateTenantSecret)?
-        .is_some()
     {
         return Err(CreateTenantError::SecretAlreadyExists);
     }
@@ -366,29 +485,20 @@ pub async fn initialize_tenant_db_secret(
         .await
         .map_err(CreateTenantError::CreateTenantSecret)?;
 
-    // Rollback guard to delete the secret on failure
-    let rollback = RollbackGuard::new({
-        let secrets = secrets.clone();
-        let secret_name = secret_name.to_string();
-        move || {
-            tokio::spawn(async move {
-                if let Err(error) = secrets.delete_secret(&secret_name).await {
-                    tracing::error!(?error, "failed to rollback tenant secret");
-                }
-            });
-        }
-    });
+    rollback.secret = Some((secrets.clone(), secret_name.to_string()));
 
-    Ok(rollback)
+    Ok(())
 }
 
 /// Create and setup the tenant storage
+#[tracing::instrument(skip(storage, rollback))]
 async fn create_tenant_storage(
     tenant: &Tenant,
     storage: &StorageLayerFactory,
     s3_queue_arn: Option<String>,
     origins: Vec<String>,
-) -> Result<RollbackGuard<impl FnOnce()>, CreateTenantError> {
+    rollback: &mut CreateTenantRollbackData,
+) -> Result<(), CreateTenantError> {
     let storage = storage.create_storage_layer(tenant);
     let outcome = storage
         .create_bucket()
@@ -396,22 +506,10 @@ async fn create_tenant_storage(
         .inspect_err(|error| tracing::error!(?error, "failed to create tenant bucket"))
         .map_err(CreateTenantError::CreateStorageBucket)?;
 
-    let rollback = RollbackGuard::new({
-        let storage = storage.clone();
-        move || {
-            // Don't try and rollback the bucket if it already existed
-            // (The bucket may existing out of user error)
-            if matches!(outcome, CreateBucketOutcome::Existing) {
-                return;
-            }
-
-            tokio::spawn(async move {
-                if let Err(error) = storage.delete_bucket().await {
-                    tracing::error!(?error, "failed to rollback created tenant storage bucket");
-                }
-            });
-        }
-    });
+    // Mark the storage for rollback if we created it
+    if matches!(outcome, CreateBucketOutcome::New) {
+        rollback.storage = Some(storage.clone());
+    }
 
     // Connect the S3 bucket for file upload notifications
     if let Some(s3_queue_arn) = s3_queue_arn {
@@ -433,14 +531,16 @@ async fn create_tenant_storage(
             .map_err(CreateTenantError::SetupStorageOrigins)?;
     }
 
-    Ok(rollback)
+    Ok(())
 }
 
 /// Create and setup the tenant search index
+#[tracing::instrument(skip(search, rollback))]
 async fn create_tenant_search(
     tenant: &Tenant,
     search: &SearchIndexFactory,
-) -> Result<(TenantSearchIndex, RollbackGuard<impl FnOnce()>), CreateTenantError> {
+    rollback: &mut CreateTenantRollbackData,
+) -> Result<TenantSearchIndex, CreateTenantError> {
     // Setup the tenant search index
     let search = search.create_search_index(tenant);
     search
@@ -449,17 +549,8 @@ async fn create_tenant_search(
         .map_err(CreateTenantError::CreateSearchIndex)
         .inspect_err(|error| tracing::error!(?error, "failed to create search index"))?;
 
-    let rollback = RollbackGuard::new({
-        let search = search.clone();
-        move || {
-            // Search was not committed, roll back
-            tokio::spawn(async move {
-                if let Err(error) = search.delete_index().await {
-                    tracing::error!(?error, "failed to rollback created tenant search index");
-                }
-            });
-        }
-    });
+    // Index has been created, provide it as rollback state
+    rollback.search_index = Some(search.clone());
 
-    Ok((search, rollback))
+    Ok(search)
 }
