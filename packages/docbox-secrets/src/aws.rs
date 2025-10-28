@@ -3,8 +3,12 @@
 //! Secret manager backed by [AWS secrets manager](https://docs.aws.amazon.com/secretsmanager/).
 //! Inherits the loaded [SdkConfig] and all configuration provided to it.
 //!
-//! Intended for AWS hosted environments
-
+//! # Environment Variables
+//!
+//! * `DOCBOX_SECRETS_ENDPOINT` - URL to use when using a custom secrets manager endpoint
+//! * `DOCBOX_SECRETS_ACCESS_KEY_ID` - Access key ID when using a custom secrets manager endpoint
+//! * `DOCBOX_SECRETS_ACCESS_KEY_SECRET` - Access key secret when using a custom secrets manager endpoint
+//!
 use crate::{Secret, SecretManagerError, SecretManagerImpl, SetSecretOutcome};
 use aws_config::SdkConfig;
 use aws_sdk_secretsmanager::{
@@ -65,11 +69,15 @@ pub enum AwsSecretsEndpoint {
 #[derive(Debug, Error)]
 pub enum AwsSecretsManagerConfigError {
     /// Using a custom endpoint but didn't specify the access key ID
-    #[error("cannot use DOCBOX_SECRETS_ACCESS_KEY_ID without specifying DOCBOX_S3_ACCESS_KEY_ID")]
+    #[error(
+        "cannot use DOCBOX_SECRETS_ACCESS_KEY_ID without specifying DOCBOX_SECRETS_ACCESS_KEY_ID"
+    )]
     MissingAccessKeyId,
 
     /// Using a custom endpoint but didn't specify the access key secret
-    #[error("cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_SECRET")]
+    #[error(
+        "cannot use DOCBOX_SECRETS_ACCESS_KEY_SECRET without specifying DOCBOX_SECRETS_ACCESS_KEY_SECRET"
+    )]
     MissingAccessKeySecret,
 }
 

@@ -99,6 +99,22 @@ services:
         extra_hosts:
             - "host.docker.internal:host-gateway"
 
+    # AWS Secrets Manager compatible server (https://github.com/jacobtread/loker)
+    secrets:
+        image: jacobtread/loker:0.1.0
+        container_name: loker
+        ports:
+            - "8083:8080"
+        environment:
+            SM_ENCRYPTION_KEY: test
+            SM_ACCESS_KEY_ID: test
+            SM_ACCESS_KEY_SECRET: test
+            SM_DATABASE_PATH: /data/secrets.db
+        volumes:
+            - secrets-data:/data
+        networks:
+            - docbox
+
     # Docbox server
     docbox:
         build:
@@ -133,6 +149,7 @@ volumes:
     pgadmin-data:
     minio-data:
     typesense-data:
+    secrets-data:
 
 networks:
     opensearch-net:
