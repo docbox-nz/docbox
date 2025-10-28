@@ -29,3 +29,7 @@ aws-sdk-secretsmanager = "=1.90.0"
 
 # File encryption for JSON file secrets manager
 age = "=0.11.1"
+
+[dev-dependencies]
+testcontainers = { workspace = true, features = ["http_wait"] }
+tokio = { workspace = true, features = ["full"] }

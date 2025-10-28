@@ -66,6 +66,7 @@
     "wordprocessingml",
     "tsvector",
     "typesensedev",
-    "tmpfs"
+    "tmpfs",
+    "loker"
   ]
 }
