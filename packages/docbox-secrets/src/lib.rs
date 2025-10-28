@@ -7,12 +7,11 @@
 //!
 //! ## Environment Variables
 //!
-//! * `DOCBOX_SECRET_MANAGER` - Which secret manager to use ("aws", "json", "memory")
+//! * `DOCBOX_SECRET_MANAGER` - Which secret manager to use ("aws" or "memory")
 //!
 //! See individual secret manager module documentation for individual environment variables
 //!
 //! - [aws]
-//! - [json]
 //! - [memory]
 
 use aws_config::SdkConfig;
@@ -20,21 +19,17 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 
 pub mod aws;
-pub mod json;
 pub mod memory;
 
 /// Configuration for a secrets manager
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum SecretsManagerConfig {
-    /// In-memory secret manager
-    Memory(memory::MemorySecretManagerConfig),
-
-    /// Encrypted JSON file secret manager
-    Json(json::JsonSecretManagerConfig),
-
     /// AWS secret manager
     Aws(aws::AwsSecretManagerConfig),
+
+    /// In-memory secret manager
+    Memory(memory::MemorySecretManagerConfig),
 }
 
 /// Errors that could occur with a secrets manager config
@@ -43,10 +38,6 @@ pub enum SecretsManagerConfigError {
     /// Error from the memory secrets manager config
     #[error(transparent)]
     Memory(memory::MemorySecretManagerConfigError),
-
-    /// Error from the JSON secrets manager config
-    #[error(transparent)]
-    Json(json::JsonSecretManagerConfigError),
 
     /// Error from the AWS secrets manager config
     #[error(transparent)]
@@ -61,9 +52,7 @@ impl SecretsManagerConfig {
             "memory" => memory::MemorySecretManagerConfig::from_env()
                 .map(Self::Memory)
                 .map_err(SecretsManagerConfigError::Memory),
-            "json" => json::JsonSecretManagerConfig::from_env()
-                .map(Self::Json)
-                .map_err(SecretsManagerConfigError::Json),
+
             _ => aws::AwsSecretManagerConfig::from_env()
                 .map(Self::Aws)
                 .map_err(SecretsManagerConfigError::Aws),
@@ -79,9 +68,6 @@ pub enum SecretManager {
 
     /// In-memory secret manager
     Memory(memory::MemorySecretManager),
-
-    /// Encrypted JSON backed secret manager
-    Json(json::JsonSecretManager),
 }
 
 /// Outcome from setting a secret
@@ -112,10 +98,6 @@ impl SecretManager {
                 ))
             }
 
-            SecretsManagerConfig::Json(config) => {
-                tracing::debug!("using json secret manager");
-                SecretManager::Json(json::JsonSecretManager::from_config(config))
-            }
             SecretsManagerConfig::Aws(config) => {
                 tracing::debug!("using aws secret manager");
                 SecretManager::Aws(aws::AwsSecretManager::from_config(aws_config, config))
@@ -133,7 +115,6 @@ impl SecretManager {
         match self {
             SecretManager::Aws(inner) => inner.get_secret(name).await,
             SecretManager::Memory(inner) => inner.get_secret(name).await,
-            SecretManager::Json(inner) => inner.get_secret(name).await,
         }
     }
 
@@ -147,7 +128,6 @@ impl SecretManager {
         match self {
             SecretManager::Aws(inner) => inner.has_secret(name).await,
             SecretManager::Memory(inner) => inner.has_secret(name).await,
-            SecretManager::Json(inner) => inner.has_secret(name).await,
         }
     }
 
@@ -164,7 +144,6 @@ impl SecretManager {
         match self {
             SecretManager::Aws(inner) => inner.set_secret(name, value).await,
             SecretManager::Memory(inner) => inner.set_secret(name, value).await,
-            SecretManager::Json(inner) => inner.set_secret(name, value).await,
         }
     }
 
@@ -175,7 +154,6 @@ impl SecretManager {
         match self {
             SecretManager::Aws(inner) => inner.delete_secret(name, force).await,
             SecretManager::Memory(inner) => inner.delete_secret(name, force).await,
-            SecretManager::Json(inner) => inner.delete_secret(name, force).await,
         }
     }
 
@@ -210,27 +188,17 @@ impl SecretManager {
 /// Errors that could occur when using a secrets manager
 #[derive(Debug, Error)]
 pub enum SecretManagerError {
-    /// In-memory secrets manager errors
-    #[error(transparent)]
-    Memory(memory::MemorySecretError),
-
-    /// JSON secrets manager errors
-    #[error(transparent)]
-    Json(Box<json::JsonSecretError>),
-
     /// AWS secrets manager errors
     #[error(transparent)]
     Aws(Box<aws::AwsSecretError>),
 
+    /// In-memory secrets manager errors
+    #[error(transparent)]
+    Memory(memory::MemorySecretError),
+
     /// Error parsing a secret from JSON
     #[error("failed to parse secret JSON")]
     ParseSecret,
-}
-
-impl From<json::JsonSecretError> for SecretManagerError {
-    fn from(value: json::JsonSecretError) -> Self {
-        Self::Json(Box::new(value))
-    }
 }
 
 impl From<aws::AwsSecretError> for SecretManagerError {
