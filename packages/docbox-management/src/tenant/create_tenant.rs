@@ -148,7 +148,7 @@ impl CreateTenantRollbackData {
 
         // Rollback secrets
         if let Some((secrets, secret_name)) = self.secret.take()
-            && let Err(error) = secrets.delete_secret(&secret_name).await
+            && let Err(error) = secrets.delete_secret(&secret_name, true).await
         {
             tracing::error!(?error, "failed to rollback tenant secret");
         }

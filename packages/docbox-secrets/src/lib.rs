@@ -164,12 +164,12 @@ impl SecretManager {
 
     /// Delete a secret by `name`
     #[tracing::instrument(skip(self))]
-    pub async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
+    pub async fn delete_secret(&self, name: &str, force: bool) -> Result<(), SecretManagerError> {
         tracing::debug!(?name, "deleting secret");
         match self {
-            SecretManager::Aws(inner) => inner.delete_secret(name).await,
-            SecretManager::Memory(inner) => inner.delete_secret(name).await,
-            SecretManager::Json(inner) => inner.delete_secret(name).await,
+            SecretManager::Aws(inner) => inner.delete_secret(name, force).await,
+            SecretManager::Memory(inner) => inner.delete_secret(name, force).await,
+            SecretManager::Json(inner) => inner.delete_secret(name, force).await,
         }
     }
 
@@ -255,5 +255,5 @@ pub(crate) trait SecretManagerImpl: Send + Sync {
         value: &str,
     ) -> Result<SetSecretOutcome, SecretManagerError>;
 
-    async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError>;
+    async fn delete_secret(&self, name: &str, force: bool) -> Result<(), SecretManagerError>;
 }

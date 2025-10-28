@@ -118,7 +118,7 @@ impl SecretManagerImpl for MemorySecretManager {
         })
     }
 
-    async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
+    async fn delete_secret(&self, name: &str, _force: bool) -> Result<(), SecretManagerError> {
         self.inner.write().await.data.remove(name);
         Ok(())
     }

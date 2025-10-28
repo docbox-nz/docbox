@@ -168,7 +168,7 @@ pub async fn delete_tenant(
                 return Err(DeleteTenantError::DeleteDatabaseRole(error));
             }
 
-            if let Err(error) = secrets.delete_secret(&tenant.db_secret_name).await {
+            if let Err(error) = secrets.delete_secret(&tenant.db_secret_name, false).await {
                 tracing::error!(?error, "failed to delete tenant database secret");
                 return Err(DeleteTenantError::DeleteDatabaseSecret(error));
             }

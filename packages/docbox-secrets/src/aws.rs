@@ -128,8 +128,15 @@ impl SecretManagerImpl for AwsSecretManager {
         Err(AwsSecretError::CreateSecret(error).into())
     }
 
-    async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
-        let error = match self.client.delete_secret().secret_id(name).send().await {
+    async fn delete_secret(&self, name: &str, force: bool) -> Result<(), SecretManagerError> {
+        let error = match self
+            .client
+            .delete_secret()
+            .secret_id(name)
+            .force_delete_without_recovery(force)
+            .send()
+            .await
+        {
             Ok(_) => return Ok(()),
             Err(error) => error,
         };

@@ -208,7 +208,7 @@ impl SecretManagerImpl for JsonSecretManager {
         })
     }
 
-    async fn delete_secret(&self, name: &str) -> Result<(), SecretManagerError> {
+    async fn delete_secret(&self, name: &str, _force: bool) -> Result<(), SecretManagerError> {
         let inner = &mut *self.inner.write().await;
         let mut secrets = if inner.path.exists() {
             inner.read_file().await?
