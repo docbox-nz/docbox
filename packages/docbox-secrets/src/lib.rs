@@ -34,7 +34,7 @@ pub enum SecretsManagerConfig {
     Json(json::JsonSecretManagerConfig),
 
     /// AWS secret manager
-    Aws,
+    Aws(aws::AwsSecretManagerConfig),
 }
 
 /// Errors that could occur with a secrets manager config
@@ -47,6 +47,10 @@ pub enum SecretsManagerConfigError {
     /// Error from the JSON secrets manager config
     #[error(transparent)]
     Json(json::JsonSecretManagerConfigError),
+
+    /// Error from the AWS secrets manager config
+    #[error(transparent)]
+    Aws(aws::AwsSecretsManagerConfigError),
 }
 
 impl SecretsManagerConfig {
@@ -60,7 +64,9 @@ impl SecretsManagerConfig {
             "json" => json::JsonSecretManagerConfig::from_env()
                 .map(Self::Json)
                 .map_err(SecretsManagerConfigError::Json),
-            _ => Ok(Self::Aws),
+            _ => aws::AwsSecretManagerConfig::from_env()
+                .map(Self::Aws)
+                .map_err(SecretsManagerConfigError::Aws),
         }
     }
 }
@@ -110,9 +116,9 @@ impl SecretManager {
                 tracing::debug!("using json secret manager");
                 SecretManager::Json(json::JsonSecretManager::from_config(config))
             }
-            SecretsManagerConfig::Aws => {
+            SecretsManagerConfig::Aws(config) => {
                 tracing::debug!("using aws secret manager");
-                SecretManager::Aws(aws::AwsSecretManager::from_sdk_config(aws_config))
+                SecretManager::Aws(aws::AwsSecretManager::from_config(aws_config, config))
             }
         }
     }

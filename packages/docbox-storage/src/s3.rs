@@ -31,7 +31,7 @@ use bytes::Bytes;
 use chrono::{DateTime, TimeDelta, Utc};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
-use std::{error::Error, time::Duration};
+use std::{error::Error, fmt::Debug, time::Duration};
 use thiserror::Error;
 
 type S3Client = aws_sdk_s3::Client;
@@ -65,7 +65,7 @@ impl S3StorageLayerFactoryConfig {
 }
 
 /// Endpoint to use for S3 operations
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum S3Endpoint {
     /// AWS default endpoint
@@ -79,6 +79,18 @@ pub enum S3Endpoint {
         /// Access key secret to use
         access_key_secret: String,
     },
+}
+
+impl Debug for S3Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Aws => write!(f, "Aws"),
+            Self::Custom { endpoint, .. } => f
+                .debug_struct("Custom")
+                .field("endpoint", endpoint)
+                .finish(),
+        }
+    }
 }
 
 impl S3Endpoint {

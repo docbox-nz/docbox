@@ -8,16 +8,34 @@
 use crate::{Secret, SecretManagerError, SecretManagerImpl, SetSecretOutcome};
 use aws_config::SdkConfig;
 use aws_sdk_secretsmanager::{
+    config::{Credentials, SharedCredentialsProvider},
     error::SdkError,
     operation::{
         create_secret::CreateSecretError, delete_secret::DeleteSecretError,
         get_secret_value::GetSecretValueError, update_secret::UpdateSecretError,
     },
 };
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 
 type SecretsManagerClient = aws_sdk_secretsmanager::Client;
+
+/// Config for the JSON secret manager
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct AwsSecretManagerConfig {
+    /// Endpoint to use for requests
+    pub endpoint: AwsSecretsEndpoint,
+}
+
+impl AwsSecretManagerConfig {
+    /// Load a [AwsSecretManagerConfig] from the current environment
+    pub fn from_env() -> Result<Self, AwsSecretsManagerConfigError> {
+        let endpoint = AwsSecretsEndpoint::from_env()?;
+        Ok(Self { endpoint })
+    }
+}
 
 /// AWS secrets manager backed secrets
 #[derive(Clone)]
@@ -25,10 +43,92 @@ pub struct AwsSecretManager {
     client: SecretsManagerClient,
 }
 
+/// Endpoint to use for secrets manager operations
+#[derive(Default, Clone, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AwsSecretsEndpoint {
+    /// AWS default endpoint
+    #[default]
+    Aws,
+    /// Custom endpoint (Loker or other compatible)
+    Custom {
+        /// Endpoint URL
+        endpoint: String,
+        /// Access key ID to use
+        access_key_id: String,
+        /// Access key secret to use
+        access_key_secret: String,
+    },
+}
+
+/// Errors that could occur when loading the AWS configuration
+#[derive(Debug, Error)]
+pub enum AwsSecretsManagerConfigError {
+    /// Using a custom endpoint but didn't specify the access key ID
+    #[error("cannot use DOCBOX_SECRETS_ACCESS_KEY_ID without specifying DOCBOX_S3_ACCESS_KEY_ID")]
+    MissingAccessKeyId,
+
+    /// Using a custom endpoint but didn't specify the access key secret
+    #[error("cannot use DOCBOX_S3_ENDPOINT without specifying DOCBOX_S3_ACCESS_KEY_SECRET")]
+    MissingAccessKeySecret,
+}
+
+impl Debug for AwsSecretsEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Aws => write!(f, "Aws"),
+            Self::Custom { endpoint, .. } => f
+                .debug_struct("Custom")
+                .field("endpoint", endpoint)
+                .finish(),
+        }
+    }
+}
+
+impl AwsSecretsEndpoint {
+    /// Load a [SecretsEndpoint] from the current environment
+    pub fn from_env() -> Result<Self, AwsSecretsManagerConfigError> {
+        match std::env::var("DOCBOX_SECRETS_ENDPOINT") {
+            // Using a custom secrets endpoint
+            Ok(endpoint_url) => {
+                let access_key_id = std::env::var("DOCBOX_SECRETS_ACCESS_KEY_ID")
+                    .map_err(|_| AwsSecretsManagerConfigError::MissingAccessKeyId)?;
+                let access_key_secret = std::env::var("DOCBOX_SECRETS_ACCESS_KEY_SECRET")
+                    .map_err(|_| AwsSecretsManagerConfigError::MissingAccessKeySecret)?;
+
+                Ok(AwsSecretsEndpoint::Custom {
+                    endpoint: endpoint_url,
+                    access_key_id,
+                    access_key_secret,
+                })
+            }
+            Err(_) => Ok(AwsSecretsEndpoint::Aws),
+        }
+    }
+}
+
 impl AwsSecretManager {
     /// Create a [AwsSecretManager] from a [SdkConfig]
-    pub fn from_sdk_config(aws_config: &SdkConfig) -> Self {
-        let client = SecretsManagerClient::new(aws_config);
+    pub fn from_config(aws_config: &SdkConfig, config: AwsSecretManagerConfig) -> Self {
+        let client = match config.endpoint {
+            AwsSecretsEndpoint::Aws => SecretsManagerClient::new(aws_config),
+            AwsSecretsEndpoint::Custom {
+                endpoint,
+                access_key_id,
+                access_key_secret,
+            } => {
+                // Apply custom credentials and endpoint
+                let credentials =
+                    Credentials::new(access_key_id, access_key_secret, None, None, "docbox");
+                let aws_config = aws_config
+                    .to_builder()
+                    .endpoint_url(endpoint)
+                    .credentials_provider(SharedCredentialsProvider::new(credentials))
+                    .build();
+                SecretsManagerClient::new(&aws_config)
+            }
+        };
+
         Self::new(client)
     }
 
