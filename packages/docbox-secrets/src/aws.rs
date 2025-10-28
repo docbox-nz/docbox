@@ -60,16 +60,20 @@ pub enum AwsSecretError {
 
 impl SecretManagerImpl for AwsSecretManager {
     async fn get_secret(&self, name: &str) -> Result<Option<super::Secret>, SecretManagerError> {
-        let result = self
-            .client
-            .get_secret_value()
-            .secret_id(name)
-            .send()
-            .await
-            .map_err(|error| {
+        let result = match self.client.get_secret_value().secret_id(name).send().await {
+            Ok(value) => value,
+            Err(error) => {
+                if error
+                    .as_service_error()
+                    .is_some_and(|value| value.is_resource_not_found_exception())
+                {
+                    return Ok(None);
+                }
+
                 tracing::error!(?error, "failed to get secret value");
-                AwsSecretError::GetSecretValue(error)
-            })?;
+                return Err(AwsSecretError::GetSecretValue(error).into());
+            }
+        };
 
         if let Some(value) = result.secret_string {
             return Ok(Some(Secret::String(value)));
