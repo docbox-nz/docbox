@@ -1,0 +1,43 @@
+# VERSION=0.3.2 cargo make -t docker-publish-alpine
+[tasks.docker-publish-alpine]
+command = "docker"
+args = [
+    "buildx",
+    "build",
+    "--platform",
+    "linux/amd64,linux/arm64",
+    "-t",
+    "jacobtread/docbox:${RELEASE_VERSION}-alpine-prebuilt",
+    "-t",
+    "jacobtread/docbox:latest-alpine-prebuilt",
+    "-f",
+    "./containers/prebuilt.alpine.Dockerfile",
+    "--push",
+    ".",
+    "--build-arg",
+    "GITHUB_RELEASE_VERSION=${RELEASE_VERSION}",
+]
+
+# VERSION=0.3.2 cargo make -t docker-publish-bookworm
+[tasks.docker-publish-bookworm]
+command = "docker"
+args = [
+    "buildx",
+    "build",
+    "--platform",
+    "linux/amd64,linux/arm64",
+    "-t",
+    "jacobtread/docbox:${RELEASE_VERSION}-bookworm-prebuilt",
+    "-t",
+    "jacobtread/docbox:latest-bookworm-prebuilt",
+    "-t",
+    "jacobtread/docbox:${RELEASE_VERSION}",
+    "-t",
+    "jacobtread/docbox:latest",
+    "-f",
+    "./containers/prebuilt.bookworm.Dockerfile",
+    "--push",
+    ".",
+    "--build-arg",
+    "GITHUB_RELEASE_VERSION=${RELEASE_VERSION}",
+]
