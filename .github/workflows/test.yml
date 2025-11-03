@@ -50,31 +50,15 @@ jobs:
                   docker pull jacobtread/office-convert-server:0.2.2
                   docker save jacobtread/office-convert-server:0.2.2 -o /tmp/.docker-cache/office-convert-server.tar
 
+                  docker pull jacobtread/loker:0.2.0
+                  docker save jacobtread/loker:0.2.0 -o /tmp/.docker-cache/loker.tar
+
             # Setup rust for building the service
             - name: Set up Rust
               uses: dtolnay/rust-toolchain@stable
               with:
                   toolchain: stable
-                  targets: x86_64-unknown-linux-musl
                   override: true
-
-            # # Cache Rust dependencies and build artifacts
-            # - name: Cache Rust dependencies
-            #   uses: actions/cache@v4
-            #   with:
-            #     path: |
-            #       ~/.cargo/bin/
-            #       ~/.cargo/registry/index/
-            #       ~/.cargo/registry/cache/
-            #       ~/.cargo/git/db/
-            #       target/
-            #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-            #     restore-keys: |
-            #       ${{ runner.os }}-cargo-
-
-            # Install musl-gcc and poppler (docbox uses poppler in tests)
-            - name: Install musl build tools
-              run: sudo apt update && sudo apt install musl-tools poppler-utils -y
 
             # Test the binary
             - name: Run tests
