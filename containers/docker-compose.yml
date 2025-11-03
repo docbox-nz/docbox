@@ -1,0 +1,83 @@
+# Docker Compose Typesense
+#
+# This configuration is for a docbox server backend by a typesense search index.
+#
+# Requires the following environment variables in .env.docker (inside .containers):
+# * TYPESENSE_API_KEY
+# * MINIO_ROOT_USER
+# * MINIO_ROOT_PASSWORD
+# * POSTGRES_PASSWORD
+# * SM_ENCRYPTION_KEY
+# * SM_ACCESS_KEY_ID
+# * SM_ACCESS_KEY_SECRET
+services:
+    # Database
+    database:
+        image: "postgres:latest"
+        container_name: docbox-database
+        ports:
+            - 8107:5432
+        env_file:
+            - .env.docker
+        environment:
+            POSTGRES_USER: docbox
+        volumes:
+            - docbox-database-data:/var/lib/postgresql/data
+
+    # Search
+    search:
+        image: typesense/typesense:28.0
+        container_name: docbox-search
+        ports:
+            - 8108:8108
+        env_file:
+            - .env.docker
+        environment:
+            TYPESENSE_DATA_DIR: /data
+        volumes:
+            - docbox-search-data:/data
+
+    # Storage (ARN = arn:minio:sqs::primary:webhook)
+    storage:
+        image: minio/minio:latest
+        container_name: docbox-storage
+        ports:
+            - 8109:9000
+        env_file:
+            - .env.docker
+        environment:
+            MINIO_NOTIFY_WEBHOOK_ENABLE_primary: "on"
+            MINIO_NOTIFY_WEBHOOK_ENDPOINT_primary: "http://host.docker.internal:8080/webhook/s3"
+            MINIO_NOTIFY_WEBHOOK_QUEUE_DIR: "/data/events"
+        command: server /data --console-address ":9001"
+        volumes:
+            - docbox-storage-data:/data
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+
+    # AWS Secrets Manager compatible server (https://github.com/jacobtread/loker)
+    secrets:
+        image: jacobtread/loker:0.2.0
+        container_name: docbox-secrets
+        ports:
+            - "8110:8080"
+        env_file:
+            - .env.docker
+        environment:
+            SM_DATABASE_PATH: /data/secrets.db
+        volumes:
+            - docbox-secrets-data:/data
+
+    # Office file converter server
+    office-convert-server:
+        image: jacobtread/office-convert-server:0.2.2
+        container_name: docbox-office-converter
+        ports:
+            - "8111:8080"
+        restart: unless-stopped
+
+volumes:
+    docbox-database-data:
+    docbox-search-data:
+    docbox-storage-data:
+    docbox-secrets-data:

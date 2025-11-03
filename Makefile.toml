@@ -1,5 +1,6 @@
 # VERSION=0.3.2 cargo make -t docker-publish-alpine
 [tasks.docker-publish-alpine]
+workspace = false
 command = "docker"
 args = [
     "buildx",
@@ -20,6 +21,7 @@ args = [
 
 # VERSION=0.3.2 cargo make -t docker-publish-bookworm
 [tasks.docker-publish-bookworm]
+workspace = false
 command = "docker"
 args = [
     "buildx",
@@ -40,4 +42,27 @@ args = [
     ".",
     "--build-arg",
     "GITHUB_RELEASE_VERSION=${RELEASE_VERSION}",
+]
+
+# cargo make -t docker-compose-up
+[tasks.docker-compose-up]
+workspace = false
+command = "docker"
+args = [
+    "compose",
+    "-f",
+    "./containers/docker-compose.yml",
+    "up",
+    "-d"
+]
+
+# cargo make -t docker-compose-down
+[tasks.docker-compose-down]
+workspace = false
+command = "docker"
+args = [
+    "compose",
+    "-f",
+    "./containers/docker-compose.yml",
+    "down"
 ]
