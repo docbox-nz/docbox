@@ -60,6 +60,10 @@ jobs:
                   toolchain: stable
                   override: true
 
+            # Install poppler (docbox uses poppler in tests)
+            - name: Install poppler
+              run: sudo apt update && sudo apt install poppler-utils -y
+
             # Test the binary
             - name: Run tests
               env:
