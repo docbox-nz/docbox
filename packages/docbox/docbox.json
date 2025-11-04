@@ -4638,6 +4638,15 @@
               }
             ],
             "default": null
+          },
+          "max_unpack_iterations": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Maximum number of times to unpack a file. When unpacking\nthings like email attachments, these are recursively this\nlimits the number of nested unpacking that can occur.\n\nDefault: 1 (Unpack Only the immediate children)",
+            "default": null,
+            "minimum": 0
           }
         }
       },
