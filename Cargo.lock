@@ -1859,7 +1859,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "aws-config",
  "aws-sdk-sqs",
@@ -1890,7 +1890,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-database"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "docbox-secrets",
@@ -1909,7 +1909,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-management"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "aws-config",
  "docbox-core",
@@ -1928,7 +1928,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-processing"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -1956,7 +1956,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-search"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "aws-config",
  "chrono",
@@ -1981,7 +1981,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-secrets"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aws-config",
  "aws-sdk-secretsmanager",
@@ -1995,7 +1995,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-storage"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
