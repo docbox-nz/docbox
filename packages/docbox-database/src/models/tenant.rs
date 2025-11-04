@@ -42,13 +42,13 @@ impl Tenant {
         sqlx::query(
             r#"
             INSERT INTO "docbox_tenants" (
-                "id", 
+                "id",
                 "name",
-                "db_name", 
-                "db_secret_name", 
-                "s3_name", 
-                "os_index_name", 
-                "env", 
+                "db_name",
+                "db_secret_name",
+                "s3_name",
+                "os_index_name",
+                "env",
                 "event_queue_url"
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -134,7 +134,7 @@ impl Tenant {
 
     /// Deletes the tenant
     pub async fn delete(self, db: impl DbExecutor<'_>) -> DbResult<()> {
-        sqlx::query(r#"DELETE "docbox_tenants" WHERE "id" = $1 AND "env" = $2"#)
+        sqlx::query(r#"DELETE FROM "docbox_tenants" WHERE "id" = $1 AND "env" = $2"#)
             .bind(self.id)
             .bind(&self.env)
             .execute(db)
