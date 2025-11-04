@@ -220,7 +220,8 @@ impl SearchIndex for TypesenseIndex {
     async fn delete_index(&self) -> Result<(), SearchError> {
         let api_key = self.client_data.api_key_provider.get_api_key().await?;
 
-        self.client
+        let response = self
+            .client
             .delete(format!(
                 "{}/collections/{}",
                 self.client_data.base_url, self.index
@@ -231,14 +232,17 @@ impl SearchIndex for TypesenseIndex {
             .map_err(|error| {
                 tracing::error!(?error, "failed to delete search index (io)");
                 TypesenseSearchError::DeleteIndex
-            })?
-            .error_for_status()
-            .map_err(|error| {
-                tracing::error!(?error, "failed to delete search index (response)");
-                TypesenseSearchError::DeleteIndex
             })?;
 
-        // TODO: Gracefully handle 404 from already deleted index
+        // Gracefully handle the index already not existing
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+
+        response.error_for_status().map_err(|error| {
+            tracing::error!(?error, "failed to delete search index (response)");
+            TypesenseSearchError::DeleteIndex
+        })?;
 
         Ok(())
     }

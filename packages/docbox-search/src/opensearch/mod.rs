@@ -256,7 +256,8 @@ impl SearchIndex for OpenSearchIndex {
 
     async fn delete_index(&self) -> Result<(), SearchError> {
         // Delete index for files
-        self.client
+        let response = self
+            .client
             .indices()
             .delete(IndicesDeleteParts::Index(&[&self.search_index.0]))
             .send()
@@ -266,7 +267,15 @@ impl SearchIndex for OpenSearchIndex {
                 OpenSearchSearchError::DeleteIndex
             })?;
 
-        // TODO: Gracefully handle 404 from already deleted index
+        // Gracefully handle the index already not existing
+        if response.status_code() == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+
+        response.error_for_status_code().map_err(|error| {
+            tracing::error!(?error, "failed to delete search index (response)");
+            OpenSearchSearchError::DeleteIndex
+        })?;
 
         Ok(())
     }
