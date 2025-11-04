@@ -84,6 +84,13 @@ pub struct DeleteTenantOptions {
     pub delete_search: bool,
     /// Whether to delete the tenant database itself (Requires "delete_contents")
     pub delete_database: bool,
+    /// Whether when using AWS secrets manager to immediately delete the secret
+    /// or to allow it to be recoverable for a short period of time.
+    ///
+    /// Note: If the secret is not immediately deleted a new tenant will not be
+    /// able to make use of this secret name until the 30day recovery window
+    /// has ended.
+    pub permanently_delete_secret: bool,
 }
 
 #[tracing::instrument(skip_all, fields(env, tenant_id))]
@@ -168,7 +175,10 @@ pub async fn delete_tenant(
                 return Err(DeleteTenantError::DeleteDatabaseRole(error));
             }
 
-            if let Err(error) = secrets.delete_secret(&tenant.db_secret_name, false).await {
+            if let Err(error) = secrets
+                .delete_secret(&tenant.db_secret_name, options.permanently_delete_secret)
+                .await
+            {
                 tracing::error!(?error, "failed to delete tenant database secret");
                 return Err(DeleteTenantError::DeleteDatabaseSecret(error));
             }
