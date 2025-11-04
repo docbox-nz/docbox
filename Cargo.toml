@@ -99,7 +99,7 @@ utoipa = { version = "=5.4.0", features = [
 ] }
 
 # AWS configuration
-aws-config = { version = "=1.8.8", features = ["behavior-version-latest"] }
+aws-config = { version = "=1.8.10", features = ["behavior-version-latest"] }
 
 # HTML parser for OGP metadata and html to text conversion
 tl = "=0.7.8"

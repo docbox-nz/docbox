@@ -25,7 +25,7 @@ tracing.workspace = true
 
 # AWS Config, AWS S3 sdk, AWS typing internals
 aws-config.workspace = true
-aws-sdk-secretsmanager = "=1.90.0"
+aws-sdk-secretsmanager = "=1.92.0"
 
 [dev-dependencies]
 testcontainers = { workspace = true, features = ["http_wait"] }
