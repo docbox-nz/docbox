@@ -110,5 +110,5 @@ base64 = "=0.22.1"
 # Iterator utilities
 itertools = "=0.14.0"
 
-testcontainers = "=0.25.0"
+testcontainers = "=0.25.2"
 testcontainers-modules = "=0.13.0"
