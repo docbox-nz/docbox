@@ -145,6 +145,11 @@ pub async fn delete_tenant(
         }
     }
 
+    // Database search index must be explicitly closed before performing database operations
+    if let TenantSearchIndex::Database(database) = search {
+        database.close().await;
+    }
+
     if options.delete_database {
         if !options.delete_contents {
             return Err(DeleteTenantError::MissingDeleteContents);
@@ -260,6 +265,9 @@ async fn delete_tenant_contents(
             .try_collect::<()>()
             .await?;
     }
+
+    // Explicitly close on graceful completion
+    tenant_db.close().await;
 
     Ok(())
 }

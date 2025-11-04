@@ -316,11 +316,11 @@ impl DatabasePoolCache {
             .time_to_idle(cache_duration)
             .max_capacity(cache_capacity)
             .eviction_policy(EvictionPolicy::tiny_lfu())
-            .eviction_listener(|cache_key: Arc<String>, pool: DbPool, _cause| {
-                tokio::spawn(async move {
+            .async_eviction_listener(|cache_key: Arc<String>, pool: DbPool, _cause| {
+                Box::pin(async move {
                     tracing::debug!(?cache_key, "database pool is no longer in use, closing");
                     pool.close().await
-                });
+                })
             })
             .build();
 
@@ -355,11 +355,24 @@ impl DatabasePoolCache {
         self.get_pool(&tenant.db_name, &tenant.db_secret_name).await
     }
 
+    /// Closes the database pool for the specific tenant if one is
+    /// available and removes the pool from the cache
+    pub async fn close_tenant_pool(&self, tenant: &Tenant) {
+        let cache_key = format!("{}-{}", &tenant.db_name, &tenant.db_secret_name);
+        if let Some(pool) = self.cache.remove(&cache_key).await {
+            pool.close().await;
+        }
+
+        // Run cache async shutdown jobs
+        self.cache.run_pending_tasks().await;
+    }
+
     /// Empties all the caches
     pub async fn flush(&self) {
         // Clear cache
         self.cache.invalidate_all();
         self.connect_info_cache.invalidate_all();
+        self.cache.run_pending_tasks().await;
     }
 
     /// Close all connections in the pool and invalidate the cache

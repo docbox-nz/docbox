@@ -102,6 +102,11 @@ impl DatabaseSearchIndex {
             })?;
         Ok(db)
     }
+
+    /// Close the associated tenant database pool
+    pub async fn close(&self) {
+        self.db.close_tenant_pool(&self.tenant).await;
+    }
 }
 
 impl SearchIndex for DatabaseSearchIndex {
