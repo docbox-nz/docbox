@@ -1,4 +1,4 @@
-# VERSION=0.3.2 cargo make -t docker-publish-alpine
+# RELEASE_VERSION=0.3.2 cargo make -t docker-publish-alpine
 [tasks.docker-publish-alpine]
 workspace = false
 command = "docker"
@@ -19,7 +19,7 @@ args = [
     "GITHUB_RELEASE_VERSION=${RELEASE_VERSION}",
 ]
 
-# VERSION=0.3.2 cargo make -t docker-publish-bookworm
+# RELEASE_VERSION=0.3.2 cargo make -t docker-publish-bookworm
 [tasks.docker-publish-bookworm]
 workspace = false
 command = "docker"
