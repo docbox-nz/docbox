@@ -1,9 +1,7 @@
 #  Builder part
-FROM rust:1.90.0-slim AS builder
+FROM rust:1.90.0-slim-bullseye AS builder
 
 # Add rust target and install deps
-RUN rustup target add x86_64-unknown-linux-musl
-RUN apt update && apt install -y musl-tools musl-dev
 RUN update-ca-certificates
 
 WORKDIR /app
@@ -35,7 +33,7 @@ RUN mkdir packages/docbox-management/src && echo "//placeholder" >packages/docbo
 RUN mkdir packages/docbox-processing/src && echo "//placeholder" >packages/docbox-processing/src/lib.rs
 
 # Run a build to download dependencies
-RUN cargo build -p docbox --target x86_64-unknown-linux-musl --release
+RUN cargo build -p docbox --release
 
 COPY packages packages
 
@@ -49,7 +47,7 @@ RUN touch packages/docbox-storage/src/lib.rs
 RUN touch packages/docbox-management/src/lib.rs
 RUN touch packages/docbox-processing/src/lib.rs
 
-RUN cargo build -p docbox --target x86_64-unknown-linux-musl --release
+RUN cargo build -p docbox --release
 
 # ----------------------------------------
 # Runner part
@@ -66,7 +64,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y poppler-utils && apt-get clean
 
 # Copy the built binary
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/docbox ./
+COPY --from=builder /app/target/release/docbox ./
 
 EXPOSE 8080
 
