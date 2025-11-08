@@ -37,6 +37,7 @@ pub async fn test_storage_factory(container: &ContainerAsync<MinIO>) -> StorageL
 
     let endpoint = docbox_storage::s3::S3Endpoint::Custom {
         endpoint: url,
+        external_endpoint: None,
         access_key_id: TEST_MINIO_USER.to_string(),
         access_key_secret: TEST_MINIO_PASSWORD.to_string(),
     };

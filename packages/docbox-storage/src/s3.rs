@@ -5,6 +5,7 @@
 //! # Environment Variables
 //!
 //! * `DOCBOX_S3_ENDPOINT` - URL to use when using a custom S3 endpoint
+//! * `DOCBOX_S3_EXTERNAL_ENDPOINT` - Alternative "external" user facing endpoint, useful when running the server in docker with a different endpoint
 //! * `DOCBOX_S3_ACCESS_KEY_ID` - Access key ID when using a custom S3 endpoint
 //! * `DOCBOX_S3_ACCESS_KEY_SECRET` - Access key secret when using a custom S3 endpoint
 
@@ -74,6 +75,8 @@ pub enum S3Endpoint {
     Custom {
         /// Endpoint URL
         endpoint: String,
+        /// Endpoint to use for external requests (Presigned requests)
+        external_endpoint: Option<String>,
         /// Access key ID to use
         access_key_id: String,
         /// Access key secret to use
@@ -104,8 +107,11 @@ impl S3Endpoint {
                 let access_key_secret = std::env::var("DOCBOX_S3_ACCESS_KEY_SECRET")
                     .map_err(|_| S3StorageLayerFactoryConfigError::MissingAccessKeySecret)?;
 
+                let external_endpoint = std::env::var("DOCBOX_S3_EXTERNAL_ENDPOINT").ok();
+
                 Ok(S3Endpoint::Custom {
                     endpoint: endpoint_url,
+                    external_endpoint,
                     access_key_id,
                     access_key_secret,
                 })
@@ -120,18 +126,21 @@ impl S3Endpoint {
 pub struct S3StorageLayerFactory {
     /// Client to access S3
     client: S3Client,
+    /// Optional different client for creating presigned external requests
+    external_client: Option<S3Client>,
 }
 
 impl S3StorageLayerFactory {
     /// Create a [S3StorageLayerFactory] from a config
     pub fn from_config(aws_config: &SdkConfig, config: S3StorageLayerFactoryConfig) -> Self {
-        let client = match config.endpoint {
+        let (client, external_client) = match config.endpoint {
             S3Endpoint::Aws => {
                 tracing::debug!("using aws s3 storage layer");
-                S3Client::new(aws_config)
+                (S3Client::new(aws_config), None)
             }
             S3Endpoint::Custom {
                 endpoint,
+                external_endpoint,
                 access_key_id,
                 access_key_secret,
             } => {
@@ -145,40 +154,67 @@ impl S3StorageLayerFactory {
                 );
 
                 // Enforces the "path" style for S3 bucket access
-                let config = aws_sdk_s3::config::Builder::from(aws_config)
+                let config_builder = aws_sdk_s3::config::Builder::from(aws_config)
                     .force_path_style(true)
                     .endpoint_url(endpoint)
-                    .credentials_provider(credentials)
-                    .build();
-                S3Client::from_conf(config)
+                    .credentials_provider(credentials);
+
+                // Create an external client for external s3 requests if needed
+                let external_client = match external_endpoint {
+                    Some(external_endpoint) => {
+                        let config = config_builder
+                            .clone()
+                            .endpoint_url(external_endpoint)
+                            .build();
+                        let client = S3Client::from_conf(config);
+                        Some(client)
+                    }
+                    None => None,
+                };
+
+                let config = config_builder.build();
+                let client = S3Client::from_conf(config);
+
+                (client, external_client)
             }
         };
 
-        Self { client }
+        Self {
+            client,
+            external_client,
+        }
     }
 
     /// Create a [S3StorageLayer] for the provided `bucket_name`
     pub fn create_storage_layer(&self, bucket_name: String) -> S3StorageLayer {
-        S3StorageLayer::new(self.client.clone(), bucket_name)
+        S3StorageLayer::new(
+            self.client.clone(),
+            self.external_client.clone(),
+            bucket_name,
+        )
     }
 }
 
 /// Storage layer backend by a S3 compatible service
 #[derive(Clone)]
 pub struct S3StorageLayer {
+    /// Name of the bucket to use
+    bucket_name: String,
+
     /// Client to access S3
     client: S3Client,
 
-    /// Name of the bucket to use
-    bucket_name: String,
+    /// Optional different client for creating presigned external requests
+    external_client: Option<S3Client>,
 }
 
 impl S3StorageLayer {
     /// Create a new S3 storage layer from the client and bucket name
-    fn new(client: S3Client, bucket_name: String) -> Self {
+    fn new(client: S3Client, external_client: Option<S3Client>, bucket_name: String) -> Self {
         Self {
-            client,
             bucket_name,
+            client,
+            external_client,
         }
     }
 }
@@ -379,8 +415,12 @@ impl StorageLayerImpl for S3StorageLayer {
             .checked_add_signed(TimeDelta::minutes(expiry_time_minutes))
             .ok_or(S3StorageError::UnixTimeCalculation)?;
 
-        let result = self
-            .client
+        let client = match self.external_client.as_ref() {
+            Some(external_client) => external_client,
+            None => &self.client,
+        };
+
+        let result = client
             .put_object()
             .bucket(&self.bucket_name)
             .key(key)
@@ -412,8 +452,12 @@ impl StorageLayerImpl for S3StorageLayer {
             .checked_add_signed(TimeDelta::seconds(expires_in.as_secs() as i64))
             .ok_or(S3StorageError::UnixTimeCalculation)?;
 
-        let result = self
-            .client
+        let client = match self.external_client.as_ref() {
+            Some(external_client) => external_client,
+            None => &self.client,
+        };
+
+        let result = client
             .get_object()
             .bucket(&self.bucket_name)
             .key(key)
