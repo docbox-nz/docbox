@@ -44,6 +44,42 @@ jobs:
             # Checkout the repo for building
             - uses: actions/checkout@v4
 
+            # Clean up the image to make space for the build
+            - name: Aggressive cleanup
+              run: |
+                  # Remove Java (JDKs)
+                  sudo rm -rf /usr/lib/jvm
+
+                  # Remove .NET SDKs
+                  sudo rm -rf /usr/share/dotnet
+
+                  # Remove Swift toolchain
+                  sudo rm -rf /usr/share/swift
+
+                  # Remove Haskell (GHC)
+                  sudo rm -rf /usr/local/.ghcup
+
+                  # Remove Julia
+                  sudo rm -rf /usr/local/julia*
+
+                  # Remove Android SDKs
+                  sudo rm -rf /usr/local/lib/android
+
+                  # Remove Chromium (optional if not using for browser tests)
+                  sudo rm -rf /usr/local/share/chromium
+
+                  # Remove Microsoft/Edge and Google Chrome builds
+                  sudo rm -rf /opt/microsoft /opt/google
+
+                  # Remove Azure CLI
+                  sudo rm -rf /opt/az
+
+                  # Remove PowerShell
+                  sudo rm -rf /usr/local/share/powershell
+
+                  # Remove CodeQL and other toolcaches
+                  sudo rm -rf /opt/hostedtoolcache
+
             # Setup rust for building the service
             - name: Set up Rust
               uses: dtolnay/rust-toolchain@stable
@@ -51,21 +87,6 @@ jobs:
                   toolchain: stable
                   targets: ${{ matrix.target }}
                   override: true
-
-            # # Cache Rust dependencies and build artifacts
-            # - name: Cache Rust dependencies
-            #   id: cache-rust
-            #   uses: actions/cache@v4
-            #   with:
-            #     path: |
-            #       ~/.cargo/bin/
-            #       ~/.cargo/registry/index/
-            #       ~/.cargo/registry/cache/
-            #       ~/.cargo/git/db/
-            #       target/
-            #     key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-            #     restore-keys: |
-            #       ${{ runner.os }}-${{ matrix.target }}-cargo-
 
             # Install cross for cross compiling
             - name: Install cross
@@ -114,19 +135,41 @@ jobs:
               with:
                   targets: ${{ matrix.target }}
 
-            # # Cache Rust dependencies and build artifacts
-            # - name: Cache Rust dependencies
-            #   uses: actions/cache@v4
-            #   with:
-            #       path: |
-            #           ~/.cargo/bin/
-            #           ~/.cargo/registry/index/
-            #           ~/.cargo/registry/cache/
-            #           ~/.cargo/git/db/
-            #           target/
-            #       key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-            #       restore-keys: |
-            #           ${{ runner.os }}-${{ matrix.target }}-cargo-
+            # Clean up the runner to make space for the build
+            - name: Aggressive cleanup
+              run: |
+                  # Remove Java (JDKs)
+                  sudo rm -rf /usr/lib/jvm
+
+                  # Remove .NET SDKs
+                  sudo rm -rf /usr/share/dotnet
+
+                  # Remove Swift toolchain
+                  sudo rm -rf /usr/share/swift
+
+                  # Remove Haskell (GHC)
+                  sudo rm -rf /usr/local/.ghcup
+
+                  # Remove Julia
+                  sudo rm -rf /usr/local/julia*
+
+                  # Remove Android SDKs
+                  sudo rm -rf /usr/local/lib/android
+
+                  # Remove Chromium (optional if not using for browser tests)
+                  sudo rm -rf /usr/local/share/chromium
+
+                  # Remove Microsoft/Edge and Google Chrome builds
+                  sudo rm -rf /opt/microsoft /opt/google
+
+                  # Remove Azure CLI
+                  sudo rm -rf /opt/az
+
+                  # Remove PowerShell
+                  sudo rm -rf /usr/local/share/powershell
+
+                  # Remove CodeQL and other toolcaches
+                  sudo rm -rf /opt/hostedtoolcache
 
             # Cross compile the binary
             - name: Build
