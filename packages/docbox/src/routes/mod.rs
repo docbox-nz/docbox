@@ -26,10 +26,16 @@ pub fn router() -> Router {
 pub fn admin_router() -> Router {
     Router::new()
         .route("/flush-db-cache", post(admin::flush_database_pool_cache))
+        .route("/flush-tenant-cache", post(admin::flush_tenant_cache))
         .route(
             "/tenant-stats",
             get(admin::tenant_stats).layer(axum::middleware::from_fn(tenant_auth_middleware)),
         )
+        // .route(
+        //     "/rebuild-search-index",
+        //     post(admin::rebuild_search_index_tenant)
+        //         .layer(axum::middleware::from_fn(tenant_auth_middleware)),
+        // )
         .route(
             "/boxes",
             post(admin::tenant_boxes).layer(axum::middleware::from_fn(tenant_auth_middleware)),
