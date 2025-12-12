@@ -27,12 +27,14 @@ use std::{str::FromStr, time::Duration};
 use thiserror::Error;
 use url_validation::{TokioDomainResolver, is_allowed_url};
 
+#[cfg(feature = "caching")]
 mod cache;
 mod data_uri;
 mod document;
 mod download_image;
 mod url_validation;
 
+#[cfg(feature = "caching")]
 pub use cache::{
     CachingWebsiteMetaService, CachingWebsiteMetaServiceConfig,
     CachingWebsiteMetaServiceConfigError,
