@@ -188,11 +188,26 @@ async fn server() -> Result<(), Box<dyn Error>> {
         },
     ));
 
-    // Spawn background scheduled tasks
-    tokio::spawn(perform_background_tasks(BackgroundTaskData {
-        db_cache: db_cache.clone(),
-        storage: storage_factory.clone(),
-    }));
+    // When operating in an environment where multiple servers are running we may want to
+    // disable automated background tasks that could run concurrently and interfere with
+    // each other
+    let disable_background_tasks = match std::env::var("DOCBOX_DISABLE_BACKGROUND_TASKS") {
+        Ok(value) => value.parse::<bool>()?,
+        // Default max file size in bytes (100MB)
+        Err(_) => false,
+    };
+
+    if disable_background_tasks {
+        tracing::debug!("background tasks are disabled, skipping schedule");
+    } else {
+        tracing::debug!("scheduling background tasks");
+
+        // Spawn background scheduled tasks
+        tokio::spawn(perform_background_tasks(BackgroundTaskData {
+            db_cache: db_cache.clone(),
+            storage: storage_factory.clone(),
+        }));
+    }
 
     // Determine whether to use https
     let use_https = match std::env::var("DOCBOX_USE_HTTPS") {
