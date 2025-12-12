@@ -275,7 +275,7 @@ pub async fn reprocess_octet_stream_files_tenant(
     tag = ADMIN_TAG,
     path = "/admin/rebuild-search-index",
     responses(
-        (status = 204, description = "Rebuilt successfully", body = AdminSearchResultResponse),
+        (status = 204, description = "Rebuilt successfully", body = ()),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(TenantParams)

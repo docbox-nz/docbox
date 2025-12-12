@@ -14,8 +14,7 @@ use docbox_search::{
     models::{DocumentPage, SearchIndexData, SearchIndexType},
 };
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
-use futures::{StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
-use itertools::Itertools;
+use futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use std::{str::FromStr, string::FromUtf8Error};
 use thiserror::Error;
 
@@ -64,11 +63,13 @@ pub async fn apply_rebuilt_tenant_index(
     // Ensure the index exists
     _ = search.create_index().await;
 
-    let index_data_chunks = data.into_iter().chunks(INDEX_CHUNK_SIZE);
-    let index_data_chunks = index_data_chunks.into_iter();
+    let mut iter = data.into_iter();
 
-    for data in index_data_chunks {
-        let chunk = data.collect::<Vec<_>>();
+    loop {
+        let chunk: Vec<_> = iter.by_ref().take(INDEX_CHUNK_SIZE).collect();
+        if chunk.is_empty() {
+            break;
+        }
         search.add_data(chunk).await?;
     }
 
@@ -245,7 +246,7 @@ pub async fn create_files_index_data(
     for chunk in files_for_processing.chunks(FILE_PROCESS_SIZE) {
         let mut results: Vec<SearchIndexData> = chunk
             .iter()
-            .map(|(file, scope)| -> LocalBoxFuture<'_, SearchIndexData> {
+            .map(|(file, scope)| -> BoxFuture<'_, SearchIndexData> {
                 Box::pin(async move {
                     let pages =
                         match try_pdf_compatible_document_pages(db, storage, scope, file).await {
@@ -281,7 +282,7 @@ pub async fn create_files_index_data(
                     }
                 })
             })
-            .collect::<FuturesUnordered<LocalBoxFuture<'_, SearchIndexData>>>()
+            .collect::<FuturesUnordered<BoxFuture<'_, SearchIndexData>>>()
             .collect()
             .await;
 
