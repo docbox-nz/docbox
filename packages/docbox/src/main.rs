@@ -24,7 +24,10 @@ use docbox_processing::{
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
 use docbox_secrets::{SecretManager, SecretsManagerConfig};
 use docbox_storage::{StorageLayerFactory, StorageLayerFactoryConfig};
-use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
+use docbox_web_scraper::{
+    CachingWebsiteMetaService, CachingWebsiteMetaServiceConfig, WebsiteMetaService,
+    WebsiteMetaServiceConfig,
+};
 use logging::{init_logging, init_logging_with_sentry};
 use routes::router;
 use std::{
@@ -108,9 +111,13 @@ async fn server() -> Result<(), Box<dyn Error>> {
 
     // Create website scraping service
     let website_meta_service_config = WebsiteMetaServiceConfig::from_env()?;
-    let website_meta_service = Arc::new(WebsiteMetaService::from_config(
-        website_meta_service_config,
-    )?);
+    let website_meta_service = WebsiteMetaService::from_config(website_meta_service_config)?;
+    let caching_website_meta_service_config = CachingWebsiteMetaServiceConfig::from_env()?;
+    let caching_website_meta_service =
+        Arc::new(CachingWebsiteMetaService::from_client_with_config(
+            website_meta_service,
+            caching_website_meta_service_config,
+        ));
 
     // Load AWS configuration
     let aws_config = aws_config().await;
@@ -209,7 +216,7 @@ async fn server() -> Result<(), Box<dyn Error>> {
         .layer(Extension(search_index_factory))
         .layer(Extension(storage_factory))
         .layer(Extension(db_cache.clone()))
-        .layer(Extension(website_meta_service))
+        .layer(Extension(caching_website_meta_service))
         .layer(Extension(event_publisher_factory))
         .layer(Extension(processing))
         .layer(Extension(tenant_cache))

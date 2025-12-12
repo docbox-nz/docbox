@@ -32,7 +32,7 @@ use docbox_database::models::{
     folder::Folder,
     link::{CreatedByUser, LastModifiedByUser, Link, LinkId, LinkWithExtra},
 };
-use docbox_web_scraper::WebsiteMetaService;
+use docbox_web_scraper::CachingWebsiteMetaService;
 use std::sync::Arc;
 
 pub const LINK_TAG: &str = "Link";
@@ -174,7 +174,7 @@ pub async fn get(
 #[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn get_metadata(
     TenantDb(db): TenantDb,
-    Extension(website_service): Extension<Arc<WebsiteMetaService>>,
+    Extension(website_service): Extension<Arc<CachingWebsiteMetaService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpResult<LinkMetadataResponse> {
     let DocumentBoxScope(scope) = scope;
@@ -231,7 +231,7 @@ pub async fn get_metadata(
 #[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn get_favicon(
     TenantDb(db): TenantDb,
-    Extension(website_service): Extension<Arc<WebsiteMetaService>>,
+    Extension(website_service): Extension<Arc<CachingWebsiteMetaService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> Result<Response<Body>, DynHttpError> {
     let DocumentBoxScope(scope) = scope;
@@ -290,7 +290,7 @@ pub async fn get_favicon(
 #[tracing::instrument(skip_all, fields(scope = %scope, link_id = %link_id))]
 pub async fn get_image(
     TenantDb(db): TenantDb,
-    Extension(website_service): Extension<Arc<WebsiteMetaService>>,
+    Extension(website_service): Extension<Arc<CachingWebsiteMetaService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> Result<Response<Body>, DynHttpError> {
     let DocumentBoxScope(scope) = scope;

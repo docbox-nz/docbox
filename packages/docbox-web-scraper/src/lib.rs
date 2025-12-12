@@ -21,19 +21,22 @@ use bytes::Bytes;
 use document::{Favicon, determine_best_favicon, get_website_metadata};
 use download_image::{ResolvedUri, download_image_href, resolve_full_url};
 use mime::Mime;
-use moka::{future::Cache, policy::EvictionPolicy};
 use reqwest::Proxy;
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
 use thiserror::Error;
-use tracing::Instrument;
 use url_validation::{TokioDomainResolver, is_allowed_url};
 
+mod cache;
 mod data_uri;
 mod document;
 mod download_image;
 mod url_validation;
 
+pub use cache::{
+    CachingWebsiteMetaService, CachingWebsiteMetaServiceConfig,
+    CachingWebsiteMetaServiceConfigError,
+};
 pub use reqwest::Url;
 
 use crate::document::is_allowed_robots_txt;
@@ -46,25 +49,6 @@ pub struct WebsiteMetaServiceConfig {
     pub http_proxy: Option<String>,
     /// HTTPS proxy to use when making HTTPS metadata requests
     pub https_proxy: Option<String>,
-
-    /// Duration to maintain site metadata for
-    ///
-    /// Default: 48h
-    pub metadata_cache_duration: Duration,
-    /// Maximum number of site metadata to maintain in the cache
-    ///
-    /// Default: 50
-    pub metadata_cache_capacity: u64,
-
-    /// Duration to maintain resolved images for
-    ///
-    /// Default: 15min
-    pub image_cache_duration: Duration,
-    /// Maximum number of images to maintain in the cache
-    ///
-    /// Default: 5
-    pub image_cache_capacity: u64,
-
     /// Time to wait when attempting to fetch resource before timing out
     ///
     /// This option is ignored if you manually provide a [`reqwest::Client`]
@@ -82,24 +66,23 @@ pub struct WebsiteMetaServiceConfig {
 /// Errors that could occur when loading the configuration
 #[derive(Debug, Error)]
 pub enum WebsiteMetaServiceConfigError {
-    /// Provided cache duration was an invalid number
-    #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION must be a number in seconds: {0}")]
-    InvalidMetadataCacheDuration(<u64 as FromStr>::Err),
-    /// Provided cache capacity was an invalid number
-    #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY must be a number: {0}")]
-    InvalidMetadataCacheCapacity(<u64 as FromStr>::Err),
     /// Provided connect timeout was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT must be a number in seconds: {0}")]
     InvalidMetadataConnectTimeout(<u64 as FromStr>::Err),
     /// Provided read timeout was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT must be a number in seconds")]
     InvalidMetadataReadTimeout(<u64 as FromStr>::Err),
-    /// Provided image cache duration was an invalid number
-    #[error("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION must be a number in seconds")]
-    InvalidImageCacheDuration(<u64 as FromStr>::Err),
-    /// Provided image cache capacity was an invalid number
-    #[error("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY must be a number")]
-    InvalidImageCacheCapacity(<u64 as FromStr>::Err),
+}
+
+impl Default for WebsiteMetaServiceConfig {
+    fn default() -> Self {
+        Self {
+            http_proxy: None,
+            https_proxy: None,
+            metadata_connect_timeout: Duration::from_secs(5),
+            metadata_read_timeout: Duration::from_secs(10),
+        }
+    }
 }
 
 impl WebsiteMetaServiceConfig {
@@ -110,26 +93,6 @@ impl WebsiteMetaServiceConfig {
             https_proxy: std::env::var("DOCBOX_WEB_SCRAPE_HTTPS_PROXY").ok(),
             ..Default::default()
         };
-
-        if let Ok(metadata_cache_duration) =
-            std::env::var("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION")
-        {
-            let metadata_cache_duration = metadata_cache_duration
-                .parse::<u64>()
-                .map_err(WebsiteMetaServiceConfigError::InvalidMetadataCacheDuration)?;
-
-            config.metadata_cache_duration = Duration::from_secs(metadata_cache_duration);
-        }
-
-        if let Ok(metadata_cache_capacity) =
-            std::env::var("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY")
-        {
-            let metadata_cache_capacity = metadata_cache_capacity
-                .parse::<u64>()
-                .map_err(WebsiteMetaServiceConfigError::InvalidMetadataCacheCapacity)?;
-
-            config.metadata_cache_capacity = metadata_cache_capacity;
-        }
 
         if let Ok(metadata_connect_timeout) =
             std::env::var("DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT")
@@ -150,55 +113,13 @@ impl WebsiteMetaServiceConfig {
             config.metadata_read_timeout = Duration::from_secs(metadata_read_timeout);
         }
 
-        if let Ok(image_cache_duration) = std::env::var("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION") {
-            let image_cache_duration = image_cache_duration
-                .parse::<u64>()
-                .map_err(WebsiteMetaServiceConfigError::InvalidImageCacheDuration)?;
-
-            config.image_cache_duration = Duration::from_secs(image_cache_duration);
-        }
-
-        if let Ok(image_cache_capacity) = std::env::var("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY") {
-            let image_cache_capacity = image_cache_capacity
-                .parse::<u64>()
-                .map_err(WebsiteMetaServiceConfigError::InvalidImageCacheCapacity)?;
-
-            config.image_cache_capacity = image_cache_capacity;
-        }
-
         Ok(config)
-    }
-}
-
-impl Default for WebsiteMetaServiceConfig {
-    fn default() -> Self {
-        Self {
-            http_proxy: None,
-            https_proxy: None,
-            metadata_cache_duration: Duration::from_secs(60 * 60 * 48),
-            metadata_cache_capacity: 50,
-            image_cache_duration: Duration::from_secs(60 * 15),
-            image_cache_capacity: 5,
-            metadata_connect_timeout: Duration::from_secs(5),
-            metadata_read_timeout: Duration::from_secs(10),
-        }
     }
 }
 
 /// Service for looking up website metadata and storing a cached value
 pub struct WebsiteMetaService {
     client: reqwest::Client,
-    /// Cache for website metadata
-    cache: Cache<String, Option<ResolvedWebsiteMetadata>>,
-    /// Cache for resolved images will contain [None] for images that failed to load
-    image_cache: Cache<(String, ImageCacheKey), Option<ResolvedImage>>,
-}
-
-/// Cache key for image cache value types
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-enum ImageCacheKey {
-    Favicon,
-    Image,
 }
 
 /// Metadata resolved from a scraped website
@@ -241,7 +162,7 @@ impl WebsiteMetaService {
 
     /// Create a web scraper from the provided client
     pub fn from_client(client: reqwest::Client) -> Self {
-        Self::from_client_with_config(client, WebsiteMetaServiceConfig::default())
+        Self { client }
     }
 
     /// Create a web scraper from the provided config
@@ -262,79 +183,44 @@ impl WebsiteMetaService {
             .read_timeout(config.metadata_read_timeout)
             .build()?;
 
-        Ok(Self::from_client_with_config(client, config))
-    }
-
-    /// Create a web scraper from the provided client and config
-    pub fn from_client_with_config(
-        client: reqwest::Client,
-        config: WebsiteMetaServiceConfig,
-    ) -> Self {
-        // Cache for metadata
-        let cache = Cache::builder()
-            .time_to_idle(config.metadata_cache_duration)
-            .max_capacity(config.metadata_cache_capacity)
-            .eviction_policy(EvictionPolicy::tiny_lfu())
-            .build();
-
-        // Cache for loaded images
-        let image_cache = Cache::builder()
-            .time_to_idle(config.image_cache_duration)
-            .max_capacity(config.image_cache_capacity)
-            .eviction_policy(EvictionPolicy::tiny_lfu())
-            .build();
-
-        Self {
-            client,
-            cache,
-            image_cache,
-        }
+        Ok(Self { client })
     }
 
     /// Resolves the metadata for the website at the provided URL
     pub async fn resolve_website(&self, url: &Url) -> Option<ResolvedWebsiteMetadata> {
-        let span = tracing::Span::current();
-        self.cache
-            .get_with(
-                url.to_string(),
-                async move {
-                    // Check if we are allowed to access the URL
-                    if !is_allowed_url::<TokioDomainResolver>(url).await {
-                        tracing::warn!("skipping resolve website metadata for disallowed url");
-                        return None;
-                    }
+        // Check if we are allowed to access the URL
+        if !is_allowed_url::<TokioDomainResolver>(url).await {
+            tracing::warn!("skipping resolve website metadata for disallowed url");
+            return None;
+        }
 
-                    // Check that the site allows scraping based on its robots.txt
-                    let is_allowed_scraping = is_allowed_robots_txt(&self.client, url)
-                        .await
-                        .unwrap_or(false);
-
-                    if !is_allowed_scraping {
-                        return None;
-                    }
-
-                    // Get the website metadata
-                    let res = match get_website_metadata(&self.client, url).await {
-                        Ok(value) => value,
-                        Err(cause) => {
-                            tracing::error!(?cause, "failed to get website metadata");
-                            return None;
-                        }
-                    };
-
-                    let best_favicon = determine_best_favicon(&res.favicons).cloned();
-
-                    Some(ResolvedWebsiteMetadata {
-                        title: res.title,
-                        og_title: res.og_title,
-                        og_description: res.og_description,
-                        og_image: res.og_image,
-                        best_favicon,
-                    })
-                }
-                .instrument(span),
-            )
+        // Check that the site allows scraping based on its robots.txt
+        let is_allowed_scraping = is_allowed_robots_txt(&self.client, url)
             .await
+            .unwrap_or(false);
+
+        if !is_allowed_scraping {
+            return None;
+        }
+
+        // Get the website metadata
+        let res = match get_website_metadata(&self.client, url).await {
+            Ok(value) => value,
+            Err(cause) => {
+                tracing::error!(?cause, "failed to get website metadata");
+                return None;
+            }
+        };
+
+        let best_favicon = determine_best_favicon(&res.favicons).cloned();
+
+        Some(ResolvedWebsiteMetadata {
+            title: res.title,
+            og_title: res.og_title,
+            og_description: res.og_description,
+            og_image: res.og_image,
+            best_favicon,
+        })
     }
 
     /// Resolve the favicon image at the provided URL
@@ -351,8 +237,7 @@ impl WebsiteMetaService {
             }
         };
 
-        self.resolve_image(url, ImageCacheKey::Favicon, favicon)
-            .await
+        self.resolve_image(url, &favicon).await
     }
 
     /// Resolve the OGP metadata image from the provided URL
@@ -360,41 +245,25 @@ impl WebsiteMetaService {
         let website = self.resolve_website(url).await?;
         let og_image = website.og_image?;
 
-        self.resolve_image(url, ImageCacheKey::Image, og_image)
-            .await
+        self.resolve_image(url, &og_image).await
     }
 
-    async fn resolve_image(
-        &self,
-        url: &Url,
-        cache_key: ImageCacheKey,
-        image: String,
-    ) -> Option<ResolvedImage> {
-        let span = tracing::Span::current();
-        self.image_cache
-            .get_with(
-                (url.to_string(), cache_key),
-                async move {
-                    let image_url = resolve_full_url(url, &image).ok()?;
+    pub(crate) async fn resolve_image(&self, url: &Url, image: &str) -> Option<ResolvedImage> {
+        let image_url = resolve_full_url(url, image).ok()?;
 
-                    // Check we are allowed to access the URL if its absolute
-                    if let ResolvedUri::Absolute(image_url) = &image_url
-                        && !is_allowed_url::<TokioDomainResolver>(image_url).await
-                    {
-                        tracing::warn!("skipping resolve image for disallowed url");
-                        return None;
-                    }
+        // Check we are allowed to access the URL if its absolute
+        if let ResolvedUri::Absolute(image_url) = &image_url
+            && !is_allowed_url::<TokioDomainResolver>(image_url).await
+        {
+            tracing::warn!("skipping resolve image for disallowed url");
+            return None;
+        }
 
-                    let (bytes, content_type) =
-                        download_image_href(&self.client, image_url).await.ok()?;
+        let (bytes, content_type) = download_image_href(&self.client, image_url).await.ok()?;
 
-                    Some(ResolvedImage {
-                        content_type,
-                        bytes,
-                    })
-                }
-                .instrument(span),
-            )
-            .await
+        Some(ResolvedImage {
+            content_type,
+            bytes,
+        })
     }
 }
