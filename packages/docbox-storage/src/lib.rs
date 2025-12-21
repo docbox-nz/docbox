@@ -87,9 +87,13 @@ impl StorageLayerFactory {
 
     /// Create a new storage layer from the factory
     pub fn create_storage_layer(&self, tenant: &Tenant) -> TenantStorageLayer {
+        self.create_storage_layer_bucket(tenant.s3_name.clone())
+    }
+
+    /// Create a new storage layer from a bucket name directly
+    pub fn create_storage_layer_bucket(&self, bucket_name: String) -> TenantStorageLayer {
         match self {
             StorageLayerFactory::S3(s3) => {
-                let bucket_name = tenant.s3_name.clone();
                 let layer = s3.create_storage_layer(bucket_name);
                 TenantStorageLayer::S3(layer)
             }
@@ -114,6 +118,13 @@ pub enum CreateBucketOutcome {
 }
 
 impl TenantStorageLayer {
+    /// Get the name of the bucket
+    pub fn bucket_name(&self) -> String {
+        match self {
+            TenantStorageLayer::S3(layer) => layer.bucket_name(),
+        }
+    }
+
     /// Creates the tenant storage bucket
     ///
     /// In the event that the bucket already exists, this is treated as a
@@ -225,6 +236,8 @@ impl TenantStorageLayer {
 
 /// Internal trait defining required async implementations for a storage backend
 pub(crate) trait StorageLayerImpl {
+    fn bucket_name(&self) -> String;
+
     async fn create_bucket(&self) -> Result<CreateBucketOutcome, StorageLayerError>;
 
     async fn bucket_exists(&self) -> Result<bool, StorageLayerError>;

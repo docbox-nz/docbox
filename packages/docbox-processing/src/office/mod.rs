@@ -1,19 +1,38 @@
+//! # Office Conversion
+//!
+//! Various backends for converting files from office formats to PDF formats
+//!
+//! ## Environment Variables
+//!
+//! * `DOCBOX_OFFICE_CONVERTER` - "server" to use a [convert_server] or "lambda" to use "convert_lambda"
+//!
+//! See individual modules for service specific environment variables
+
 use crate::{
     ProcessingError, ProcessingOutput, QueuedUpload,
-    office::convert_server::{
-        OfficeConvertServerConfig, OfficeConvertServerError, is_known_pdf_convertable,
+    office::{
+        convert_lambda::{
+            OfficeConvertLambdaConfig, OfficeConvertLambdaConfigError, OfficeConvertLambdaError,
+            OfficeConverterLambda,
+        },
+        convert_server::{OfficeConvertServerConfig, OfficeConvertServerError},
+        libreoffice::is_known_libreoffice_pdf_convertable,
     },
     pdf::{is_pdf_file, process_pdf},
 };
+use aws_config::SdkConfig;
 use bytes::Bytes;
 use convert_server::OfficeConverterServer;
 use docbox_database::models::generated_file::GeneratedFileType;
+use docbox_storage::StorageLayerFactory;
 use mime::Mime;
 use office_convert_client::RequestError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod convert_lambda;
 pub mod convert_server;
+pub mod libreoffice;
 
 const DISALLOW_MALFORMED_OFFICE: bool = true;
 
@@ -22,6 +41,10 @@ pub enum PdfConvertError {
     /// Failed to convert the file to a pdf
     #[error(transparent)]
     ConversionFailed(#[from] RequestError),
+
+    /// Failed to convert the file to a pdf
+    #[error(transparent)]
+    ConversionFailedLambda(#[from] OfficeConvertLambdaError),
 
     #[error("office document is malformed")]
     MalformedDocument,
@@ -33,24 +56,46 @@ pub enum PdfConvertError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OfficeConverterConfig {
     ConverterServer(OfficeConvertServerConfig),
+    ConverterLambda(OfficeConvertLambdaConfig),
+}
+
+#[derive(Debug, Error)]
+pub enum OfficeConverterConfigError {
+    #[error(transparent)]
+    ConverterLambda(#[from] OfficeConvertLambdaConfigError),
 }
 
 impl OfficeConverterConfig {
-    pub fn from_env() -> OfficeConverterConfig {
-        let config = OfficeConvertServerConfig::from_env();
-        OfficeConverterConfig::ConverterServer(config)
+    pub fn from_env() -> Result<OfficeConverterConfig, OfficeConverterConfigError> {
+        let variant =
+            std::env::var("DOCBOX_OFFICE_CONVERTER").unwrap_or_else(|_| "server".to_string());
+
+        match variant.as_str() {
+            "lambda" => {
+                let config = OfficeConvertLambdaConfig::from_env()?;
+                Ok(OfficeConverterConfig::ConverterLambda(config))
+            }
+
+            _ => {
+                let config = OfficeConvertServerConfig::from_env();
+                Ok(OfficeConverterConfig::ConverterServer(config))
+            }
+        }
     }
 }
 
 #[derive(Clone)]
 pub enum OfficeConverter {
     ConverterServer(OfficeConverterServer),
+    ConverterLambda(OfficeConverterLambda),
 }
 
 #[derive(Debug, Error)]
 pub enum OfficeConverterError {
     #[error(transparent)]
     ConverterServer(#[from] OfficeConvertServerError),
+    #[error(transparent)]
+    ConverterLambda(#[from] OfficeConvertLambdaError),
 }
 
 #[derive(Clone)]
@@ -59,7 +104,13 @@ pub struct OfficeProcessingLayer {
 }
 
 impl OfficeConverter {
+    /// Create a [OfficeConverter] from the provided `config`
+    ///
+    /// `storage` is required when using the lambda option as a temporary
+    /// bucket is required for the lambda to perform processing
     pub fn from_config(
+        aws_config: &SdkConfig,
+        storage: &StorageLayerFactory,
         config: OfficeConverterConfig,
     ) -> Result<OfficeConverter, OfficeConverterError> {
         match config {
@@ -67,18 +118,26 @@ impl OfficeConverter {
                 let converter_server = OfficeConverterServer::from_config(config)?;
                 Ok(OfficeConverter::ConverterServer(converter_server))
             }
+
+            OfficeConverterConfig::ConverterLambda(config) => {
+                let converter_server =
+                    OfficeConverterLambda::from_config(aws_config, storage, config)?;
+                Ok(OfficeConverter::ConverterLambda(converter_server))
+            }
         }
     }
 
     pub async fn convert_to_pdf(&self, bytes: Bytes) -> Result<Bytes, PdfConvertError> {
         match self {
             OfficeConverter::ConverterServer(inner) => inner.convert_to_pdf(bytes).await,
+            OfficeConverter::ConverterLambda(inner) => inner.convert_to_pdf(bytes).await,
         }
     }
 
     pub fn is_convertable(&self, mime: &Mime) -> bool {
         match self {
             OfficeConverter::ConverterServer(inner) => inner.is_convertable(mime),
+            OfficeConverter::ConverterLambda(inner) => inner.is_convertable(mime),
         }
     }
 }
@@ -94,7 +153,7 @@ pub(crate) trait ConvertToPdf {
 /// Checks if the provided mime type either is a PDF
 /// or can be converted to a PDF
 pub fn is_pdf_compatible(mime: &Mime) -> bool {
-    is_pdf_file(mime) || is_known_pdf_convertable(mime)
+    is_pdf_file(mime) || is_known_libreoffice_pdf_convertable(mime)
 }
 
 /// Processes a PDF compatible office/other supported file format. Converts to

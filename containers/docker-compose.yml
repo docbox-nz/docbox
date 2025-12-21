@@ -43,6 +43,7 @@ services:
         container_name: docbox-storage
         ports:
             - 8109:9000
+            - 8112:9001
         env_file:
             - .env.docker
         environment:
@@ -73,7 +74,7 @@ services:
         image: jacobtread/office-convert-server:0.2.2
         container_name: docbox-office-converter
         ports:
-            - "8111:8080"
+            - "8111:3000"
         restart: unless-stopped
 
 volumes:

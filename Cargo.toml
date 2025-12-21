@@ -19,13 +19,13 @@ license = "MIT"
 
 [workspace.dependencies]
 # Core business logic
-docbox-core = { version = "0.7.0", path = "packages/docbox-core" }
+docbox-core = { version = "0.8.0", path = "packages/docbox-core" }
 
 # Database access
 docbox-database = { version = "0.6.0", path = "packages/docbox-database" }
 
 # File processing
-docbox-processing = { version = "0.2.0", path = "packages/docbox-processing" }
+docbox-processing = { version = "0.3.0", path = "packages/docbox-processing" }
 
 # Search access
 docbox-search = { version = "0.6.0", path = "packages/docbox-search" }
@@ -34,7 +34,7 @@ docbox-search = { version = "0.6.0", path = "packages/docbox-search" }
 docbox-secrets = { version = "0.3.0", path = "packages/docbox-secrets" }
 
 # Storage access
-docbox-storage = { version = "0.4.0", path = "packages/docbox-storage" }
+docbox-storage = { version = "0.5.0", path = "packages/docbox-storage" }
 
 # Web scraping
 docbox-web-scraper = { version = "0.5.0", path = "packages/docbox-web-scraper" }
@@ -112,3 +112,5 @@ itertools = "=0.14.0"
 
 testcontainers = "=0.25.2"
 testcontainers-modules = "=0.13.0"
+
+aws-sdk-lambda = "=1.110.0"

@@ -1,6 +1,6 @@
 [package]
 name = "docbox-processing"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Docbox file processing logic"
 
@@ -16,11 +16,15 @@ docbox-database.workspace = true
 # Search index types
 docbox-search.workspace = true
 
+# Storage layer for some converter types
+docbox-storage.workspace = true
+
 # PDF to image conversion, text extraction
 pdf_process = "=0.2.0"
 
 # Office conversion client
 office-convert-client = "=0.5.0"
+office-convert-lambda-client = "=0.1.0"
 
 # Image conversion and manipulation
 image = "=0.25.8"
@@ -59,6 +63,9 @@ mime.workspace = true
 base64.workspace = true
 
 utoipa.workspace = true
+
+aws-sdk-lambda.workspace = true
+aws-config.workspace = true
 
 [dev-dependencies]
 testcontainers = { workspace = true, features = ["http_wait"] }

@@ -96,18 +96,8 @@ async fn server() -> Result<(), Box<dyn Error>> {
         Err(_) => 100 * 1000 * 1024,
     };
 
-    // Create the converter
-    let converter_config = OfficeConverterConfig::from_env();
-    let converter = OfficeConverter::from_config(converter_config)?;
-
-    // Load the config for the processing layer
-    let processing_layer_config = ProcessingLayerConfig::from_env()?;
-
-    // Setup processing layer
-    let processing = ProcessingLayer {
-        office: OfficeProcessingLayer { converter },
-        config: processing_layer_config,
-    };
+    // Load AWS configuration
+    let aws_config = aws_config().await;
 
     // Create website scraping service
     let website_meta_service_config = WebsiteMetaServiceConfig::from_env()?;
@@ -118,9 +108,6 @@ async fn server() -> Result<(), Box<dyn Error>> {
             website_meta_service,
             caching_website_meta_service_config,
         ));
-
-    // Load AWS configuration
-    let aws_config = aws_config().await;
 
     // Create secrets manager
     let secrets_config = SecretsManagerConfig::from_env()?;
@@ -154,6 +141,19 @@ async fn server() -> Result<(), Box<dyn Error>> {
     // Setup storage factory
     let storage_factory_config = StorageLayerFactoryConfig::from_env()?;
     let storage_factory = StorageLayerFactory::from_config(&aws_config, storage_factory_config);
+
+    // Create the converter
+    let converter_config = OfficeConverterConfig::from_env()?;
+    let converter = OfficeConverter::from_config(&aws_config, &storage_factory, converter_config)?;
+
+    // Load the config for the processing layer
+    let processing_layer_config = ProcessingLayerConfig::from_env()?;
+
+    // Setup processing layer
+    let processing = ProcessingLayer {
+        office: OfficeProcessingLayer { converter },
+        config: processing_layer_config,
+    };
 
     // Create tenant cache
     let tenant_cache = Arc::new(TenantCache::new());

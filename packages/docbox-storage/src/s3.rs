@@ -295,6 +295,10 @@ pub enum S3StorageError {
 }
 
 impl StorageLayerImpl for S3StorageLayer {
+    fn bucket_name(&self) -> String {
+        self.bucket_name.clone()
+    }
+
     async fn create_bucket(&self) -> Result<CreateBucketOutcome, StorageLayerError> {
         let bucket_region = self
             .client

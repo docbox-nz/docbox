@@ -1,3 +1,15 @@
+//! # Convert Server
+//!
+//! Persistent file conversion server https://github.com/jacobtread/office-convert-server backend
+//! for performing office file conversion
+//!
+//! ## Environment Variables
+//!
+//! * `DOCBOX_CONVERT_SERVER_ADDRESS` - Comma separated list of server addresses
+//! * `DOCBOX_CONVERT_SERVER_USE_PROXY` - Whether to use the system proxy when talking to the server
+
+use crate::office::libreoffice::is_known_libreoffice_pdf_convertable;
+
 use super::{ConvertToPdf, PdfConvertError};
 use bytes::Bytes;
 use office_convert_client::{
@@ -7,72 +19,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// List of supported convertable formats
-pub const CONVERTABLE_FORMATS: &[&str] = &[
-    // .dotm
-    "application/vnd.ms-word.template.macroenabled.12",
-    // .xlsb
-    "application/vnd.ms-excel.sheet.binary.macroenabled.12",
-    // .xlsm
-    "application/vnd.ms-excel.sheet.macroenabled.12",
-    // .xltm
-    "application/vnd.ms-excel.template.macroenabled.12",
-    // .ods
-    "application/vnd.oasis.opendocument.spreadsheet",
-    "text/html",
-    "application/msword",
-    "application/vnd.oasis.opendocument.text-flat-xml",
-    "application/rtf",
-    "application/vnd.sun.xml.writer",
-    "application/vnd.wordperfect",
-    "application/vnd.ms-works",
-    "application/x-mswrite",
-    "application/clarisworks",
-    "application/macwriteii",
-    "application/x-abiword",
-    "application/x-t602",
-    "application/vnd.lotus-wordpro",
-    "application/x-hwp",
-    "application/vnd.sun.xml.writer.template",
-    "application/pdf",
-    "application/vnd.oasis.opendocument.text",
-    "application/vnd.oasis.opendocument.text-template",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.slideshow",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.oasis.opendocument.presentation",
-    "application/x-fictionbook+xml",
-    "application/x-aportisdoc",
-    "application/prs.plucker",
-    "application/x-iwork-pages-sffpages",
-    "application/vnd.palm",
-    "application/epub+zip",
-    "application/x-pocket-word",
-    "application/vnd.oasis.opendocument.spreadsheet-flat-xml",
-    "application/vnd.lotus-1-2-3",
-    "application/vnd.ms-excel",
-    "text/spreadsheet",
-    "application/vnd.sun.xml.calc",
-    "application/vnd.sun.xml.calc.template",
-    "application/x-gnumeric",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-excel.sheet.macroEnabled.12",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
-    "application/clarisworks",
-    "application/x-iwork-numbers-sffnumbers",
-    "application/mathml+xml",
-    "application/vnd.sun.xml.math",
-    "application/vnd.oasis.opendocument.formula",
-    "application/vnd.sun.xml.base",
-    "image/jpeg",
-    "image/png",
-    "image/svg+xml",
-    "image/webp",
-    "application/docbook+xml",
-    "application/xhtml+xml",
-];
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OfficeConvertServerConfig {
     pub addresses: Vec<String>,
@@ -81,8 +27,9 @@ pub struct OfficeConvertServerConfig {
 
 impl OfficeConvertServerConfig {
     pub fn from_env() -> OfficeConvertServerConfig {
-        let addresses =
-            std::env::var("CONVERT_SERVER_ADDRESS").unwrap_or("http://127.0.0.1:8081".to_string());
+        let addresses = std::env::var("DOCBOX_CONVERT_SERVER_ADDRESS")
+            .or(std::env::var("CONVERT_SERVER_ADDRESS"))
+            .unwrap_or("http://127.0.0.1:8081".to_string());
         let addresses = addresses
             .split(',')
             .map(|value| value.to_string())
@@ -93,7 +40,9 @@ impl OfficeConvertServerConfig {
         // it shouldn't be leaving the private network
         //
         // CONVERT_SERVER_USE_PROXY allows this behavior to be disabled
-        let use_proxy = match std::env::var("CONVERT_SERVER_USE_PROXY") {
+        let use_proxy = match std::env::var("DOCBOX_CONVERT_SERVER_USE_PROXY")
+            .or(std::env::var("CONVERT_SERVER_USE_PROXY"))
+        {
             Ok(value) => match value.parse::<bool>() {
                 Ok(value) => value,
                 Err(error) => {
@@ -202,14 +151,6 @@ impl ConvertToPdf for OfficeConverterServer {
     }
 
     fn is_convertable(&self, mime: &mime::Mime) -> bool {
-        is_known_pdf_convertable(mime)
+        is_known_libreoffice_pdf_convertable(mime)
     }
-}
-
-/// Checks if the provided mime is included in the known convertable mime types
-pub fn is_known_pdf_convertable(mime: &mime::Mime) -> bool {
-    // We don't want to send images through the office converter
-    mime.type_() != mime::IMAGE &&
-    // Must be in the convertable formats list
-    CONVERTABLE_FORMATS.contains(&mime.essence_str())
 }
