@@ -190,6 +190,12 @@ impl ConvertToPdf for OfficeConverterLambda {
                     .await
                     .map_err(OfficeConvertLambdaError::Storage)?;
 
+                // Delete the output file after download
+                self.storage
+                    .delete_file(&output_key)
+                    .await
+                    .map_err(OfficeConvertLambdaError::Storage)?;
+
                 Ok(output_bytes)
             }
             Err(error) => {
