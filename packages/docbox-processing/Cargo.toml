@@ -27,7 +27,7 @@ office-convert-client = "=0.5.0"
 office-convert-lambda-client = "=0.1.0"
 
 # Image conversion and manipulation
-image = "=0.25.8"
+image = "=0.25.9"
 
 # Email parsing
 mail-parser = "=0.11.1"
@@ -71,6 +71,5 @@ aws-config.workspace = true
 testcontainers = { workspace = true, features = ["http_wait"] }
 testcontainers-modules = { workspace = true, features = ["postgres", "minio"] }
 tokio = { workspace = true, features = ["full"] }
-# Enable typesense search backend for testing
 docbox-search.workspace = true
 mime_guess.workspace = true

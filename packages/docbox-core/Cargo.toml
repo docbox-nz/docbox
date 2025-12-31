@@ -42,7 +42,7 @@ tracing.workspace = true
 # AWS Config
 aws-config.workspace = true
 # AWS SQS sdk
-aws-sdk-sqs = "=1.88.0"
+aws-sdk-sqs = "=1.91.0"
 
 bytes.workspace = true
 
@@ -68,5 +68,4 @@ moka.workspace = true
 testcontainers = { workspace = true, features = ["http_wait"] }
 testcontainers-modules = { workspace = true, features = ["postgres", "minio"] }
 tokio = { workspace = true, features = ["full"] }
-# Enable typesense search backend for testing
 docbox-search.workspace = true

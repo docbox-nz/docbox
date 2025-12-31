@@ -23,9 +23,11 @@ serde_json.workspace = true
 # Logging
 tracing.workspace = true
 
-# AWS Config, AWS S3 sdk, AWS typing internals
+# AWS Config
 aws-config.workspace = true
-aws-sdk-secretsmanager = "=1.92.0"
+
+# AWS Secrets Manager SDK
+aws-sdk-secretsmanager = "=1.97.0"
 
 [dev-dependencies]
 testcontainers = { workspace = true, features = ["http_wait"] }

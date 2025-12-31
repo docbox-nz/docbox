@@ -58,6 +58,5 @@ strum = { version = "=0.27.2", features = ["derive"] }
 
 utoipa.workspace = true
 
-
 [dev-dependencies]
 testcontainers-modules = { workspace = true, features = ["postgres"] }
