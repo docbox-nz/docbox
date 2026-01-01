@@ -22,8 +22,11 @@ pub struct WebsiteMetadata {
 /// Favicon extracted from a website
 #[derive(Debug, Clone)]
 pub struct Favicon {
+    /// Mime type for the favicon
     pub ty: Mime,
+    /// Size if known
     pub sizes: Option<String>,
+    /// URL of the favicon
     pub href: String,
 }
 

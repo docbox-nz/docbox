@@ -1,5 +1,6 @@
 //! Link related endpoints
 
+use crate::cache::website_metadata::CachingWebsiteMetaService;
 use crate::error::{HttpCommonError, HttpErrorResponse};
 use crate::middleware::action_user::UserParams;
 use crate::middleware::tenant::TenantParams;
@@ -32,7 +33,6 @@ use docbox_database::models::{
     folder::Folder,
     link::{CreatedByUser, LastModifiedByUser, Link, LinkId, LinkWithExtra},
 };
-use docbox_web_scraper::CachingWebsiteMetaService;
 use std::sync::Arc;
 
 pub const LINK_TAG: &str = "Link";
@@ -251,8 +251,13 @@ pub async fn get_favicon(
         HttpLinkError::InvalidLinkUrl
     })?;
 
+    let website_metadata = website_service
+        .resolve_website(&url)
+        .await
+        .ok_or(HttpLinkError::NoFavicon)?;
+
     let favicon = website_service
-        .resolve_website_favicon(&url)
+        .resolve_favicon(&url, website_metadata.best_favicon.as_ref())
         .await
         .ok_or(HttpLinkError::NoFavicon)?;
 
@@ -315,8 +320,14 @@ pub async fn get_image(
         HttpLinkError::InvalidLinkUrl
     })?;
 
+    let website_metadata = website_service
+        .resolve_website(&url)
+        .await
+        .ok_or(HttpLinkError::NoImage)?;
+
+    let og_image = website_metadata.og_image.ok_or(HttpLinkError::NoImage)?;
     let og_image = website_service
-        .resolve_website_image(&url)
+        .resolve_image(&url, &og_image)
         .await
         .ok_or(HttpLinkError::NoImage)?;
 

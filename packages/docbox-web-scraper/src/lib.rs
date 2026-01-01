@@ -14,10 +14,8 @@
 //! * `DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY` - Maximum amount of metadata to cache at once
 //! * `DOCBOX_WEB_SCRAPE_METADATA_CONNECT_TIMEOUT` - Timeout when connecting while scraping
 //! * `DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT` - Timeout when reading responses from scraping
-//! * `DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION` - Time before cached images are considered expired
-//! * `DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY` - Maximum images to cache at once
 
-use document::{Favicon, determine_best_favicon, get_website_metadata};
+use document::{determine_best_favicon, get_website_metadata};
 use download_image::{ResolvedUri, download_image_href, resolve_full_url};
 use mime::Mime;
 use reqwest::Proxy;
@@ -26,18 +24,12 @@ use std::{str::FromStr, time::Duration};
 use thiserror::Error;
 use url_validation::{TokioDomainResolver, is_allowed_url};
 
-#[cfg(feature = "caching")]
-mod cache;
 mod data_uri;
 mod document;
 mod download_image;
 mod url_validation;
 
-#[cfg(feature = "caching")]
-pub use cache::{
-    CachingWebsiteMetaService, CachingWebsiteMetaServiceConfig,
-    CachingWebsiteMetaServiceConfigError,
-};
+pub use document::Favicon;
 pub use reqwest::Url;
 
 use crate::{document::is_allowed_robots_txt, download_image::ImageStream};
@@ -227,8 +219,29 @@ impl WebsiteMetaService {
     /// Resolve the favicon image at the provided URL
     pub async fn resolve_website_favicon(&self, url: &Url) -> Option<ResolvedImage> {
         let website = self.resolve_website(url).await?;
-        let favicon = match website.best_favicon {
-            Some(best) => best.href,
+
+        self.resolve_favicon(url, website.best_favicon.as_ref())
+            .await
+    }
+
+    /// Resolve the OGP metadata image from the provided URL
+    pub async fn resolve_website_image(&self, url: &Url) -> Option<ResolvedImage> {
+        let website = self.resolve_website(url).await?;
+        let og_image = website.og_image?;
+
+        self.resolve_image(url, &og_image).await
+    }
+
+    /// Resolve the favicon using the best favicon. Used by wrapping services to provide
+    /// the default favicon fallback URL for favicons and resolve favicon images without
+    /// internally calling [`Self::resolve_website`]
+    pub async fn resolve_favicon(
+        &self,
+        url: &Url,
+        best_favicon: Option<&Favicon>,
+    ) -> Option<ResolvedImage> {
+        let favicon = match best_favicon {
+            Some(best) => best.href.clone(),
 
             // No favicon from document? Fallback and try to use the default path
             None => {
@@ -241,15 +254,8 @@ impl WebsiteMetaService {
         self.resolve_image(url, &favicon).await
     }
 
-    /// Resolve the OGP metadata image from the provided URL
-    pub async fn resolve_website_image(&self, url: &Url) -> Option<ResolvedImage> {
-        let website = self.resolve_website(url).await?;
-        let og_image = website.og_image?;
-
-        self.resolve_image(url, &og_image).await
-    }
-
-    pub(crate) async fn resolve_image(&self, url: &Url, image: &str) -> Option<ResolvedImage> {
+    /// Resolve an image content type and provide a stream to download the image
+    pub async fn resolve_image(&self, url: &Url, image: &str) -> Option<ResolvedImage> {
         let image_url = resolve_full_url(url, image).ok()?;
 
         // Check we are allowed to access the URL if its absolute

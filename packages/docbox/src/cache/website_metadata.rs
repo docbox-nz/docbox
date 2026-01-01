@@ -1,4 +1,4 @@
-use crate::{ResolvedImage, ResolvedWebsiteMetadata, WebsiteMetaService};
+use docbox_web_scraper::{Favicon, ResolvedImage, ResolvedWebsiteMetadata, WebsiteMetaService};
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
@@ -73,7 +73,7 @@ impl Default for CachingWebsiteMetaServiceConfig {
 /// Wrapper around [WebsiteMetaService] which provides in-memory caching of
 /// image and metadata responses
 pub struct CachingWebsiteMetaService {
-    service: WebsiteMetaService,
+    pub service: WebsiteMetaService,
     /// Cache for website metadata
     cache: Cache<String, Option<ResolvedWebsiteMetadata>>,
 }
@@ -108,28 +108,15 @@ impl CachingWebsiteMetaService {
             .await
     }
 
-    /// Resolve the favicon image at the provided URL
-    pub async fn resolve_website_favicon(&self, url: &Url) -> Option<ResolvedImage> {
-        let website = self.resolve_website(url).await?;
-        let favicon = match website.best_favicon {
-            Some(best) => best.href,
-
-            // No favicon from document? Fallback and try to use the default path
-            None => {
-                let mut url = url.clone();
-                url.set_path("/favicon.ico");
-                url.to_string()
-            }
-        };
-
-        self.service.resolve_image(url, &favicon).await
+    pub async fn resolve_favicon(
+        &self,
+        url: &Url,
+        best_favicon: Option<&Favicon>,
+    ) -> Option<ResolvedImage> {
+        self.service.resolve_favicon(url, best_favicon).await
     }
 
-    /// Resolve the OGP metadata image from the provided URL
-    pub async fn resolve_website_image(&self, url: &Url) -> Option<ResolvedImage> {
-        let website = self.resolve_website(url).await?;
-        let og_image = website.og_image?;
-
-        self.service.resolve_image(url, &og_image).await
+    pub async fn resolve_image(&self, url: &Url, image: &str) -> Option<ResolvedImage> {
+        self.service.resolve_image(url, image).await
     }
 }

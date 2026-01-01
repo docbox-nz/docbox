@@ -9,10 +9,6 @@ authors.workspace = true
 repository.workspace = true
 readme.workspace = true
 
-[features]
-default = ["caching"]
-caching = ["dep:moka"]
-
 [dependencies]
 # HTML parser for OGP metadata
 tl.workspace = true
@@ -43,9 +39,6 @@ mime.workspace = true
 
 # URLs
 url.workspace = true
-
-# Caching
-moka = { workspace = true, optional = true }
 
 # Base64 encoding / decoding for data URL
 base64.workspace = true

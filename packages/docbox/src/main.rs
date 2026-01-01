@@ -11,6 +11,7 @@ use crate::{
 };
 use axum::{Extension, extract::DefaultBodyLimit, routing::post};
 use axum_server::tls_rustls::RustlsConfig;
+use cache::website_metadata::{CachingWebsiteMetaService, CachingWebsiteMetaServiceConfig};
 use docbox_core::{
     aws::{SqsClient, aws_config},
     events::{EventPublisherFactory, sqs::SqsEventPublisherFactory},
@@ -24,10 +25,7 @@ use docbox_processing::{
 use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
 use docbox_secrets::{SecretManager, SecretsManagerConfig};
 use docbox_storage::{StorageLayerFactory, StorageLayerFactoryConfig};
-use docbox_web_scraper::{
-    CachingWebsiteMetaService, CachingWebsiteMetaServiceConfig, WebsiteMetaService,
-    WebsiteMetaServiceConfig,
-};
+use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
 use logging::{init_logging, init_logging_with_sentry};
 use routes::router;
 use std::{
@@ -39,6 +37,7 @@ use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
 
 mod background;
+mod cache;
 mod docs;
 mod error;
 mod extensions;
