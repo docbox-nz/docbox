@@ -17,7 +17,6 @@
 //! * `DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION` - Time before cached images are considered expired
 //! * `DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY` - Maximum images to cache at once
 
-use bytes::Bytes;
 use document::{Favicon, determine_best_favicon, get_website_metadata};
 use download_image::{ResolvedUri, download_image_href, resolve_full_url};
 use mime::Mime;
@@ -41,7 +40,7 @@ pub use cache::{
 };
 pub use reqwest::Url;
 
-use crate::document::is_allowed_robots_txt;
+use crate::{document::is_allowed_robots_txt, download_image::ImageStream};
 
 /// Configuration for the website metadata service
 #[derive(Debug, Deserialize, Serialize)]
@@ -125,7 +124,7 @@ pub struct WebsiteMetaService {
 }
 
 /// Metadata resolved from a scraped website
-#[derive(Clone, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ResolvedWebsiteMetadata {
     /// Title of the website from the `<title/>` element
     pub title: Option<String>,
@@ -147,12 +146,12 @@ pub struct ResolvedWebsiteMetadata {
 
 /// Represents an image that has been resolved where the
 /// contents are now know and the content type as well
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ResolvedImage {
     /// Content type of the image
     pub content_type: Mime,
-    /// Byte contents of the resolved image
-    pub bytes: Bytes,
+    /// Stream for the image bytes
+    pub stream: ImageStream,
 }
 
 impl WebsiteMetaService {
@@ -261,11 +260,11 @@ impl WebsiteMetaService {
             return None;
         }
 
-        let (bytes, content_type) = download_image_href(&self.client, image_url).await.ok()?;
+        let (stream, content_type) = download_image_href(&self.client, image_url).await.ok()?;
 
         Some(ResolvedImage {
             content_type,
-            bytes,
+            stream,
         })
     }
 }

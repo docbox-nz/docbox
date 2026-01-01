@@ -23,8 +23,11 @@ tokio = { workspace = true, features = ["net", "macros"] }
 # Logging
 tracing.workspace = true
 
+# Futures for streams
+futures.workspace = true
+
 # HTTP
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["stream"] }
 
 # Serialization support
 serde.workspace = true

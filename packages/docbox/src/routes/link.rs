@@ -255,13 +255,18 @@ pub async fn get_favicon(
         .resolve_website_favicon(&url)
         .await
         .ok_or(HttpLinkError::NoFavicon)?;
-    let body = axum::body::Body::from(favicon.bytes);
+
+    let body = axum::body::Body::from_stream(favicon.stream);
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, favicon.content_type.to_string())
         .header(
             header::CONTENT_SECURITY_POLICY,
             "default-src 'none'; img-src 'self' data:;",
+        )
+        .header(
+            header::CACHE_CONTROL,
+            "public, max-age=3600, stale-while-revalidate=86400",
         )
         .body(body)?)
 }
@@ -314,13 +319,18 @@ pub async fn get_image(
         .resolve_website_image(&url)
         .await
         .ok_or(HttpLinkError::NoImage)?;
-    let body = axum::body::Body::from(og_image.bytes);
+
+    let body = axum::body::Body::from_stream(og_image.stream);
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, og_image.content_type.to_string())
         .header(
             header::CONTENT_SECURITY_POLICY,
             "default-src 'none'; img-src 'self' data:;",
+        )
+        .header(
+            header::CACHE_CONTROL,
+            "public, max-age=3600, stale-while-revalidate=86400",
         )
         .body(body)?)
 }

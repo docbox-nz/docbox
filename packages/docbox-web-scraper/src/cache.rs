@@ -18,15 +18,6 @@ pub struct CachingWebsiteMetaServiceConfig {
     ///
     /// Default: 50
     pub metadata_cache_capacity: u64,
-
-    /// Duration to maintain resolved images for
-    ///
-    /// Default: 15min
-    pub image_cache_duration: Duration,
-    /// Maximum number of images to maintain in the cache
-    ///
-    /// Default: 5
-    pub image_cache_capacity: u64,
 }
 
 /// Errors that could occur when loading the configuration
@@ -38,12 +29,6 @@ pub enum CachingWebsiteMetaServiceConfigError {
     /// Provided cache capacity was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_CAPACITY must be a number: {0}")]
     InvalidMetadataCacheCapacity(<u64 as FromStr>::Err),
-    /// Provided image cache duration was an invalid number
-    #[error("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION must be a number in seconds")]
-    InvalidImageCacheDuration(<u64 as FromStr>::Err),
-    /// Provided image cache capacity was an invalid number
-    #[error("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY must be a number")]
-    InvalidImageCacheCapacity(<u64 as FromStr>::Err),
 }
 
 impl CachingWebsiteMetaServiceConfig {
@@ -72,22 +57,6 @@ impl CachingWebsiteMetaServiceConfig {
             config.metadata_cache_capacity = metadata_cache_capacity;
         }
 
-        if let Ok(image_cache_duration) = std::env::var("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_DURATION") {
-            let image_cache_duration = image_cache_duration
-                .parse::<u64>()
-                .map_err(CachingWebsiteMetaServiceConfigError::InvalidImageCacheDuration)?;
-
-            config.image_cache_duration = Duration::from_secs(image_cache_duration);
-        }
-
-        if let Ok(image_cache_capacity) = std::env::var("DOCBOX_WEB_SCRAPE_IMAGE_CACHE_CAPACITY") {
-            let image_cache_capacity = image_cache_capacity
-                .parse::<u64>()
-                .map_err(CachingWebsiteMetaServiceConfigError::InvalidImageCacheCapacity)?;
-
-            config.image_cache_capacity = image_cache_capacity;
-        }
-
         Ok(config)
     }
 }
@@ -97,8 +66,6 @@ impl Default for CachingWebsiteMetaServiceConfig {
         Self {
             metadata_cache_duration: Duration::from_secs(60 * 60 * 48),
             metadata_cache_capacity: 50,
-            image_cache_duration: Duration::from_secs(60 * 15),
-            image_cache_capacity: 5,
         }
     }
 }
@@ -109,15 +76,6 @@ pub struct CachingWebsiteMetaService {
     service: WebsiteMetaService,
     /// Cache for website metadata
     cache: Cache<String, Option<ResolvedWebsiteMetadata>>,
-    /// Cache for resolved images will contain [None] for images that failed to load
-    image_cache: Cache<(String, ImageCacheKey), Option<ResolvedImage>>,
-}
-
-/// Cache key for image cache value types
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-enum ImageCacheKey {
-    Favicon,
-    Image,
 }
 
 impl CachingWebsiteMetaService {
@@ -138,18 +96,7 @@ impl CachingWebsiteMetaService {
             .eviction_policy(EvictionPolicy::tiny_lfu())
             .build();
 
-        // Cache for loaded images
-        let image_cache = Cache::builder()
-            .time_to_idle(config.image_cache_duration)
-            .max_capacity(config.image_cache_capacity)
-            .eviction_policy(EvictionPolicy::tiny_lfu())
-            .build();
-
-        Self {
-            service,
-            cache,
-            image_cache,
-        }
+        Self { service, cache }
     }
 
     /// Resolves the metadata for the website at the provided URL
@@ -175,8 +122,7 @@ impl CachingWebsiteMetaService {
             }
         };
 
-        self.resolve_image(url, ImageCacheKey::Favicon, favicon)
-            .await
+        self.service.resolve_image(url, &favicon).await
     }
 
     /// Resolve the OGP metadata image from the provided URL
@@ -184,21 +130,6 @@ impl CachingWebsiteMetaService {
         let website = self.resolve_website(url).await?;
         let og_image = website.og_image?;
 
-        self.resolve_image(url, ImageCacheKey::Image, og_image)
-            .await
-    }
-
-    async fn resolve_image(
-        &self,
-        url: &Url,
-        cache_key: ImageCacheKey,
-        image: String,
-    ) -> Option<ResolvedImage> {
-        let span = tracing::Span::current();
-        let inner = self.service.resolve_image(url, &image);
-
-        self.image_cache
-            .get_with((url.to_string(), cache_key), inner.instrument(span))
-            .await
+        self.service.resolve_image(url, &og_image).await
     }
 }

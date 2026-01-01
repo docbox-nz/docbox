@@ -2,8 +2,11 @@
 //!
 //! Logic around downloading and resolving remote images
 
+use std::{fmt::Debug, pin::Pin, task::Poll};
+
 use crate::data_uri::{DataUriError, parse_data_uri};
 use bytes::Bytes;
+use futures::{Stream, TryStreamExt};
 use mime::Mime;
 use reqwest::{Url, header::CONTENT_TYPE};
 use thiserror::Error;
@@ -67,11 +70,42 @@ pub fn resolve_full_url<'a>(
     Ok(ResolvedUri::Absolute(url))
 }
 
+/// Image response stream types
+pub enum ImageStream {
+    /// Image is fully loaded in memory and being streamed directly
+    Memory(Option<Bytes>),
+    /// Image is being streamed from a response
+    Response(Pin<Box<dyn futures::Stream<Item = Result<Bytes, DownloadImageError>> + Send>>),
+}
+
+impl Debug for ImageStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImageStream").finish()
+    }
+}
+
+impl Stream for ImageStream {
+    type Item = Result<Bytes, DownloadImageError>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        match self.get_mut() {
+            ImageStream::Memory(bytes) => {
+                let value = bytes.take();
+                Poll::Ready(value.map(Ok))
+            }
+            ImageStream::Response(stream) => stream.as_mut().poll_next(cx),
+        }
+    }
+}
+
 /// Downloads an image file from a href relative to the `base_url`
 pub async fn download_image_href(
     client: &reqwest::Client,
     url: ResolvedUri<'_>,
-) -> Result<(Bytes, Mime), DownloadImageError> {
+) -> Result<(ImageStream, Mime), DownloadImageError> {
     match url {
         // Handle data URIs
         ResolvedUri::Data(data_uri) => parse_data_uri(data_uri)
@@ -82,7 +116,7 @@ pub async fn download_image_href(
                     return Err(DownloadImageError::InvalidMimeType);
                 }
 
-                Ok((bytes, mime))
+                Ok((ImageStream::Memory(Some(bytes)), mime))
             }),
 
         ResolvedUri::Absolute(url) => {
@@ -98,7 +132,7 @@ pub async fn download_image_href(
 async fn download_image(
     client: &reqwest::Client,
     url: Url,
-) -> Result<(Bytes, Mime), DownloadImageError> {
+) -> Result<(ImageStream, Mime), DownloadImageError> {
     // Request page at URL
     let response = client
         .get(url)
@@ -119,11 +153,10 @@ async fn download_image(
         return Err(DownloadImageError::InvalidMimeType);
     }
 
-    // Read response text
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(DownloadImageError::ResponseDownload)?;
+    let stream = response
+        .bytes_stream()
+        .map_err(DownloadImageError::ResponseDownload);
+    let stream = ImageStream::Response(Box::pin(stream));
 
-    Ok((bytes, content_type))
+    Ok((stream, content_type))
 }
