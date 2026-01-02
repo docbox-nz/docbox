@@ -66,9 +66,9 @@ pub async fn process_pdf(file_bytes: &[u8]) -> Result<ProcessingOutput, Processi
         }
 
         // Handle other errors
-        Err(cause) => {
-            tracing::error!(?cause, "failed to get pdf file info");
-            return Err(ProcessingError::ReadPdfInfo(cause));
+        Err(error) => {
+            tracing::error!(?error, "failed to get pdf file info");
+            return Err(ProcessingError::ReadPdfInfo(error));
         }
     };
 

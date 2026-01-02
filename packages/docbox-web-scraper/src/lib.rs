@@ -199,8 +199,8 @@ impl WebsiteMetaService {
         // Get the website metadata
         let res = match get_website_metadata(&self.client, url).await {
             Ok(value) => value,
-            Err(cause) => {
-                tracing::error!(?cause, "failed to get website metadata");
+            Err(error) => {
+                tracing::error!(?error, "failed to get website metadata");
                 return None;
             }
         };

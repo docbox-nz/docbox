@@ -14,7 +14,7 @@ use utoipa::ToSchema;
 /// Valid document box scope string, must be: A-Z, a-z, 0-9, ':', '-', '_', '.'
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema, Serialize)]
 #[serde(transparent)]
-#[schema(example = "user:1:files", value_type = String)]
+#[schema(examples( "user:1:files"), value_type = String)]
 pub struct DocumentBoxScope(pub String);
 
 impl Display for DocumentBoxScope {

@@ -53,31 +53,31 @@ pub async fn update_file(
     let mut db = db
         .begin()
         .await
-        .inspect_err(|cause| tracing::error!(?cause, "failed to begin transaction"))?;
+        .inspect_err(|error| tracing::error!(?error, "failed to begin transaction"))?;
 
     if let Some(target_id) = update.folder_id {
         // Ensure the target folder exists, also ensures the target folder is in the same scope
         // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
         let target_folder = Folder::find_by_id(db.deref_mut(), scope, target_id)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to query target folder"))?
+            .inspect_err(|error| tracing::error!(?error, "failed to query target folder"))?
             .ok_or(UpdateFileError::UnknownTargetFolder)?;
 
         file = move_file(&mut db, user_id.clone(), file, target_folder)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to move file"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to move file"))?;
     };
 
     if let Some(new_name) = update.name {
         file = update_file_name(&mut db, user_id.clone(), file, new_name)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to update file name"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to update file name"))?;
     }
 
     if let Some(new_value) = update.pinned {
         file = update_file_pinned(&mut db, user_id, file, new_value)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to update file pinned state"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to update file pinned state"))?;
     }
 
     // Update search index data for the new name and value
@@ -93,13 +93,13 @@ pub async fn update_file(
             },
         )
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to update search index");
-            UpdateFileError::SearchIndex(cause)
+        .map_err(|error| {
+            tracing::error!(?error, "failed to update search index");
+            UpdateFileError::SearchIndex(error)
         })?;
 
-    db.commit().await.inspect_err(|cause| {
-        tracing::error!(?cause, "failed to commit transaction");
+    db.commit().await.inspect_err(|error| {
+        tracing::error!(?error, "failed to commit transaction");
     })?;
 
     Ok(())

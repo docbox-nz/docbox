@@ -186,9 +186,9 @@ pub async fn process_office(
         }
 
         // Other error
-        Err(cause) => {
-            tracing::error!(?cause, "failed to convert document to pdf");
-            return Err(ProcessingError::ConvertFile(cause));
+        Err(error) => {
+            tracing::error!(?error, "failed to convert document to pdf");
+            return Err(ProcessingError::ConvertFile(error));
         }
     };
 

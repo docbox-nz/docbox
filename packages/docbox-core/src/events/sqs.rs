@@ -67,8 +67,8 @@ impl EventPublisher for SqsEventPublisher {
                 // Serialize the event message
                 let msg = match serde_json::to_string(&event) {
                     Ok(value) => value,
-                    Err(cause) => {
-                        tracing::error!(?cause, ?event, "failed to serialize tenant event");
+                    Err(error) => {
+                        tracing::error!(?error, ?event, "failed to serialize tenant event");
                         return;
                     }
                 };
@@ -76,14 +76,14 @@ impl EventPublisher for SqsEventPublisher {
                 tracing::debug!(?event, "emitting tenant event");
 
                 // Push the event to the SQS queue
-                if let Err(cause) = client
+                if let Err(error) = client
                     .send_message()
                     .queue_url(event_queue_url)
                     .message_body(msg)
                     .send()
                     .await
                 {
-                    tracing::error!(?cause, ?event, "failed to emit tenant event");
+                    tracing::error!(?error, ?event, "failed to emit tenant event");
                 }
             }
             .instrument(span),

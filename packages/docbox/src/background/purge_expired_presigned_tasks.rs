@@ -55,9 +55,9 @@ pub async fn purge_expired_presigned_tasks(
 
         let storage = storage.create_storage_layer(&tenant);
 
-        if let Err(cause) = purge_expired_presigned_tasks_tenant(&db, &storage).await {
+        if let Err(error) = purge_expired_presigned_tasks_tenant(&db, &storage).await {
             tracing::error!(
-                ?cause,
+                ?error,
                 ?tenant,
                 "failed to purge presigned tasks for tenant"
             );

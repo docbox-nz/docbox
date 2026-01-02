@@ -117,16 +117,16 @@ pub async fn extract_tenant(
 
     let env = get_tenant_env(headers)?;
 
-    let db = db_cache.get_root_pool().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to connect to root database");
+    let db = db_cache.get_root_pool().await.map_err(|error| {
+        tracing::error!(?error, "failed to connect to root database");
         HttpCommonError::ServerError
     })?;
 
     let tenant = tenant_cache
         .get_tenant(&db, env, tenant_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query root tenant");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query root tenant");
             HttpCommonError::ServerError
         })?
         .ok_or(ExtractTenantError::TenantNotFound)?;
@@ -157,8 +157,8 @@ where
         })?;
 
         // Create the database connection pool
-        let db = db_cache.get_tenant_pool(tenant).await.map_err(|cause| {
-            tracing::error!(?cause, "failed to connect to root database");
+        let db = db_cache.get_tenant_pool(tenant).await.map_err(|error| {
+            tracing::error!(?error, "failed to connect to root database");
             HttpCommonError::ServerError
         })?;
 

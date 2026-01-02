@@ -219,8 +219,8 @@ pub async fn perform_process_file(
     store_file_index(&search, &created_file, &file.scope, index_metadata).await?;
 
     // Start a database transaction
-    let mut db = db.begin().await.map_err(|cause| {
-        tracing::error!(?cause, "failed to begin transaction");
+    let mut db = db.begin().await.map_err(|error| {
+        tracing::error!(?error, "failed to begin transaction");
         ProcessFileError::BeginTransaction
     })?;
 

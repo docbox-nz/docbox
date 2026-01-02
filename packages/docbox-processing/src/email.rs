@@ -212,8 +212,8 @@ pub fn process_email(
 
         let mime: Mime = match raw_mime.parse() {
             Ok(value) => value,
-            Err(cause) => {
-                tracing::error!(?cause, ?raw_mime, "invalid email attachment file mime type");
+            Err(error) => {
+                tracing::error!(?error, ?raw_mime, "invalid email attachment file mime type");
                 continue;
             }
         };
@@ -273,10 +273,10 @@ pub fn process_email(
 
     let metadata_bytes = match serde_json::to_vec(&document) {
         Ok(value) => value,
-        Err(cause) => {
-            tracing::error!(?cause, "failed to serialize email json metadata document");
+        Err(error) => {
+            tracing::error!(?error, "failed to serialize email json metadata document");
             return Err(ProcessingError::Email(
-                EmailProcessingError::MetadataSerialize(cause),
+                EmailProcessingError::MetadataSerialize(error),
             ));
         }
     };

@@ -21,8 +21,8 @@ impl ActionUser {
 
         let user = match User::store(db, user_data.id, user_data.name, user_data.image_id).await {
             Ok(value) => value,
-            Err(cause) => {
-                tracing::error!(?cause, "failed to store user");
+            Err(error) => {
+                tracing::error!(?error, "failed to store user");
                 return Err(HttpCommonError::ServerError.into());
             }
         };

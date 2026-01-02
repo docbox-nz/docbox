@@ -28,11 +28,11 @@ pub const TASK_TAG: &str = "Task";
     ),
     params(
         ("scope" = String, Path, description = "Scope the task is within"),
-        ("task_id" = String, Path, description = "ID of the task to query"),
+        ("task_id" = Uuid, Path, description = "ID of the task to query"),
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, task_id = %task_id))]
+#[tracing::instrument(skip_all, fields(%scope, %task_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, TaskId)>,
@@ -42,8 +42,8 @@ pub async fn get(
     let task = Task::find(&db, task_id, &scope)
         .await
         // Failed to query the database
-        .map_err(|cause| {
-            tracing::error!(?scope, ?task_id, ?cause, "failed to query task");
+        .map_err(|error| {
+            tracing::error!(?scope, ?task_id, ?error, "failed to query task");
             HttpCommonError::ServerError
         })?
         // Task not found

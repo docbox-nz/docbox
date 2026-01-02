@@ -251,8 +251,8 @@ pub async fn create_files_index_data(
                     let pages =
                         match try_pdf_compatible_document_pages(db, storage, scope, file).await {
                             Ok(value) => value,
-                            Err(cause) => {
-                                tracing::error!(?cause, "failed to re-create pdf index data pages");
+                            Err(error) => {
+                                tracing::error!(?error, "failed to re-create pdf index data pages");
                                 return SearchIndexData {
                                     ty: SearchIndexType::File,
                                     item_id: file.id,
@@ -327,8 +327,8 @@ pub async fn try_pdf_compatible_document_pages(
         .await?
         .collect_bytes()
         .await
-        .inspect_err(|cause| {
-            tracing::error!(?cause, "failed to load pdf bytes from s3 stream");
+        .inspect_err(|error| {
+            tracing::error!(?error, "failed to load pdf bytes from s3 stream");
         })?;
 
     // Load the text content

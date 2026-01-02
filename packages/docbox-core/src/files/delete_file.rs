@@ -71,8 +71,8 @@ pub async fn delete_file(
 
             // Ignore errors from this point, they are not recoverable
             while let Some(result) = delete_files_future.next().await {
-                if let Err(cause) = result {
-                    tracing::error!(?cause, "failed to delete generated file from db");
+                if let Err(error) = result {
+                    tracing::error!(?error, "failed to delete generated file from db");
                 }
             }
 
@@ -87,9 +87,9 @@ pub async fn delete_file(
 
     // Delete the generated files from the database
     while let Some(result) = delete_files_future.next().await {
-        if let Err(cause) = result {
-            tracing::error!(?cause, "failed to delete generated file");
-            return Err(DeleteFileError::Database(cause));
+        if let Err(error) = result {
+            tracing::error!(?error, "failed to delete generated file");
+            return Err(DeleteFileError::Database(error));
         }
     }
 

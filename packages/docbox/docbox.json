@@ -11,7 +11,7 @@
       "name": "MIT",
       "url": "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md"
     },
-    "version": "0.4.0"
+    "version": "0.6.0"
   },
   "paths": {
     "/admin/boxes": {
@@ -20,7 +20,7 @@
           "Admin"
         ],
         "summary": "Admin Boxes",
-        "description": "Requests a list of document boxes within the tenant",
+        "description": "Requests a list of document boxes within the tenant optionally filtered to\na specific query with support for wildcards",
         "operationId": "admin_tenant_boxes",
         "parameters": [
           {
@@ -122,7 +122,7 @@
           "Admin"
         ],
         "summary": "Purge Presigned Tasks",
-        "description": "Purges all expired presigned tasks",
+        "description": "Purges all expired presigned tasks, this operation deletes any presigned uploads\nthat have not yet been completed but have passed the expiration date",
         "operationId": "admin_purge_expired_presigned_tasks",
         "responses": {
           "204": {
@@ -175,7 +175,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminSearchResultResponse"
+                  "default": null
                 }
               }
             }
@@ -323,7 +323,7 @@
           "Admin"
         ],
         "summary": "Admin Stats",
-        "description": "Requests stats about a tenant",
+        "description": "Requests stats about a tenant such as the total of each item type as\nwell as the total file size consumed",
         "operationId": "admin_tenant_stats",
         "parameters": [
           {
@@ -754,7 +754,7 @@
           "File"
         ],
         "summary": "Create presigned file upload",
-        "description": "Creates a new \"presigned\" upload, where the file is uploaded\ndirectly to storage [complete_presigned] is called by the client\nafter it has completed its upload",
+        "description": "Creates a new \"presigned\" upload, where the file is uploaded\ndirectly to storage and processed asynchronously.\n\nUse the task ID from the response to poll the file processing\nprogress.",
         "operationId": "file_create_presigned",
         "parameters": [
           {
@@ -1553,7 +1553,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Obtained raw file successfully"
+            "description": "Obtained raw file successfully",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinaryResponse"
+                }
+              }
+            }
           },
           "404": {
             "description": "Generated file not found",
@@ -1671,7 +1678,7 @@
         }
       }
     },
-    "/box/{scope}/file/{file_id}/generated/{type}/raw/{*tail}": {
+    "/box/{scope}/file/{file_id}/generated/{type}/raw/{file_name}": {
       "get": {
         "tags": [
           "File"
@@ -1709,6 +1716,16 @@
             }
           },
           {
+            "name": "file_name",
+            "in": "path",
+            "description": "User defined file name for the download",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "allowReserved": true
+          },
+          {
             "name": "x-tenant-id",
             "in": "header",
             "description": "ID of the tenant you are targeting",
@@ -1729,7 +1746,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Obtained raw file successfully"
+            "description": "Obtained raw file successfully",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinaryResponse"
+                }
+              }
+            }
           },
           "404": {
             "description": "Generated file not found",
@@ -1803,7 +1827,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Obtained raw file successfully"
+            "description": "Obtained raw file successfully",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinaryResponse"
+                }
+              }
+            }
           },
           "404": {
             "description": "File not found",
@@ -1912,7 +1943,7 @@
         }
       }
     },
-    "/box/{scope}/file/{file_id}/raw/{*file_name}": {
+    "/box/{scope}/file/{file_id}/raw/{file_name}": {
       "get": {
         "tags": [
           "File"
@@ -1941,6 +1972,16 @@
             }
           },
           {
+            "name": "file_name",
+            "in": "path",
+            "description": "User defined file name for the download",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "allowReserved": true
+          },
+          {
             "name": "x-tenant-id",
             "in": "header",
             "description": "ID of the tenant you are targeting",
@@ -1961,7 +2002,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Obtained raw file successfully"
+            "description": "Obtained raw file successfully",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinaryResponse"
+                }
+              }
+            }
           },
           "404": {
             "description": "File not found",
@@ -3047,7 +3095,7 @@
           "Link"
         ],
         "summary": "Get link favicon",
-        "description": "Obtain the favicon image for the website that\nthe link points to",
+        "description": "Obtain the favicon image for the website that the link points to\nthe image data is streamed directly from the target website",
         "operationId": "link_get_favicon",
         "parameters": [
           {
@@ -3090,11 +3138,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Obtained link favicon",
+            "description": "Streamed link favicon binary data",
             "content": {
-              "application/json": {
+              "application/octet-stream": {
                 "schema": {
-                  "$ref": "#/components/schemas/LinkWithExtra"
+                  "$ref": "#/components/schemas/BinaryResponse"
                 }
               }
             }
@@ -3128,7 +3176,7 @@
           "Link"
         ],
         "summary": "Get link social image",
-        "description": "Obtain the \"Social Image\" for the website, this resolves the website\nmetadata and finds the OGP metadata image responding with the image\ndirectly",
+        "description": "Obtain the \"Social Image\" for the website, this resolves the website\nmetadata and finds the OGP metadata image responding with the image\ndirectly. The image data is streamed directly from the target\nwebsite",
         "operationId": "link_get_image",
         "parameters": [
           {
@@ -3171,11 +3219,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Obtained link social image",
+            "description": "Streamed link social image binary data",
             "content": {
-              "application/json": {
+              "application/octet-stream": {
                 "schema": {
-                  "$ref": "#/components/schemas/LinkWithExtra"
+                  "$ref": "#/components/schemas/BinaryResponse"
                 }
               }
             }
@@ -3470,7 +3518,8 @@
             "description": "ID of the task to query",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -3646,6 +3695,11 @@
           }
         }
       },
+      "BinaryResponse": {
+        "type": "string",
+        "format": "binary",
+        "description": "Type hint type for Utoipa to indicate a binary response type"
+      },
       "CreateDocumentBoxRequest": {
         "type": "object",
         "description": "Request to create a document box",
@@ -3671,7 +3725,7 @@
           "folder_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Folder to store folder in"
+            "description": "ID of the folder to store folder in"
           },
           "name": {
             "type": "string",
@@ -3693,7 +3747,7 @@
           "folder_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Folder to store link in"
+            "description": "ID of the folder to store link in"
           },
           "name": {
             "type": "string",
@@ -3714,8 +3768,7 @@
         "required": [
           "name",
           "folder_id",
-          "size",
-          "mime"
+          "size"
         ],
         "properties": {
           "disable_mime_sniffing": {
@@ -3728,10 +3781,13 @@
           "folder_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Folder to store the file in"
+            "description": "ID of the folder to store the file in"
           },
           "mime": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Mime type of the file"
           },
           "name": {
@@ -3746,7 +3802,7 @@
               "null"
             ],
             "format": "uuid",
-            "description": "Optional parent file ID"
+            "description": "Optional ID of the parent file if this file is associated as a child\nof another file. Mainly used to associating attachments to email files"
           },
           "processing_config": {
             "oneOf": [
@@ -3762,7 +3818,7 @@
           "size": {
             "type": "integer",
             "format": "int32",
-            "description": "Size of the file being uploaded",
+            "description": "Size of the file being uploaded in bytes. Must match the size of the\nfile being uploaded",
             "minimum": 1
           }
         }
@@ -3774,7 +3830,8 @@
         ],
         "properties": {
           "version": {
-            "type": "string"
+            "type": "string",
+            "description": "Version of the docbox server"
           }
         }
       },
@@ -3836,7 +3893,9 @@
       "DocumentBoxScope": {
         "type": "string",
         "description": "Valid document box scope string, must be: A-Z, a-z, 0-9, ':', '-', '_', '.'",
-        "example": "user:1:files"
+        "examples": [
+          "user:1:files"
+        ]
       },
       "DocumentBoxStats": {
         "type": "object",
@@ -4537,6 +4596,7 @@
         "oneOf": [
           {
             "type": "object",
+            "description": "Presigned upload is currently pending",
             "required": [
               "status"
             ],
@@ -4551,6 +4611,7 @@
           },
           {
             "type": "object",
+            "description": "Presigned upload is completed",
             "required": [
               "file",
               "generated",
@@ -4558,13 +4619,15 @@
             ],
             "properties": {
               "file": {
-                "$ref": "#/components/schemas/FileWithExtra"
+                "$ref": "#/components/schemas/FileWithExtra",
+                "description": "The uploaded file"
               },
               "generated": {
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/GeneratedFile"
-                }
+                },
+                "description": "The generated file"
               },
               "status": {
                 "type": "string",
@@ -4576,13 +4639,15 @@
           },
           {
             "type": "object",
+            "description": "Presigned upload failed",
             "required": [
               "error",
               "status"
             ],
             "properties": {
               "error": {
-                "type": "string"
+                "type": "string",
+                "description": "The error that occurred"
               },
               "status": {
                 "type": "string",
@@ -4596,6 +4661,7 @@
       },
       "PresignedUploadResponse": {
         "type": "object",
+        "description": "Response describing how to upload the presigned file and the ID\nfor polling the progress",
         "required": [
           "task_id",
           "method",
@@ -4605,6 +4671,7 @@
         "properties": {
           "headers": {
             "type": "object",
+            "description": "Headers to include on the file upload request",
             "additionalProperties": {
               "type": "string"
             },
@@ -4613,14 +4680,17 @@
             }
           },
           "method": {
-            "type": "string"
+            "type": "string",
+            "description": "HTTP method to use when uploading the file"
           },
           "task_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "ID of the file upload task to poll"
           },
           "uri": {
-            "type": "string"
+            "type": "string",
+            "description": "URL to upload the file to"
           }
         }
       },
@@ -5066,11 +5136,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DocumentBox"
-            }
+            },
+            "description": "The document boxes"
           },
           "total": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "The total number of document boxes available to query"
           }
         }
       },
@@ -5145,7 +5217,7 @@
               "null"
             ],
             "format": "uuid",
-            "description": "New parent folder for the folder"
+            "description": "ID of the new parent folder for the folder"
           },
           "name": {
             "type": [
@@ -5175,7 +5247,7 @@
               "null"
             ],
             "format": "uuid",
-            "description": "New parent folder for the link"
+            "description": "New parent folder ID for the link"
           },
           "name": {
             "type": [
@@ -5245,7 +5317,7 @@
           "folder_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Folder to store the file in"
+            "description": "ID of the folder to store the file in"
           },
           "mime": {
             "type": [
@@ -5256,6 +5328,7 @@
           },
           "name": {
             "type": "string",
+            "description": "Name of the file being uploaded",
             "maxLength": 255,
             "minLength": 1
           },
@@ -5265,14 +5338,14 @@
               "null"
             ],
             "format": "uuid",
-            "description": "Optional ID of a parent file (i.e for email attachments)"
+            "description": "Optional ID of the parent file if this file is associated as a child\nof another file. Mainly used to associating attachments to email files"
           },
           "processing_config": {
             "type": [
               "string",
               "null"
             ],
-            "description": "JSON encoded processing config"
+            "description": "Optional JSON encoded processing config"
           }
         }
       },

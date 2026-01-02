@@ -20,7 +20,7 @@ pub struct CreateLink {
     #[schema(min_length = 1)]
     pub value: String,
 
-    /// Folder to store link in
+    /// ID of the folder to store link in
     #[garde(skip)]
     #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
@@ -39,7 +39,7 @@ pub struct UpdateLinkRequest {
     #[schema(min_length = 1)]
     pub value: Option<String>,
 
-    /// New parent folder for the link
+    /// New parent folder ID for the link
     #[garde(skip)]
     #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
@@ -50,13 +50,19 @@ pub struct UpdateLinkRequest {
     pub pinned: Option<bool>,
 }
 
+/// Response metadata for a resolved link
 #[derive(Debug, Serialize, ToSchema)]
 pub struct LinkMetadataResponse {
+    /// Title from the website metadata
     pub title: Option<String>,
+    /// Alternative title from the website OGP metadata
     pub og_title: Option<String>,
+    /// Description from the OGP metadata
     pub og_description: Option<String>,
 
+    /// Whether the metadata resolved a favicon
     pub favicon: bool,
+    /// Whether the metadata resolved a image
     pub image: bool,
 }
 

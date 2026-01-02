@@ -159,8 +159,8 @@ pub async fn upload_file(
     let output = match persist_file_upload(&mut db, data).await {
         Ok(value) => value,
         Err(error) => {
-            if let Err(cause) = db.rollback().await {
-                tracing::error!(?cause, "failed to roll back database transaction");
+            if let Err(error) = db.rollback().await {
+                tracing::error!(?error, "failed to roll back database transaction");
             }
 
             tracing::error!(?error, "failed to complete inner file processing");
@@ -442,9 +442,9 @@ pub async fn store_generated_files(
                 generated_files.push(create);
             }
             // Failed upload
-            Err(cause) => {
-                tracing::error!(?cause, "failed to upload generated file");
-                upload_errors.push(UploadFileError::UploadGeneratedFile(cause));
+            Err(error) => {
+                tracing::error!(?error, "failed to upload generated file");
+                upload_errors.push(UploadFileError::UploadGeneratedFile(error));
             }
         }
     }

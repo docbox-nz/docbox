@@ -1,5 +1,3 @@
-use axum::{Extension, Json, http::StatusCode};
-
 use crate::{
     VERSION,
     error::{DynHttpError, HttpCommonError},
@@ -7,6 +5,7 @@ use crate::{
     models::{document_box::DocumentBoxOptions, utils::DocboxServerResponse},
     notifications::{MpscNotificationQueueSender, NotificationQueueMessage, parse_bucket_message},
 };
+use axum::{Extension, Json, http::StatusCode};
 
 pub const UTILS_TAG: &str = "Utils";
 

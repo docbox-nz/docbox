@@ -44,7 +44,7 @@ pub const FOLDER_TAG: &str = "Folder";
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, req = ?req))]
+#[tracing::instrument(skip_all, fields(%scope, ?req))]
 pub async fn create(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -57,11 +57,11 @@ pub async fn create(
     let parent_folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
         // Failed to query destination folder
-        .map_err(|cause| {
+        .map_err(|error| {
             tracing::error!(
-                ?scope,
-                ?folder_id,
-                ?cause,
+                %scope,
+                %folder_id,
+                ?error,
                 "failed to query link destination folder"
             );
             HttpCommonError::ServerError
@@ -82,9 +82,9 @@ pub async fn create(
     // Perform Folder creation
     let folder = safe_create_folder(&db, search, &events, create)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to create link");
-            HttpFolderError::CreateError(cause)
+        .map_err(|error| {
+            tracing::error!(?error, "failed to create link");
+            HttpFolderError::CreateError(error)
         })?;
 
     Ok((
@@ -125,7 +125,7 @@ pub async fn create(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id))]
+#[tracing::instrument(skip_all, fields(%scope, %folder_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
@@ -135,8 +135,8 @@ pub async fn get(
     let folder = Folder::find_by_id_with_extra(&db, &scope, folder_id)
         .await
         // Failed to query folder
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query folder");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query folder");
             HttpCommonError::ServerError
         })?
         // Folder not found
@@ -144,10 +144,11 @@ pub async fn get(
 
     let children = ResolvedFolderWithExtra::resolve(&db, folder.id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to resolve folder children");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to resolve folder children");
             HttpCommonError::ServerError
         })?;
+
     Ok(Json(FolderResponse { folder, children }))
 }
 
@@ -170,7 +171,7 @@ pub async fn get(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id))]
+#[tracing::instrument(skip_all, fields(%scope, %folder_id))]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
@@ -180,8 +181,8 @@ pub async fn get_edit_history(
     _ = Folder::find_by_id_with_extra(&db, &scope, folder_id)
         .await
         // Failed to query folder
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query folder");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query folder");
             HttpCommonError::ServerError
         })?
         // Folder not found
@@ -189,8 +190,8 @@ pub async fn get_edit_history(
 
     let edit_history = EditHistory::all_by_folder(&db, folder_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query folder edit history");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query folder edit history");
             HttpCommonError::ServerError
         })?;
 
@@ -218,7 +219,7 @@ pub async fn get_edit_history(
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id, req = ?req))]
+#[tracing::instrument(skip_all, fields(%scope, %folder_id, ?req))]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -231,8 +232,8 @@ pub async fn update(
     let folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
         // Failed to query folder
-        .map_err(|cause| {
-            tracing::error!(?scope, ?folder_id, ?cause, "failed to query folder");
+        .map_err(|error| {
+            tracing::error!(%scope, %folder_id, ?error, "failed to query folder");
             HttpCommonError::ServerError
         })?
         // Folder not found
@@ -252,16 +253,10 @@ pub async fn update(
         &db, &search, &scope, folder, user_id, update,
     )
     .await
-    .map_err(|err| match err {
-        UpdateFolderError::UnknownTargetFolder => {
-            DynHttpError::from(HttpFolderError::UnknownTargetFolder)
-        }
-        UpdateFolderError::CannotModifyRoot => {
-            DynHttpError::from(HttpFolderError::CannotModifyRoot)
-        }
-        UpdateFolderError::CannotMoveIntoSelf => {
-            DynHttpError::from(HttpFolderError::CannotMoveIntoSelf)
-        }
+    .map_err(|error| match error {
+        UpdateFolderError::UnknownTargetFolder => HttpFolderError::UnknownTargetFolder.into(),
+        UpdateFolderError::CannotModifyRoot => HttpFolderError::CannotModifyRoot.into(),
+        UpdateFolderError::CannotMoveIntoSelf => HttpFolderError::CannotMoveIntoSelf.into(),
         _ => DynHttpError::from(HttpCommonError::ServerError),
     })?;
 
@@ -289,7 +284,7 @@ pub async fn update(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, folder_id = %folder_id))]
+#[tracing::instrument(skip_all, fields(%scope, %folder_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
@@ -302,8 +297,8 @@ pub async fn delete(
     let folder = Folder::find_by_id(&db, &scope, folder_id)
         .await
         // Failed to query folder
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query folder");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query folder");
             HttpCommonError::ServerError
         })?
         // Folder not found
@@ -316,8 +311,8 @@ pub async fn delete(
 
     delete_folder(&db, &storage, &search, &events, folder)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to delete folder");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to delete folder");
             HttpCommonError::ServerError
         })?;
 

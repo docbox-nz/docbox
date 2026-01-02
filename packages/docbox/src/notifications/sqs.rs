@@ -65,8 +65,8 @@ async fn process_sqs_queue(task: SqsNotificationQueueTask) {
             .await
         {
             Ok(value) => value,
-            Err(cause) => {
-                tracing::error!(?cause, "error getting messages from sqs");
+            Err(error) => {
+                tracing::error!(?error, "error getting messages from sqs");
                 sleep(Duration::from_secs(10)).await;
                 continue;
             }
@@ -89,8 +89,8 @@ async fn process_sqs_queue(task: SqsNotificationQueueTask) {
 
             let parsed: serde_json::Value = match serde_json::from_str(&body) {
                 Ok(value) => value,
-                Err(cause) => {
-                    if let Err(cause) = task
+                Err(error) => {
+                    if let Err(error) = task
                         .client
                         .delete_message()
                         .queue_url(&task.queue_url)
@@ -98,10 +98,10 @@ async fn process_sqs_queue(task: SqsNotificationQueueTask) {
                         .send()
                         .await
                     {
-                        tracing::error!(?cause, "failed to delete message from sqs");
+                        tracing::error!(?error, "failed to delete message from sqs");
                     }
 
-                    tracing::error!(?cause, "got malformed message from sqs");
+                    tracing::error!(?error, "got malformed message from sqs");
                     continue;
                 }
             };
@@ -120,7 +120,7 @@ async fn process_sqs_queue(task: SqsNotificationQueueTask) {
                     .await;
             }
 
-            if let Err(cause) = task
+            if let Err(error) = task
                 .client
                 .delete_message()
                 .queue_url(&task.queue_url)
@@ -128,7 +128,7 @@ async fn process_sqs_queue(task: SqsNotificationQueueTask) {
                 .send()
                 .await
             {
-                tracing::error!(?cause, "failed to delete message from sqs");
+                tracing::error!(?error, "failed to delete message from sqs");
             }
         }
     }

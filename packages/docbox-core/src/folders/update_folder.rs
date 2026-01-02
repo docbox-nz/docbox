@@ -65,7 +65,7 @@ pub async fn update_folder(
     let mut db = db
         .begin()
         .await
-        .inspect_err(|cause| tracing::error!(?cause, "failed to begin transaction"))?;
+        .inspect_err(|error| tracing::error!(?error, "failed to begin transaction"))?;
 
     if let Some(target_id) = update.folder_id {
         // Cannot move folder into itself
@@ -77,26 +77,26 @@ pub async fn update_folder(
         // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
         let target_folder = Folder::find_by_id(db.deref_mut(), scope, target_id)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to query target folder"))?
+            .inspect_err(|error| tracing::error!(?error, "failed to query target folder"))?
             .ok_or(UpdateFolderError::UnknownTargetFolder)?;
 
         folder_id = target_folder.id;
 
         folder = move_folder(&mut db, user_id.clone(), folder, folder_id, target_folder)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to move folder"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to move folder"))?;
     };
 
     if let Some(new_name) = update.name {
         folder = update_folder_name(&mut db, user_id.clone(), folder, new_name)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to update folder name"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to update folder name"))?;
     }
 
     if let Some(new_value) = update.pinned {
         folder = update_folder_pinned(&mut db, user_id, folder, new_value)
             .await
-            .inspect_err(|cause| tracing::error!(?cause, "failed to update folder pinned state"))?;
+            .inspect_err(|error| tracing::error!(?error, "failed to update folder pinned state"))?;
     }
 
     // Update search index data for the new name and value
@@ -111,13 +111,13 @@ pub async fn update_folder(
             },
         )
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to update search index");
-            UpdateFolderError::SearchIndex(cause)
+        .map_err(|error| {
+            tracing::error!(?error, "failed to update search index");
+            UpdateFolderError::SearchIndex(error)
         })?;
 
-    db.commit().await.inspect_err(|cause| {
-        tracing::error!(?cause, "failed to commit transaction");
+    db.commit().await.inspect_err(|error| {
+        tracing::error!(?error, "failed to commit transaction");
     })?;
 
     Ok(())

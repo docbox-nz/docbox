@@ -61,16 +61,16 @@ async fn create_document_box_entry(
 ) -> Result<DocumentBox, CreateDocumentBoxError> {
     DocumentBox::create(db.deref_mut(), scope)
         .await
-        .map_err(|cause| {
-            if let Some(db_err) = cause.as_database_error() {
+        .map_err(|error| {
+            if let Some(db_err) = error.as_database_error() {
                 // Handle attempts at a duplicate scope creation
                 if db_err.is_unique_violation() {
                     return CreateDocumentBoxError::ScopeAlreadyExists;
                 }
             }
 
-            tracing::error!(?cause, "failed to create document box");
-            CreateDocumentBoxError::from(cause)
+            tracing::error!(?error, "failed to create document box");
+            CreateDocumentBoxError::from(error)
         })
 }
 

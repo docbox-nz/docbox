@@ -31,7 +31,8 @@ pub const ADMIN_TAG: &str = "Admin";
 
 /// Admin Boxes
 ///
-/// Requests a list of document boxes within the tenant
+/// Requests a list of document boxes within the tenant optionally filtered to
+/// a specific query with support for wildcards
 #[utoipa::path(
     post,
     operation_id = "admin_tenant_boxes",
@@ -44,7 +45,7 @@ pub const ADMIN_TAG: &str = "Admin";
     ),
     params(TenantParams)
 )]
-#[tracing::instrument(skip_all, fields(req = ?req))]
+#[tracing::instrument(skip_all, fields(?req))]
 pub async fn tenant_boxes(
     TenantDb(db): TenantDb,
     Garde(Json(req)): Garde<Json<TenantDocumentBoxesRequest>>,
@@ -109,7 +110,8 @@ pub async fn tenant_boxes(
 
 /// Admin Stats
 ///
-/// Requests stats about a tenant
+/// Requests stats about a tenant such as the total of each item type as
+/// well as the total file size consumed
 #[utoipa::path(
     get,
     operation_id = "admin_tenant_stats",
@@ -135,23 +137,23 @@ pub async fn tenant_stats(TenantDb(db): TenantDb) -> HttpResult<TenantStatsRespo
         file_size_future
     );
 
-    let total_files = total_files.map_err(|cause| {
-        tracing::error!(?cause, "failed to query tenant total files");
+    let total_files = total_files.map_err(|error| {
+        tracing::error!(?error, "failed to query tenant total files");
         HttpCommonError::ServerError
     })?;
 
-    let total_links = total_links.map_err(|cause| {
-        tracing::error!(?cause, "failed to query tenant total links");
+    let total_links = total_links.map_err(|error| {
+        tracing::error!(?error, "failed to query tenant total links");
         HttpCommonError::ServerError
     })?;
 
-    let total_folders = total_folders.map_err(|cause| {
-        tracing::error!(?cause, "failed to query tenant total folders");
+    let total_folders = total_folders.map_err(|error| {
+        tracing::error!(?error, "failed to query tenant total folders");
         HttpCommonError::ServerError
     })?;
 
-    let file_size = file_size.map_err(|cause| {
-        tracing::error!(?cause, "failed to query tenant files size");
+    let file_size = file_size.map_err(|error| {
+        tracing::error!(?error, "failed to query tenant files size");
         HttpCommonError::ServerError
     })?;
 
@@ -181,7 +183,7 @@ pub async fn tenant_stats(TenantDb(db): TenantDb) -> HttpResult<TenantStatsRespo
     ),
     params(TenantParams)
 )]
-#[tracing::instrument(skip_all, fields(req = ?req))]
+#[tracing::instrument(skip_all, fields(?req))]
 pub async fn search_tenant(
     TenantDb(db): TenantDb,
     TenantSearch(search): TenantSearch,
@@ -340,7 +342,8 @@ pub async fn flush_tenant_cache(
 
 /// Purge Presigned Tasks
 ///
-/// Purges all expired presigned tasks
+/// Purges all expired presigned tasks, this operation deletes any presigned uploads
+/// that have not yet been completed but have passed the expiration date
 #[utoipa::path(
     post,
     operation_id = "admin_purge_expired_presigned_tasks",

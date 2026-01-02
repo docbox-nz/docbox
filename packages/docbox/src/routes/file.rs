@@ -10,8 +10,8 @@ use crate::{
     models::{
         document_box::DocumentBoxScope,
         file::{
-            CreatePresignedRequest, FileResponse, FileUploadResponse, GetPresignedRequest,
-            HttpFileError, PresignedDownloadResponse, PresignedStatusResponse,
+            BinaryResponse, CreatePresignedRequest, FileResponse, FileUploadResponse,
+            GetPresignedRequest, HttpFileError, PresignedDownloadResponse, PresignedStatusResponse,
             PresignedUploadResponse, RawFileQuery, UpdateFileRequest, UploadFileRequest,
             UploadTaskResponse, UploadedFile,
         },
@@ -86,7 +86,7 @@ pub const FILE_TAG: &str = "File";
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope))]
+#[tracing::instrument(skip_all, fields(%scope))]
 #[allow(clippy::too_many_arguments)]
 pub async fn upload(
     action_user: ActionUser,
@@ -102,8 +102,8 @@ pub async fn upload(
 ) -> HttpResult<FileUploadResponse> {
     let folder = Folder::find_by_id(&db, &scope, req.folder_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query folder");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query folder");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFolderError::UnknownTargetFolder)?;
@@ -111,8 +111,8 @@ pub async fn upload(
     if let Some(fixed_id) = req.fixed_id
         && File::find(&db, &scope, fixed_id)
             .await
-            .map_err(|cause| {
-                tracing::error!(?cause, "failed to check for duplicate files");
+            .map_err(|error| {
+                tracing::error!(?error, "failed to check for duplicate files");
                 HttpCommonError::ServerError
             })?
             .is_some()
@@ -147,8 +147,8 @@ pub async fn upload(
     let processing_config: Option<ProcessingConfig> = match &req.processing_config {
         Some(value) => match serde_json::from_str(value) {
             Ok(value) => value,
-            Err(cause) => {
-                tracing::error!(?cause, "failed to deserialize processing config");
+            Err(error) => {
+                tracing::error!(?error, "failed to deserialize processing config");
                 None
             }
         },
@@ -209,9 +209,9 @@ pub async fn upload(
 
             match result {
                 Ok(value) => (TaskStatus::Completed, value),
-                Err(err) => (
+                Err(error) => (
                     TaskStatus::Failed,
-                    serde_json::json!({ "error": err.to_string() }),
+                    serde_json::json!({ "error": error.to_string() }),
                 ),
             }
         }
@@ -220,8 +220,8 @@ pub async fn upload(
         .instrument(span),
     )
     .await
-    .map_err(|cause| {
-        tracing::error!(?cause, "failed to create background task");
+    .map_err(|error| {
+        tracing::error!(?error, "failed to create background task");
         HttpCommonError::ServerError
     })?;
 
@@ -269,8 +269,10 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
 /// Create presigned file upload
 ///
 /// Creates a new "presigned" upload, where the file is uploaded
-/// directly to storage [complete_presigned] is called by the client
-/// after it has completed its upload
+/// directly to storage and processed asynchronously.
+///
+/// Use the task ID from the response to poll the file processing
+/// progress.
 #[utoipa::path(
     post,
     operation_id = "file_create_presigned",
@@ -288,7 +290,7 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, req = ?req))]
+#[tracing::instrument(skip_all, fields(%scope, ?req))]
 pub async fn create_presigned(
     action_user: ActionUser,
     Extension(MaxFileSizeBytes(max_file_size)): Extension<MaxFileSizeBytes>,
@@ -303,8 +305,8 @@ pub async fn create_presigned(
 
     let folder = Folder::find_by_id(&db, &scope, req.folder_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query folder");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query folder");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFolderError::UnknownTargetFolder)?;
@@ -312,7 +314,7 @@ pub async fn create_presigned(
     // Update stored editing user data
     let created_by = action_user.store_user(&db).await?;
 
-    let mut mime = req.mime;
+    let mut mime = req.mime.unwrap_or(mime::APPLICATION_OCTET_STREAM);
 
     // Attempt to guess the file mime type when application/octet-stream is specified
     // (Likely from old browsers)
@@ -344,8 +346,8 @@ pub async fn create_presigned(
         },
     )
     .await
-    .map_err(|cause| {
-        tracing::error!(?cause, "failed to create presigned upload");
+    .map_err(|error| {
+        tracing::error!(?error, "failed to create presigned upload");
         HttpCommonError::ServerError
     })?;
 
@@ -381,7 +383,7 @@ pub async fn create_presigned(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, task_id = %task_id))]
+#[tracing::instrument(skip_all, fields(%scope, %task_id))]
 pub async fn get_presigned(
     TenantDb(db): TenantDb,
     Path((scope, task_id)): Path<(DocumentBoxScope, PresignedUploadTaskId)>,
@@ -390,8 +392,8 @@ pub async fn get_presigned(
 
     let task = PresignedUploadTask::find(&db, &scope, task_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query presigned upload");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query presigned upload");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownTask)?;
@@ -406,16 +408,16 @@ pub async fn get_presigned(
 
     let file = File::find_with_extra(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     let generated = GeneratedFile::find_all(&db, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query generated files");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query generated files");
             HttpCommonError::ServerError
         })?;
 
@@ -442,7 +444,7 @@ pub async fn get_presigned(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id))]
 pub async fn get(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -450,16 +452,16 @@ pub async fn get(
     let DocumentBoxScope(scope) = scope;
     let file = File::find_with_extra(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     let generated = GeneratedFile::find_all(&db, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query generated files");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query generated files");
             HttpCommonError::ServerError
         })?;
 
@@ -486,7 +488,7 @@ pub async fn get(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id))]
 pub async fn get_children(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -496,16 +498,16 @@ pub async fn get_children(
     // Request the file first to ensure scoping rules
     _ = File::find_with_extra(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     let files = File::find_by_parent_file_with_extra(&db, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file children");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file children");
             HttpCommonError::ServerError
         })?;
 
@@ -531,7 +533,7 @@ pub async fn get_children(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id))]
 pub async fn get_edit_history(
     TenantDb(db): TenantDb,
     Path((scope, file_id)): Path<(DocumentBoxScope, FileId)>,
@@ -540,16 +542,16 @@ pub async fn get_edit_history(
 
     _ = File::find(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     let edit_history = EditHistory::all_by_file(&db, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file history");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file history");
             HttpCommonError::ServerError
         })?;
 
@@ -576,7 +578,7 @@ pub async fn get_edit_history(
         UserParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, req = ?req))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id, ?req))]
 pub async fn update(
     action_user: ActionUser,
     TenantDb(db): TenantDb,
@@ -588,8 +590,8 @@ pub async fn update(
 
     let file = File::find(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
@@ -606,7 +608,7 @@ pub async fn update(
 
     docbox_core::files::update_file::update_file(&db, &search, &scope, file, user_id, update)
         .await
-        .map_err(|err| match err {
+        .map_err(|error| match error {
             UpdateFileError::UnknownTargetFolder => {
                 DynHttpError::from(HttpFolderError::UnknownTargetFolder)
             }
@@ -626,7 +628,7 @@ pub async fn update(
     tag = FILE_TAG,
     path = "/box/{scope}/file/{file_id}/raw",
     responses(
-        (status = 200, description = "Obtained raw file successfully"),
+        (status = 200, description = "Obtained raw file successfully", content_type = "application/octet-stream", body = BinaryResponse),
         (status = 404, description = "File not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
@@ -636,7 +638,7 @@ pub async fn update(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, query = ?query))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id, ?query))]
 pub async fn get_raw(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
@@ -647,14 +649,14 @@ pub async fn get_raw(
 
     let file = File::find(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
-    let byte_stream = storage.get_file(&file.file_key).await.map_err(|cause| {
-        tracing::error!(?cause, "failed to get file from storage");
+    let byte_stream = storage.get_file(&file.file_key).await.map_err(|error| {
+        tracing::error!(?error, "failed to get file from storage");
         HttpCommonError::ServerError
     })?;
 
@@ -708,7 +710,7 @@ pub async fn get_raw(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, req = ?req))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id, ?req))]
 pub async fn get_raw_presigned(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
@@ -719,8 +721,8 @@ pub async fn get_raw_presigned(
 
     let file = File::find(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
@@ -731,8 +733,8 @@ pub async fn get_raw_presigned(
     let (signed_request, expires_at) = storage
         .create_presigned_download(&file.file_key, expires_at)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to created file presigned download");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to created file presigned download");
             HttpCommonError::ServerError
         })?;
 
@@ -760,19 +762,20 @@ pub async fn get_raw_presigned(
     get,
     operation_id = "file_get_raw_named",
     tag = FILE_TAG,
-    path = "/box/{scope}/file/{file_id}/raw/{*file_name}",
+    path = "/box/{scope}/file/{file_id}/raw/{file_name}",
     responses(
-        (status = 200, description = "Obtained raw file successfully"),
+        (status = 200, description = "Obtained raw file successfully", content_type = "application/octet-stream", body = BinaryResponse),
         (status = 404, description = "File not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
     params(
         ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
+        ("file_name" = String, Path, description = "User defined file name for the download", allow_reserved = true),
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, query = ?query))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id, ?query))]
 pub async fn get_raw_named(
     db: TenantDb,
     storage: TenantStorage,
@@ -814,8 +817,8 @@ pub async fn search(
     // Assert the file exists
     _ = File::find(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
@@ -853,7 +856,7 @@ pub async fn search(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id))]
 pub async fn delete(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
@@ -865,16 +868,16 @@ pub async fn delete(
 
     let file = File::find(&db, &scope, file_id)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::UnknownFile)?;
 
     delete_file(&db, &storage, &search, &events, file, scope)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to delete file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to delete file");
             HttpCommonError::ServerError
         })?;
 
@@ -903,7 +906,7 @@ pub async fn delete(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id, %generated_type))]
 pub async fn get_generated(
     TenantDb(db): TenantDb,
     Path((scope, file_id, generated_type)): Path<(DocumentBoxScope, FileId, GeneratedFileType)>,
@@ -912,8 +915,8 @@ pub async fn get_generated(
 
     let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query generated file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query generated file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::NoMatchingGenerated)?;
@@ -931,7 +934,7 @@ pub async fn get_generated(
     tag = FILE_TAG,
     path = "/box/{scope}/file/{file_id}/generated/{type}/raw",
     responses(
-        (status = 200, description = "Obtained raw file successfully"),
+        (status = 200, description = "Obtained raw file successfully", content_type = "application/octet-stream", body = BinaryResponse),
         (status = 404, description = "Generated file not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
@@ -942,7 +945,7 @@ pub async fn get_generated(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id, %generated_type))]
 pub async fn get_generated_raw(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
@@ -952,14 +955,14 @@ pub async fn get_generated_raw(
 
     let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query generated file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query generated file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::NoMatchingGenerated)?;
 
-    let byte_stream = storage.get_file(&file.file_key).await.map_err(|cause| {
-        tracing::error!(?cause, "failed to file from storage");
+    let byte_stream = storage.get_file(&file.file_key).await.map_err(|error| {
+        tracing::error!(?error, "failed to file from storage");
         HttpCommonError::ServerError
     })?;
 
@@ -1004,7 +1007,7 @@ pub async fn get_generated_raw(
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type, req = ?req))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id, %generated_type, ?req))]
 pub async fn get_generated_raw_presigned(
     TenantDb(db): TenantDb,
     TenantStorage(storage): TenantStorage,
@@ -1015,8 +1018,8 @@ pub async fn get_generated_raw_presigned(
 
     let file = GeneratedFile::find(&db, &scope, file_id, generated_type)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query generated file");
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query generated file");
             HttpCommonError::ServerError
         })?
         .ok_or(HttpFileError::NoMatchingGenerated)?;
@@ -1050,9 +1053,9 @@ pub async fn get_generated_raw_presigned(
     get,
     operation_id = "file_get_generated_raw_named",
     tag = FILE_TAG,
-    path = "/box/{scope}/file/{file_id}/generated/{type}/raw/{*tail}",
+    path = "/box/{scope}/file/{file_id}/generated/{type}/raw/{file_name}",
     responses(
-        (status = 200, description = "Obtained raw file successfully"),
+        (status = 200, description = "Obtained raw file successfully", content_type = "application/octet-stream", body = BinaryResponse),
         (status = 404, description = "Generated file not found", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
@@ -1060,10 +1063,11 @@ pub async fn get_generated_raw_presigned(
         ("scope" = DocumentBoxScope, Path, description = "Scope the file resides within"),
         ("file_id" = Uuid, Path, description = "ID of the file to query"),
         ("type" = GeneratedFileType, Path, description = "ID of the file to query"),
+        ("file_name" = String, Path, description = "User defined file name for the download", allow_reserved = true),
         TenantParams
     )
 )]
-#[tracing::instrument(skip_all, fields(scope = %scope, file_id = %file_id, generated_type = %generated_type))]
+#[tracing::instrument(skip_all, fields(%scope, %file_id, %generated_type))]
 pub async fn get_generated_raw_named(
     db: TenantDb,
     storage: TenantStorage,

@@ -21,7 +21,9 @@ pub struct TenantDocumentBoxesRequest {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TenantDocumentBoxesResponse {
+    /// The document boxes
     pub results: Vec<DocumentBox>,
+    /// The total number of document boxes available to query
     pub total: i64,
 }
 

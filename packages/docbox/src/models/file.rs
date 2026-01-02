@@ -16,7 +16,7 @@ use garde::Validate;
 use mime::Mime;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 use thiserror::Error;
 use utoipa::ToSchema;
 
@@ -29,23 +29,25 @@ pub struct CreatePresignedRequest {
     #[schema(min_length = 1, max_length = 255)]
     pub name: String,
 
-    /// Folder to store the file in
+    /// ID of the folder to store the file in
     #[garde(skip)]
     #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
 
-    /// Size of the file being uploaded
+    /// Size of the file being uploaded in bytes. Must match the size of the
+    /// file being uploaded
     #[garde(range(min = 1))]
     #[schema(minimum = 1)]
     pub size: i32,
 
     /// Mime type of the file
     #[garde(skip)]
-    #[serde_as(as = "serde_with::DisplayFromStr")]
-    #[schema(value_type = String)]
-    pub mime: Mime,
+    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
+    #[schema(value_type = Option<String>)]
+    pub mime: Option<Mime>,
 
-    /// Optional parent file ID
+    /// Optional ID of the parent file if this file is associated as a child
+    /// of another file. Mainly used to associating attachments to email files
     #[garde(skip)]
     #[schema(value_type = Option<Uuid>)]
     pub parent_id: Option<FileId>,
@@ -61,12 +63,18 @@ pub struct CreatePresignedRequest {
     pub disable_mime_sniffing: Option<bool>,
 }
 
+/// Response describing how to upload the presigned file and the ID
+/// for polling the progress
 #[derive(Serialize, ToSchema)]
 pub struct PresignedUploadResponse {
+    /// ID of the file upload task to poll
     #[schema(value_type = Uuid)]
     pub task_id: PresignedUploadTaskId,
+    /// HTTP method to use when uploading the file
     pub method: String,
+    /// URL to upload the file to
     pub uri: String,
+    /// Headers to include on the file upload request
     pub headers: HashMap<String, String>,
 }
 
@@ -74,23 +82,30 @@ pub struct PresignedUploadResponse {
 #[serde(tag = "status")]
 #[allow(clippy::large_enum_variant)]
 pub enum PresignedStatusResponse {
+    /// Presigned upload is currently pending
     Pending,
+    /// Presigned upload is completed
     Complete {
+        /// The uploaded file
         file: FileWithExtra,
+        /// The generated file
         generated: Vec<GeneratedFile>,
     },
+    /// Presigned upload failed
     Failed {
+        /// The error that occurred
         error: String,
     },
 }
 
 #[derive(TryFromMultipart, Validate, ToSchema)]
 pub struct UploadFileRequest {
+    /// Name of the file being uploaded
     #[garde(length(min = 1, max = 255))]
     #[schema(min_length = 1, max_length = 255)]
     pub name: String,
 
-    /// Folder to store the file in
+    /// ID of the folder to store the file in
     #[garde(skip)]
     #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
@@ -126,12 +141,13 @@ pub struct UploadFileRequest {
     #[schema(value_type = Option<Uuid>)]
     pub fixed_id: Option<FileId>,
 
-    /// Optional ID of a parent file (i.e for email attachments)
+    /// Optional ID of the parent file if this file is associated as a child
+    /// of another file. Mainly used to associating attachments to email files
     #[garde(skip)]
     #[schema(value_type = Option<Uuid>)]
     pub parent_id: Option<FileId>,
 
-    /// JSON encoded processing config
+    /// Optional JSON encoded processing config
     #[garde(skip)]
     pub processing_config: Option<String>,
 }
@@ -212,6 +228,11 @@ pub struct PresignedDownloadResponse {
     pub headers: HashMap<String, String>,
     pub expires_at: DateTime<Utc>,
 }
+
+/// Type hint type for Utoipa to indicate a binary response type
+#[derive(ToSchema)]
+#[schema(value_type = String, format = Binary)]
+pub struct BinaryResponse(PhantomData<Vec<u8>>);
 
 #[derive(Debug, Error)]
 pub enum HttpFileError {

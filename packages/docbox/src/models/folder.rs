@@ -15,7 +15,7 @@ pub struct CreateFolderRequest {
     #[schema(min_length = 1, max_length = 255)]
     pub name: String,
 
-    /// Folder to store folder in
+    /// ID of the folder to store folder in
     #[garde(skip)]
     #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
@@ -39,7 +39,7 @@ pub struct UpdateFolderRequest {
     #[schema(min_length = 1, max_length = 255)]
     pub name: Option<String>,
 
-    /// New parent folder for the folder
+    /// ID of the new parent folder for the folder
     #[garde(skip)]
     #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,

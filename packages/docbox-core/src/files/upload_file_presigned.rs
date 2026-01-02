@@ -195,9 +195,9 @@ pub async fn safe_complete_presigned(
                 file_id: output.file.id,
             };
 
-            if let Err(cause) = complete.task.set_status(&db_pool, status).await {
-                tracing::error!(?cause, "failed to set presigned task status");
-                return Err(PresignedUploadError::UpdateTaskStatus(cause));
+            if let Err(error) = complete.task.set_status(&db_pool, status).await {
+                tracing::error!(?error, "failed to set presigned task status");
+                return Err(PresignedUploadError::UpdateTaskStatus(error));
             }
 
             Ok(())
@@ -208,9 +208,9 @@ pub async fn safe_complete_presigned(
                 error: error.to_string(),
             };
 
-            if let Err(cause) = complete.task.set_status(&db_pool, status).await {
-                tracing::error!(?cause, "failed to set presigned task status");
-                return Err(PresignedUploadError::UpdateTaskStatus(cause));
+            if let Err(error) = complete.task.set_status(&db_pool, status).await {
+                tracing::error!(?error, "failed to set presigned task status");
+                return Err(PresignedUploadError::UpdateTaskStatus(error));
             }
 
             Err(error)
@@ -245,8 +245,8 @@ pub async fn complete_presigned(
     let processing_config: Option<ProcessingConfig> = match &task.processing_config {
         Some(value) => match serde_json::from_value(value.0.clone()) {
             Ok(value) => value,
-            Err(cause) => {
-                tracing::error!(?cause, "failed to deserialize processing config");
+            Err(error) => {
+                tracing::error!(?error, "failed to deserialize processing config");
                 None
             }
         },

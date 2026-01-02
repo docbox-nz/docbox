@@ -77,9 +77,9 @@ pub async fn search_document_box(
     let results = search
         .search_index(std::slice::from_ref(&scope), request, search_folder_ids)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query search index");
-            SearchDocumentBoxError::QueryIndex(cause)
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query search index");
+            SearchDocumentBoxError::QueryIndex(error)
         })?;
 
     let total_hits = results.total_hits;
@@ -100,9 +100,9 @@ pub async fn search_document_boxes_admin(
     let results = search
         .search_index(&request.scopes, request.request, None)
         .await
-        .map_err(|cause| {
-            tracing::error!(?cause, "failed to query search index");
-            SearchDocumentBoxError::QueryIndex(cause)
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query search index");
+            SearchDocumentBoxError::QueryIndex(error)
         })?;
 
     let total_hits = results.total_hits;
