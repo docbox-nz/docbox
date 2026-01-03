@@ -22,7 +22,7 @@ license = "MIT"
 docbox-core = { version = "0.8.0", path = "packages/docbox-core" }
 
 # Database access
-docbox-database = { version = "0.6.0", path = "packages/docbox-database" }
+docbox-database = { version = "0.7.0", path = "packages/docbox-database" }
 
 # File processing
 docbox-processing = { version = "0.3.0", path = "packages/docbox-processing" }

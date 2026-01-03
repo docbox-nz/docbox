@@ -25,6 +25,9 @@ docbox-secrets.workspace = true
 # Storage access
 docbox-storage.workspace = true
 
+# Web scraper access
+docbox-web-scraper.workspace = true
+
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
@@ -63,6 +66,8 @@ utoipa.workspace = true
 
 # Caching
 moka.workspace = true
+
+url.workspace = true
 
 [dev-dependencies]
 testcontainers = { workspace = true, features = ["http_wait"] }

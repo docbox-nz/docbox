@@ -4,6 +4,7 @@ pub mod file;
 pub mod folder;
 pub mod generated_file;
 pub mod link;
+pub mod link_resolved_metadata;
 pub mod presigned_upload_task;
 pub mod root_migration;
 pub mod search;
