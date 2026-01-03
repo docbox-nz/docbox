@@ -17,7 +17,10 @@ pub enum PurgeExpiredWebsiteMetadataError {
 
 pub async fn safe_purge_expired_website_metadata(db_cache: Arc<DatabasePoolCache>) {
     if let Err(error) = purge_expired_website_metadata(db_cache).await {
-        tracing::error!(?error, "failed to purge presigned tasks");
+        tracing::error!(
+            ?error,
+            "failed to purge expired website metadata for tenants"
+        );
     }
 }
 
@@ -50,7 +53,7 @@ pub async fn purge_expired_website_metadata(
             tracing::error!(
                 ?error,
                 ?tenant,
-                "failed to purge presigned expired website metadata for tenant"
+                "failed to purge expired website metadata for tenant"
             );
         }
     }
