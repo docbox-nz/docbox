@@ -101,7 +101,7 @@ impl DocumentBox {
     /// Find a specific document box by scope within a tenant
     pub async fn find_by_scope(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScopeRaw,
+        scope: DocumentBoxScopeRawRef<'_>,
     ) -> DbResult<Option<DocumentBox>> {
         sqlx::query_as(r#"SELECT * FROM "docbox_boxes" WHERE "scope" = $1"#)
             .bind(scope)
@@ -109,6 +109,7 @@ impl DocumentBox {
             .await
     }
 
+    /// Creates a document box with the provided scope
     pub async fn create(db: impl DbExecutor<'_>, scope: String) -> DbResult<DocumentBox> {
         let document_box = DocumentBox {
             scope,

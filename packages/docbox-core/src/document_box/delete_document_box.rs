@@ -37,7 +37,7 @@ pub async fn delete_document_box(
     events: &TenantEventPublisher,
     scope: DocumentBoxScopeRawRef<'_>,
 ) -> Result<(), DeleteDocumentBoxError> {
-    let document_box = DocumentBox::find_by_scope(db, &scope.to_string())
+    let document_box = DocumentBox::find_by_scope(db, scope)
         .await?
         .ok_or(DeleteDocumentBoxError::UnknownScope)?;
 
