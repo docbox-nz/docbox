@@ -10,7 +10,7 @@ use futures::{Stream, TryStreamExt};
 use mime::Mime;
 use reqwest::{Url, header::CONTENT_TYPE};
 use thiserror::Error;
-use tracing::{debug, error};
+use tracing::debug;
 
 /// Error's that can occur when downloading an image
 #[derive(Debug, Error)]

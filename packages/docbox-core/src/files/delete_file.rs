@@ -14,7 +14,6 @@ use docbox_search::{SearchError, TenantSearchIndex};
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
-use tracing::error;
 
 #[derive(Debug, Error)]
 pub enum DeleteFileError {

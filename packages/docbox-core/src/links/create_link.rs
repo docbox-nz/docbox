@@ -14,7 +14,6 @@ use docbox_database::{
 use docbox_search::{SearchError, TenantSearchIndex};
 use std::ops::DerefMut;
 use thiserror::Error;
-use tracing::error;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]

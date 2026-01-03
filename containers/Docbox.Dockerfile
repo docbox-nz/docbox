@@ -1,5 +1,5 @@
 #  Builder part
-FROM rust:1.90.0-slim-bullseye AS builder
+FROM rust:1.92.0-slim-bullseye AS builder
 
 # Add rust target and install deps
 RUN update-ca-certificates

@@ -1,7 +1,7 @@
 use axum::{
-    Json,
-    http::{StatusCode, header::InvalidHeaderValue},
+    http::{header::InvalidHeaderValue, StatusCode},
     response::{IntoResponse, Response},
+    Json,
 };
 use serde::Serialize;
 use std::{
@@ -9,7 +9,6 @@ use std::{
     fmt::{Debug, Display},
 };
 use thiserror::Error;
-use tracing::error;
 use utoipa::ToSchema;
 
 /// Type alias for dynamic error handling and JSON responses
