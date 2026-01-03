@@ -7,8 +7,12 @@ use docbox_database::{
 };
 use docbox_web_scraper::{ResolvedWebsiteMetadata, WebsiteMetaService};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    str::FromStr,
+};
 use thiserror::Error;
+use tokio::sync::{Mutex, MutexGuard};
 use url::Url;
 
 /// Configuration for caching data in the website metadata service cache
@@ -34,7 +38,11 @@ impl Default for ResolveWebsiteConfig {
 pub enum ResolveWebsiteConfigError {
     /// Provided cache duration was an invalid number
     #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION must be a number in seconds: {0}")]
-    InvalidMetadataCacheDuration(<u64 as FromStr>::Err),
+    InvalidMetadataCacheDuration(<i64 as FromStr>::Err),
+
+    /// Provided cache duration was not within the allowed bounds
+    #[error("DOCBOX_WEB_SCRAPE_METADATA_CACHE_DURATION must be within the valid seconds bounds")]
+    MetadataCacheDurationOutOfBounds,
 }
 
 impl ResolveWebsiteConfig {
@@ -49,6 +57,11 @@ impl ResolveWebsiteConfig {
                 .parse::<i64>()
                 .map_err(ResolveWebsiteConfigError::InvalidMetadataCacheDuration)?;
 
+            // Prevent panic by ensuring value range
+            if !(-i64::MAX / 1_000..i64::MAX / 1_000).contains(&metadata_cache_duration) {
+                return Err(ResolveWebsiteConfigError::MetadataCacheDurationOutOfBounds);
+            }
+
             config.metadata_cache_duration = TimeDelta::seconds(metadata_cache_duration);
         }
 
@@ -59,6 +72,32 @@ impl ResolveWebsiteConfig {
 pub struct ResolveWebsiteService {
     pub service: WebsiteMetaService,
     config: ResolveWebsiteConfig,
+    lock: StripeLock,
+}
+
+/// Number of stripes in the stripe locking impl
+const STRIPES: usize = 1024;
+
+/// Stripe based locking implementation for locking URL resolution
+struct StripeLock {
+    locks: [Mutex<()>; STRIPES],
+}
+
+impl Default for StripeLock {
+    fn default() -> StripeLock {
+        Self {
+            locks: std::array::from_fn(|_| Mutex::new(())),
+        }
+    }
+}
+
+impl StripeLock {
+    async fn acquire(&self, url: &str) -> MutexGuard<'_, ()> {
+        let mut hasher = DefaultHasher::new();
+        url.hash(&mut hasher);
+        let idx = (hasher.finish() as usize) % STRIPES;
+        self.locks[idx].lock().await
+    }
 }
 
 impl ResolveWebsiteService {
@@ -67,12 +106,35 @@ impl ResolveWebsiteService {
         service: WebsiteMetaService,
         config: ResolveWebsiteConfig,
     ) -> Self {
-        Self { service, config }
+        Self {
+            service,
+            config,
+            lock: Default::default(),
+        }
     }
 
     /// Resolves the metadata for the website at the provided URL
     pub async fn resolve_website(&self, db: &DbPool, url: &Url) -> Option<ResolvedWebsiteMetadata> {
+        let _guard = self.lock.acquire(url.as_str()).await;
+
         // Check the database for existing metadata
+        if let Some(value) = self.resolve_website_db(db, url).await {
+            return Some(value);
+        }
+
+        // Resolve the metadata
+        let resolved = self.service.resolve_website(url).await;
+        if let Some(resolved) = resolved.as_ref() {
+            // Persist the resolved metadata to the database
+            self.persist_resolved_metadata(db, url.as_str(), resolved)
+                .await;
+        }
+
+        resolved
+    }
+
+    /// Query the database for resolved link metadata
+    async fn resolve_website_db(&self, db: &DbPool, url: &Url) -> Option<ResolvedWebsiteMetadata> {
         if let Some(resolved) = LinkResolvedMetadata::query(db, url.as_str())
             .await
             .inspect_err(|error| tracing::error!(?error, "failed to query link resolved metadata"))
@@ -92,16 +154,10 @@ impl ResolveWebsiteService {
             }
         }
 
-        // Resolve the metadata
-        let resolved = self.service.resolve_website(url).await?;
-
-        // Persist the resolved metadata to the database
-        self.persist_resolved_metadata(db, url.as_str(), &resolved)
-            .await;
-
-        Some(resolved)
+        None
     }
 
+    /// Store resolved link metadata in the database
     async fn persist_resolved_metadata(
         &self,
         db: &DbPool,
