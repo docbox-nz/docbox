@@ -69,6 +69,10 @@ pub const TENANT_MIGRATIONS: &[(&str, &str)] = &[
         "m10_add_pinned_column",
         include_str!("./tenant/m10_add_pinned_column.sql"),
     ),
+    (
+        "m11_create_links_resolved_metadata_table",
+        include_str!("./tenant/m11_create_links_resolved_metadata_table.sql"),
+    ),
 ];
 
 /// Initialize the table used for root migration tracking

@@ -1,7 +1,6 @@
 //! Link related endpoints
 
 use crate::{
-    cache::website_metadata::CachingWebsiteMetaService,
     error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::{
         action_user::{ActionUser, UserParams},
@@ -24,6 +23,7 @@ use axum_valid::Garde;
 use docbox_core::links::{
     create_link::{CreateLinkData, safe_create_link},
     delete_link::delete_link,
+    resolve_website::ResolveWebsiteService,
     update_link::{UpdateLink, UpdateLinkError},
 };
 use docbox_database::models::{
@@ -172,7 +172,7 @@ pub async fn get(
 #[tracing::instrument(skip_all, fields(%scope, %link_id))]
 pub async fn get_metadata(
     TenantDb(db): TenantDb,
-    Extension(website_service): Extension<Arc<CachingWebsiteMetaService>>,
+    Extension(website_service): Extension<Arc<ResolveWebsiteService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> HttpResult<LinkMetadataResponse> {
     let DocumentBoxScope(scope) = scope;
@@ -192,10 +192,13 @@ pub async fn get_metadata(
         HttpLinkError::InvalidLinkUrl
     })?;
 
-    let resolved = website_service.resolve_website(&url).await.ok_or_else(|| {
-        tracing::warn!("failed to resolve link site metadata");
-        HttpLinkError::FailedResolve
-    })?;
+    let resolved = website_service
+        .resolve_website(&db, &url)
+        .await
+        .ok_or_else(|| {
+            tracing::warn!("failed to resolve link site metadata");
+            HttpLinkError::FailedResolve
+        })?;
 
     Ok(Json(LinkMetadataResponse {
         title: resolved.title,
@@ -229,7 +232,7 @@ pub async fn get_metadata(
 #[tracing::instrument(skip_all, fields(%scope, %link_id))]
 pub async fn get_favicon(
     TenantDb(db): TenantDb,
-    Extension(website_service): Extension<Arc<CachingWebsiteMetaService>>,
+    Extension(website_service): Extension<Arc<ResolveWebsiteService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> Result<Response<Body>, DynHttpError> {
     let DocumentBoxScope(scope) = scope;
@@ -250,12 +253,13 @@ pub async fn get_favicon(
     })?;
 
     let website_metadata = website_service
-        .resolve_website(&url)
+        .resolve_website(&db, &url)
         .await
         .ok_or(HttpLinkError::NoFavicon)?;
 
     let favicon = website_service
-        .resolve_favicon(&url, website_metadata.best_favicon.as_ref())
+        .service
+        .resolve_favicon(&url, website_metadata.best_favicon)
         .await
         .ok_or(HttpLinkError::NoFavicon)?;
 
@@ -299,7 +303,7 @@ pub async fn get_favicon(
 #[tracing::instrument(skip_all, fields(%scope, %link_id))]
 pub async fn get_image(
     TenantDb(db): TenantDb,
-    Extension(website_service): Extension<Arc<CachingWebsiteMetaService>>,
+    Extension(website_service): Extension<Arc<ResolveWebsiteService>>,
     Path((scope, link_id)): Path<(DocumentBoxScope, LinkId)>,
 ) -> Result<Response<Body>, DynHttpError> {
     let DocumentBoxScope(scope) = scope;
@@ -320,12 +324,13 @@ pub async fn get_image(
     })?;
 
     let website_metadata = website_service
-        .resolve_website(&url)
+        .resolve_website(&db, &url)
         .await
         .ok_or(HttpLinkError::NoImage)?;
 
     let og_image = website_metadata.og_image.ok_or(HttpLinkError::NoImage)?;
     let og_image = website_service
+        .service
         .resolve_image(&url, &og_image)
         .await
         .ok_or(HttpLinkError::NoImage)?;

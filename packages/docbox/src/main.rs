@@ -11,10 +11,10 @@ use crate::{
 };
 use axum::{Extension, extract::DefaultBodyLimit, routing::post};
 use axum_server::tls_rustls::RustlsConfig;
-use cache::website_metadata::{CachingWebsiteMetaService, CachingWebsiteMetaServiceConfig};
 use docbox_core::{
     aws::{SqsClient, aws_config},
     events::{EventPublisherFactory, sqs::SqsEventPublisherFactory},
+    links::resolve_website::{ResolveWebsiteConfig, ResolveWebsiteService},
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
@@ -37,7 +37,6 @@ use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
 
 mod background;
-mod cache;
 mod docs;
 mod error;
 mod extensions;
@@ -101,12 +100,12 @@ async fn server() -> Result<(), Box<dyn Error>> {
     // Create website scraping service
     let website_meta_service_config = WebsiteMetaServiceConfig::from_env()?;
     let website_meta_service = WebsiteMetaService::from_config(website_meta_service_config)?;
-    let caching_website_meta_service_config = CachingWebsiteMetaServiceConfig::from_env()?;
-    let caching_website_meta_service =
-        Arc::new(CachingWebsiteMetaService::from_client_with_config(
-            website_meta_service,
-            caching_website_meta_service_config,
-        ));
+    let resolve_website_config = ResolveWebsiteConfig::from_env()?;
+
+    let caching_website_meta_service = Arc::new(ResolveWebsiteService::from_client_with_config(
+        website_meta_service,
+        resolve_website_config,
+    ));
 
     // Create secrets manager
     let secrets_config = SecretsManagerConfig::from_env()?;

@@ -116,7 +116,7 @@ pub struct WebsiteMetaService {
 }
 
 /// Metadata resolved from a scraped website
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolvedWebsiteMetadata {
     /// Title of the website from the `<title/>` element
     pub title: Option<String>,
@@ -133,7 +133,7 @@ pub struct ResolvedWebsiteMetadata {
 
     /// Best determined favicon
     #[serde(skip)]
-    pub best_favicon: Option<Favicon>,
+    pub best_favicon: Option<String>,
 }
 
 /// Represents an image that has been resolved where the
@@ -212,7 +212,7 @@ impl WebsiteMetaService {
             og_title: res.og_title,
             og_description: res.og_description,
             og_image: res.og_image,
-            best_favicon,
+            best_favicon: best_favicon.map(|value| value.href),
         })
     }
 
@@ -220,8 +220,7 @@ impl WebsiteMetaService {
     pub async fn resolve_website_favicon(&self, url: &Url) -> Option<ResolvedImage> {
         let website = self.resolve_website(url).await?;
 
-        self.resolve_favicon(url, website.best_favicon.as_ref())
-            .await
+        self.resolve_favicon(url, website.best_favicon).await
     }
 
     /// Resolve the OGP metadata image from the provided URL
@@ -238,10 +237,10 @@ impl WebsiteMetaService {
     pub async fn resolve_favicon(
         &self,
         url: &Url,
-        best_favicon: Option<&Favicon>,
+        best_favicon: Option<String>,
     ) -> Option<ResolvedImage> {
         let favicon = match best_favicon {
-            Some(best) => best.href.clone(),
+            Some(best) => best,
 
             // No favicon from document? Fallback and try to use the default path
             None => {
