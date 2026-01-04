@@ -7,12 +7,9 @@ use docbox_database::{
 };
 use docbox_web_scraper::{ResolvedWebsiteMetadata, WebsiteMetaService};
 use serde::{Deserialize, Serialize};
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    str::FromStr,
-};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 use thiserror::Error;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::Mutex;
 use url::Url;
 
 /// Configuration for caching data in the website metadata service cache
@@ -72,31 +69,26 @@ impl ResolveWebsiteConfig {
 pub struct ResolveWebsiteService {
     pub service: WebsiteMetaService,
     config: ResolveWebsiteConfig,
-    lock: StripeLock,
+
+    /// Lock for concurrent requests to prevent duplicate fetching
+    locks: RequestLock,
 }
 
-/// Number of stripes in the stripe locking impl
-const STRIPES: usize = 1024;
-
-/// Stripe based locking implementation for locking URL resolution
-struct StripeLock {
-    locks: [Mutex<()>; STRIPES],
+/// Simple per-url lock system
+#[derive(Default)]
+struct RequestLock {
+    locks: Mutex<HashMap<Url, Arc<Mutex<()>>>>,
 }
 
-impl Default for StripeLock {
-    fn default() -> StripeLock {
-        Self {
-            locks: std::array::from_fn(|_| Mutex::new(())),
-        }
+impl RequestLock {
+    pub async fn acquire(&self, url: &Url) -> Arc<Mutex<()>> {
+        let mut locks = self.locks.lock().await;
+        locks.entry(url.to_owned()).or_default().clone()
     }
-}
 
-impl StripeLock {
-    async fn acquire(&self, url: &str) -> MutexGuard<'_, ()> {
-        let mut hasher = DefaultHasher::new();
-        url.hash(&mut hasher);
-        let idx = (hasher.finish() as usize) % STRIPES;
-        self.locks[idx].lock().await
+    pub async fn remove(&self, url: &Url) {
+        let mut locks = self.locks.lock().await;
+        locks.remove(url);
     }
 }
 
@@ -109,16 +101,25 @@ impl ResolveWebsiteService {
         Self {
             service,
             config,
-            lock: Default::default(),
+            locks: Default::default(),
         }
     }
 
     /// Resolves the metadata for the website at the provided URL
     pub async fn resolve_website(&self, db: &DbPool, url: &Url) -> Option<ResolvedWebsiteMetadata> {
-        let _guard = self.lock.acquire(url.as_str()).await;
-
         // Check the database for existing metadata
         if let Some(value) = self.resolve_website_db(db, url).await {
+            return Some(value);
+        }
+
+        // Acquire lock before attempting to resolve
+        let lock = self.locks.acquire(url).await;
+        let _guard = lock.lock().await;
+
+        // Re-check the database for existing metadata in-case someone else resolved the data
+        if let Some(value) = self.resolve_website_db(db, url).await {
+            // Remove the lock in-case we added a lock
+            self.locks.remove(url).await;
             return Some(value);
         }
 
@@ -130,6 +131,7 @@ impl ResolveWebsiteService {
                 .await;
         }
 
+        self.locks.remove(url).await;
         resolved
     }
 
