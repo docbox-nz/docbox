@@ -33,6 +33,7 @@ use docbox_core::{
         upload_file::{UploadFile, UploadedFileData, upload_file},
         upload_file_presigned::{CreatePresigned, create_presigned_upload},
     },
+    tasks::background_task::background_task,
     utils::file::get_file_name_ext,
 };
 use docbox_database::models::{
@@ -41,7 +42,7 @@ use docbox_database::models::{
     folder::Folder,
     generated_file::{GeneratedFile, GeneratedFileType},
     presigned_upload_task::{PresignedTaskStatus, PresignedUploadTask, PresignedUploadTaskId},
-    tasks::{TaskStatus, background_task},
+    tasks::TaskStatus,
     user::User,
 };
 use docbox_processing::{ProcessingConfig, ProcessingLayer};
