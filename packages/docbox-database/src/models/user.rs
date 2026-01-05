@@ -24,10 +24,10 @@ impl User {
         image_id: Option<String>,
     ) -> DbResult<User> {
         sqlx::query(
-            r#"   
-            INSERT INTO "docbox_users" ("id", "name", "image_id") 
+            r#"
+            INSERT INTO "docbox_users" ("id", "name", "image_id")
             VALUES ($1, $2, $3)
-            ON CONFLICT ("id") 
+            ON CONFLICT ("id")
             DO UPDATE SET "name" = EXCLUDED."name", "image_id" = EXCLUDED."image_id"
         "#,
         )
@@ -40,7 +40,7 @@ impl User {
         Ok(User { id, name, image_id })
     }
 
-    #[allow(unused)]
+    /// Find a user by ID
     pub async fn find(db: impl DbExecutor<'_>, id: UserId) -> DbResult<Option<User>> {
         sqlx::query_as(r#"SELECT * FROM "docbox_users" WHERE "id" = $1"#)
             .bind(id)
