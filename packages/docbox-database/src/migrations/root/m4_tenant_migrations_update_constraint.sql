@@ -1,5 +1,5 @@
 ALTER TABLE "docbox_tenants_migrations"
-DROP CONSTRAINT "docbox_tenants_migrations_env_tenant_id_fkey";
+DROP CONSTRAINT IF EXISTS "docbox_tenants_migrations_env_tenant_id_fkey";
 
 ALTER TABLE "docbox_tenants_migrations"
 ADD CONSTRAINT "docbox_tenants_migrations_env_tenant_id_fkey"
