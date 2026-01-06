@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 pub type TenantId = Uuid;
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, FromRow, Serialize, PartialEq, Eq)]
 pub struct Tenant {
     /// Unique ID for the tenant
     pub id: TenantId,
@@ -111,25 +111,6 @@ impl Tenant {
         sqlx::query_as(r#"SELECT * FROM "docbox_tenants""#)
             .fetch_all(db)
             .await
-    }
-
-    /// Update the open search index for the tenant
-    pub async fn update_os_index(
-        &mut self,
-        db: impl DbExecutor<'_>,
-        os_index_name: String,
-    ) -> DbResult<()> {
-        sqlx::query(
-            r#"UPDATE "docbox_tenants" SET "os_index_name" = $1 WHERE "id" = $2 AND "env" = $3"#,
-        )
-        .bind(&os_index_name)
-        .bind(self.id)
-        .bind(&self.env)
-        .execute(db)
-        .await?;
-
-        self.os_index_name = os_index_name;
-        Ok(())
     }
 
     /// Deletes the tenant
