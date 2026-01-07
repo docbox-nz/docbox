@@ -123,9 +123,7 @@ pub async fn initialize_root_database(
 
     // Create the tenant database
     if let Err(err) = create_database(&db_root, ROOT_DATABASE_NAME).await
-        && !err
-            .as_database_error()
-            .is_some_and(|err| err.code().is_some_and(|code| code.to_string().eq("42P04")))
+        && !err.is_database_exists()
     {
         return Err(InitializeError::CreateRootDatabase(err));
     }
