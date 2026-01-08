@@ -13,7 +13,7 @@ use crate::{
         index_file::store_file_index,
         upload_file::{UploadFileError, store_generated_files},
     },
-    utils::file::get_file_name_ext,
+    utils::{file::get_file_name_ext, timing::handle_slow_future},
 };
 use docbox_database::{
     DbPool, DbResult,
@@ -22,13 +22,17 @@ use docbox_database::{
         generated_file::{CreateGeneratedFile, GeneratedFile},
     },
 };
-use docbox_processing::{ProcessingError, ProcessingIndexMetadata, ProcessingLayer, process_file};
+use docbox_processing::{
+    DEFAULT_PROCESS_TIMEOUT, ProcessingError, ProcessingIndexMetadata, ProcessingLayer,
+    process_file,
+};
 use docbox_search::TenantSearchIndex;
 use docbox_storage::{StorageLayerError, TenantStorageLayer};
 use futures::{StreamExt, future::BoxFuture};
 use mime::Mime;
-use std::ops::DerefMut;
+use std::{ops::DerefMut, time::Duration};
 use thiserror::Error;
+use tokio::time::timeout;
 use tracing::Instrument;
 
 pub async fn reprocess_octet_stream_files(
@@ -151,6 +155,9 @@ pub enum ProcessFileError {
 
     #[error("failed to update file mime")]
     SetMime,
+
+    #[error("timeout occurred while processing file")]
+    ConvertTimeout,
 }
 
 /// TODO: Handle rollback for failure
@@ -170,7 +177,25 @@ pub async fn perform_process_file(
         .await
         .inspect_err(|error| tracing::error!(?error, "Failed to get storage file"))?;
 
-    let processing_output = process_file(&None, &processing, bytes, &mime).await?;
+    let process_future = process_file(&None, &processing, bytes, &mime);
+
+    let process_timeout = processing
+        .config
+        .process_timeout
+        .unwrap_or(DEFAULT_PROCESS_TIMEOUT);
+
+    // Apply a 120s timeout to file processing, we can assume it has definitely failed if its taken that long
+    let process_future = timeout(process_timeout, process_future);
+
+    // Apply a slow future warning to the processing future
+    let processing_output = handle_slow_future(process_future, Duration::from_secs(25), || {
+        tracing::warn!(
+            ?file,
+            "file upload processing has taken over 25s to complete"
+        )
+    })
+    .await
+    .map_err(|_| ProcessFileError::ConvertTimeout)??;
 
     let mut index_metadata: Option<ProcessingIndexMetadata> = None;
 

@@ -90,6 +90,7 @@ async fn test_email_unpack_limiting_increased_limit_2() {
         &converter_container,
         ProcessingLayerConfig {
             max_unpack_iterations: Some(2),
+            ..Default::default()
         },
     )
     .await;
@@ -154,6 +155,7 @@ async fn test_email_unpack_limiting_increased_limit_3() {
         &converter_container,
         ProcessingLayerConfig {
             max_unpack_iterations: Some(3),
+            ..Default::default()
         },
     )
     .await;
@@ -221,6 +223,7 @@ async fn test_email_unpack_limiting_zero() {
         &converter_container,
         ProcessingLayerConfig {
             max_unpack_iterations: Some(0),
+            ..Default::default()
         },
     )
     .await;
@@ -281,6 +284,7 @@ async fn test_email_unpack_limiting_zero_request() {
         &converter_container,
         ProcessingLayerConfig {
             max_unpack_iterations: None,
+            ..Default::default()
         },
     )
     .await;

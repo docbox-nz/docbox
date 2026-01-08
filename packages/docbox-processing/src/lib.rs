@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::num::ParseIntError;
+use std::{num::ParseIntError, str::FromStr, time::Duration};
 
 use crate::{
     email::{EmailProcessingError, is_mail_mime, process_email},
@@ -154,13 +154,25 @@ pub struct ProcessingLayerConfig {
     ///
     /// Default: 1 (Unpack Only the immediate children)
     pub max_unpack_iterations: Option<usize>,
+
+    /// Maximum duration to allow the file processing to run for
+    /// the processing will be terminated if it takes longer than
+    /// this duration to run.
+    ///
+    /// Default: 300s
+    pub process_timeout: Option<Duration>,
 }
+
+pub const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Error)]
 pub enum ProcessingLayerConfigError {
     /// Value provided for max unpack iterations was invalid
     #[error("invalid DOCBOX_MAX_FILE_UNPACK_ITERATIONS value must be a number")]
     InvalidMaxIterations(ParseIntError),
+    /// Invalid process timeout seconds
+    #[error("DOCBOX_FILE_PROCESSING_TIMEOUT must be a number in seconds")]
+    InvalidProcessTimeout(<u64 as FromStr>::Err),
 }
 
 impl ProcessingLayerConfig {
@@ -174,8 +186,19 @@ impl ProcessingLayerConfig {
             })
             .transpose()?;
 
+        let process_timeout = std::env::var("DOCBOX_FILE_PROCESSING_TIMEOUT")
+            .ok()
+            .map(|process_timeout| {
+                process_timeout
+                    .parse::<u64>()
+                    .map_err(ProcessingLayerConfigError::InvalidProcessTimeout)
+                    .map(Duration::from_secs)
+            })
+            .transpose()?;
+
         Ok(ProcessingLayerConfig {
             max_unpack_iterations,
+            process_timeout,
         })
     }
 }
