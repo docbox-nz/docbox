@@ -2,6 +2,7 @@ use docbox_database::migrations::{apply_root_migrations, initialize_root_migrati
 use docbox_database::{
     DbPool, PgConnectOptions, PgPoolOptions, migrations::force_apply_tenant_migrations,
 };
+use testcontainers_modules::testcontainers::ImageExt;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use testcontainers_modules::{postgres::Postgres, testcontainers::ContainerAsync};
 
@@ -14,6 +15,7 @@ pub async fn test_database_container() -> ContainerAsync<Postgres> {
         .with_db_name(TEST_DB_NAME)
         .with_user(TEST_DB_USER)
         .with_password(TEST_DB_PASSWORD)
+        .with_tag("18.1-alpine")
         .start()
         .await
         .unwrap()
