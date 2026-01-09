@@ -233,28 +233,11 @@ impl Folder {
             id: FolderId,
         }
 
-        let results: Vec<TempIdRow> = sqlx::query_as(
-            r#"
-        -- Recursively collect all child folders
-        WITH RECURSIVE "folder_hierarchy" AS (
-            SELECT "id", "folder_id"
-            FROM "docbox_folders"
-            WHERE "docbox_folders"."id" = $1
-            UNION ALL (
-                SELECT
-                    "folder"."id",
-                    "folder"."folder_id"
-                FROM "docbox_folders" AS "folder"
-                INNER JOIN "folder_hierarchy" ON "folder"."folder_id" = "folder_hierarchy"."id"
-            )
-        )
-        CYCLE "id" SET "looped" USING "traversal_path"
-        SELECT "folder_hierarchy"."id" FROM "folder_hierarchy"
-      "#,
-        )
-        .bind(self.id)
-        .fetch_all(db)
-        .await?;
+        let results: Vec<TempIdRow> =
+            sqlx::query_as(r#"SELECT "id" FROM recursive_folder_children_ids($1)"#)
+                .bind(self.id)
+                .fetch_all(db)
+                .await?;
 
         Ok(results.into_iter().map(|value| value.id).collect())
     }
@@ -265,39 +248,11 @@ impl Folder {
         db: impl DbExecutor<'_>,
         folder_id: FolderId,
     ) -> DbResult<FolderChildrenCount> {
-        let (file_count, link_count, folder_count): (i64, i64, i64) = sqlx::query_as(
-            r#"
-        -- Recursively collect all child folders
-        WITH RECURSIVE "folder_hierarchy" AS (
-            SELECT "id", "folder_id"
-            FROM "docbox_folders"
-            WHERE "docbox_folders"."id" = $1
-            UNION ALL (
-                SELECT
-                    "folder"."id",
-                    "folder"."folder_id"
-                FROM "docbox_folders" AS "folder"
-                INNER JOIN "folder_hierarchy" ON "folder"."folder_id" = "folder_hierarchy"."id"
-            )
-        )
-        CYCLE "id" SET "looped" USING "traversal_path"
-        SELECT * FROM (
-            SELECT
-                -- Get counts of child tables
-                COUNT(DISTINCT "file"."id") AS "file_count",
-                COUNT(DISTINCT "link"."id") AS "link_count",
-                COUNT(DISTINCT "folder"."id") AS "folder_count"
-            FROM "folder_hierarchy"
-            -- Join on collections of files, links and folders
-            LEFT JOIN "docbox_files" AS "file" ON "file"."folder_id" = "folder_hierarchy"."id"
-            LEFT JOIN "docbox_links" AS "link" ON "link"."folder_id" = "folder_hierarchy"."id"
-            LEFT JOIN "docbox_folders" AS "folder" ON "folder"."folder_id" = "folder_hierarchy"."id"
-        ) AS "counts"
-        "#,
-        )
-        .bind(folder_id)
-        .fetch_one(db)
-        .await?;
+        let (file_count, link_count, folder_count): (i64, i64, i64) =
+            sqlx::query_as(r#"SELECT * FROM count_folder_children($1) AS "counts""#)
+                .bind(folder_id)
+                .fetch_one(db)
+                .await?;
 
         Ok(FolderChildrenCount {
             file_count,
@@ -312,32 +267,10 @@ impl Folder {
         db: impl DbExecutor<'_>,
         folder_id: FolderId,
     ) -> DbResult<Vec<FolderPathSegment>> {
-        sqlx::query_as(
-            r#"
-            WITH RECURSIVE "folder_hierarchy" AS (
-                SELECT "id", "name", "folder_id", 0 AS "depth"
-                FROM "docbox_folders"
-                WHERE "docbox_folders"."id" = $1
-                UNION ALL (
-                    SELECT
-                        "folder"."id",
-                        "folder"."name",
-                        "folder"."folder_id",
-                        "folder_hierarchy"."depth" + 1 as "depth"
-                    FROM "docbox_folders" AS "folder"
-                    INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
-                )
-            )
-            CYCLE "id" SET "looped" USING "traversal_path"
-            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
-            FROM "folder_hierarchy"
-            WHERE "folder_hierarchy"."id" <> $1
-            ORDER BY "folder_hierarchy"."depth" DESC
-        "#,
-        )
-        .bind(folder_id)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT "id", "name" FROM resolve_folder_path($1)"#)
+            .bind(folder_id)
+            .fetch_all(db)
+            .await
     }
 
     pub async fn move_to_folder(
@@ -511,21 +444,19 @@ impl Folder {
             ),
             "folder_hierarchy" AS (
                 SELECT
-                    "f"."id" AS "item_id",
-                    "folder"."id" AS "folder_id",
-                    "folder"."name" AS "folder_name",
-                    "folder"."folder_id" AS "parent_folder_id",
+                    "folder"."id" AS "item_id",
+                    "parent"."folder_id" AS "parent_folder_id",
                     0 AS "depth",
-                    jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
-                FROM "docbox_folders" "f"
-                JOIN "input_folders" "i" ON "f"."id" = "i"."folder_id"
-                JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
+                    jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) AS "path"
+                FROM "docbox_folders" "folder"
+                JOIN "input_folders" "i" ON "folder"."id" = "i"."folder_id"
+                JOIN "docbox_folders" "parent" ON "folder"."folder_id" = "parent"."id"
                 WHERE "folder"."document_box" = "i"."document_box"
+
                 UNION ALL
+
                 SELECT
                     "fh"."item_id",
-                    "parent"."id",
-                    "parent"."name",
                     "parent"."folder_id",
                     "fh"."depth" + 1,
                     jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
@@ -592,33 +523,6 @@ impl Folder {
 
         sqlx::query_as(
             r#"
-        -- Recursively resolve the folder paths for each folder creating a JSON array for the path
-        WITH RECURSIVE "folder_hierarchy" AS (
-            SELECT
-                "f"."id" AS "item_id",
-                "folder"."id" AS "folder_id",
-                "folder"."name" AS "folder_name",
-                "folder"."folder_id" AS "parent_folder_id",
-                0 AS "depth",
-                jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
-            FROM "docbox_folders" "f"
-            JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
-            WHERE "f"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2
-            UNION ALL
-            SELECT
-                "fh"."item_id",
-                "parent"."id",
-                "parent"."name",
-                "parent"."folder_id",
-                "fh"."depth" + 1,
-                jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
-            FROM "folder_hierarchy" "fh"
-            JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
-        ),
-        "folder_paths" AS (
-            SELECT "item_id", "path", ROW_NUMBER() OVER (PARTITION BY "item_id" ORDER BY "depth" DESC) AS "rn"
-            FROM "folder_hierarchy"
-        )
         SELECT
             -- folder itself
             "folder".*,
@@ -648,7 +552,7 @@ impl Folder {
         -- Join on the editor history latest edit user
         LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
         -- Join on the resolved folder path
-        LEFT JOIN "folder_paths" "fp" ON "folder".id = "fp"."item_id" AND "fp".rn = 1
+        LEFT JOIN resolve_folders_paths($1, $2) AS "fp" ON "folder".id = "fp"."item_id"
         WHERE "folder"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2"#,
         )
         .bind(folder_ids)

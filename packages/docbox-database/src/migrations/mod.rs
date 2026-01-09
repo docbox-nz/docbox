@@ -73,6 +73,10 @@ pub const TENANT_MIGRATIONS: &[(&str, &str)] = &[
         "m11_create_links_resolved_metadata_table",
         include_str!("./tenant/m11_create_links_resolved_metadata_table.sql"),
     ),
+    (
+        "m12_create_path_functions",
+        include_str!("./tenant/m12_create_path_functions.sql"),
+    ),
 ];
 
 /// Initialize the table used for root migration tracking

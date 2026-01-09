@@ -9,3 +9,10 @@ pub struct TotalSizeResult {
 pub struct CountResult {
     pub count: i64,
 }
+
+#[derive(sqlx::Type)]
+#[sqlx(type_name = "folder_input")]
+pub struct FolderInput {
+    pub document_box: String,
+    pub folder_id: uuid::Uuid,
+}
