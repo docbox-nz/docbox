@@ -404,32 +404,10 @@ impl File {
         db: impl DbExecutor<'_>,
         file_id: FileId,
     ) -> DbResult<Vec<FolderPathSegment>> {
-        sqlx::query_as(
-            r#"
-            WITH RECURSIVE "folder_hierarchy" AS (
-                SELECT "id", "name", "folder_id", 0 AS "depth"
-                FROM "docbox_files"
-                WHERE "docbox_files"."id" = $1
-                UNION ALL (
-                    SELECT
-                        "folder"."id",
-                        "folder"."name",
-                        "folder"."folder_id",
-                        "folder_hierarchy"."depth" + 1 as "depth"
-                    FROM "docbox_folders" AS "folder"
-                    INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
-                )
-            )
-            CYCLE "id" SET "looped" USING "traversal_path"
-            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
-            FROM "folder_hierarchy"
-            WHERE "folder_hierarchy"."id" <> $1
-            ORDER BY "folder_hierarchy"."depth" DESC
-        "#,
-        )
-        .bind(file_id)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT "id", "name" FROM resolve_file_path($1)"#)
+            .bind(file_id)
+            .fetch_all(db)
+            .await
     }
 
     pub async fn find_by_parent(

@@ -272,32 +272,10 @@ impl Link {
         db: impl DbExecutor<'_>,
         link_id: LinkId,
     ) -> DbResult<Vec<FolderPathSegment>> {
-        sqlx::query_as(
-            r#"
-            WITH RECURSIVE "folder_hierarchy" AS (
-                SELECT "id", "name", "folder_id", 0 AS "depth"
-                FROM "docbox_links"
-                WHERE "docbox_links"."id" = $1
-                UNION ALL (
-                    SELECT
-                        "folder"."id",
-                        "folder"."name",
-                        "folder"."folder_id",
-                        "folder_hierarchy"."depth" + 1 as "depth"
-                    FROM "docbox_folders" AS "folder"
-                    INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
-                )
-            )
-            CYCLE "id" SET "looped" USING "traversal_path"
-            SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
-            FROM "folder_hierarchy"
-            WHERE "folder_hierarchy"."id" <> $1
-            ORDER BY "folder_hierarchy"."depth" DESC
-        "#,
-        )
-        .bind(link_id)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT "id", "name" FROM resolve_link_path($1)"#)
+            .bind(link_id)
+            .fetch_all(db)
+            .await
     }
 
     /// Finds all links within the provided parent folder

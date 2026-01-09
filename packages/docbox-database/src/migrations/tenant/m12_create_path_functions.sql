@@ -33,6 +33,75 @@ WHERE "folder_hierarchy"."id" <> p_folder_id
 ORDER BY "folder_hierarchy"."depth" DESC
 $$;
 
+-- ==== ==== ==== ====
+-- Resolve the path of a link by ID
+-- ==== ==== ==== ====
+
+CREATE OR REPLACE FUNCTION resolve_link_path(
+    p_link_id uuid
+)
+RETURNS TABLE (
+    id uuid,
+    name text
+)
+LANGUAGE sql
+STABLE
+AS $$
+WITH RECURSIVE "folder_hierarchy" AS (
+    SELECT "id", "name", "folder_id", 0 AS "depth"
+    FROM "docbox_links"
+    WHERE "docbox_links"."id" = p_link_id
+    UNION ALL (
+        SELECT
+            "folder"."id",
+            "folder"."name",
+            "folder"."folder_id",
+            "folder_hierarchy"."depth" + 1 as "depth"
+        FROM "docbox_folders" AS "folder"
+        INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
+    )
+)
+CYCLE "id" SET "looped" USING "traversal_path"
+SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
+FROM "folder_hierarchy"
+WHERE "folder_hierarchy"."id" <> p_link_id
+ORDER BY "folder_hierarchy"."depth" DESC
+$$;
+
+-- ==== ==== ==== ====
+-- Resolve the path of a file by ID
+-- ==== ==== ==== ====
+
+CREATE OR REPLACE FUNCTION resolve_file_path(
+    p_file_id uuid
+)
+RETURNS TABLE (
+    id uuid,
+    name text
+)
+LANGUAGE sql
+STABLE
+AS $$
+WITH RECURSIVE "folder_hierarchy" AS (
+    SELECT "id", "name", "folder_id", 0 AS "depth"
+    FROM "docbox_files"
+    WHERE "docbox_files"."id" = p_file_id
+    UNION ALL (
+        SELECT
+            "folder"."id",
+            "folder"."name",
+            "folder"."folder_id",
+            "folder_hierarchy"."depth" + 1 as "depth"
+        FROM "docbox_folders" AS "folder"
+        INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
+    )
+)
+CYCLE "id" SET "looped" USING "traversal_path"
+SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
+FROM "folder_hierarchy"
+WHERE "folder_hierarchy"."id" <> p_file_id
+ORDER BY "folder_hierarchy"."depth" DESC
+$$;
 
 -- ==== ==== ==== ====
 -- Resolve a collection of folder paths for `p_folder_ids` withing `p_document_box`
