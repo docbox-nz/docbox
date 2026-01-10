@@ -3,7 +3,7 @@
 -- ================================================================
 
 CREATE OR REPLACE FUNCTION resolve_link_path(p_link_id UUID)
-RETURNS TABLE (id UUID, name VARCHAR)
+RETURNS SETOF docbox_path_segment
 LANGUAGE sql
 STABLE
 AS $$
@@ -21,13 +21,11 @@ WITH RECURSIVE "folder_hierarchy" AS (
         INNER JOIN "folder_hierarchy" ON "folder"."id" = "folder_hierarchy"."folder_id"
     )
 )
-SELECT "folder_hierarchy"."id", "folder_hierarchy"."name"
-FROM "folder_hierarchy"
-WHERE "folder_hierarchy"."id" <> p_link_id
-ORDER BY "folder_hierarchy"."depth" DESC
+SELECT ROW("fh"."id", "fh"."name")::docbox_path_segment
+FROM "folder_hierarchy" "fh"
+WHERE "fh"."id" <> p_link_id
+ORDER BY "fh"."depth" DESC
 $$;
-
-
 
 -- ================================================================
 -- Resolve a collection of link paths for `p_link_ids` within
@@ -38,7 +36,7 @@ CREATE OR REPLACE FUNCTION resolve_links_paths(
     p_document_box VARCHAR,
     p_link_ids UUID[]
 )
-RETURNS TABLE (item_id UUID, path JSONB)
+RETURNS TABLE (item_id UUID, path docbox_path_segment[])
 LANGUAGE sql
 STABLE
 AS $$
@@ -48,7 +46,7 @@ WITH RECURSIVE "folder_hierarchy" AS (
         "link"."id" AS "item_id",
         "parent"."folder_id" AS "parent_folder_id",
         0 AS "depth",
-        jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) AS "path"
+        ARRAY[ROW("parent"."id", "parent"."name")::docbox_path_segment] AS "path"
     FROM "docbox_links" "link"
     JOIN docbox_folders "parent" ON "link"."folder_id" = "parent"."id"
     WHERE "link"."id" = ANY(p_link_ids)
@@ -60,18 +58,13 @@ WITH RECURSIVE "folder_hierarchy" AS (
         "fh"."item_id",
         "parent"."folder_id",
         "fh"."depth" + 1,
-        jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
+        ARRAY[ROW("parent"."id", "parent"."name")::docbox_path_segment] || "fh"."path"
     FROM "folder_hierarchy" "fh"
     JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
-),
-"folder_paths" AS (
-    SELECT "item_id", "path", ROW_NUMBER() OVER (PARTITION BY "item_id" ORDER BY "depth" DESC) AS "rn"
-    FROM "folder_hierarchy"
 )
-SELECT "item_id", "path"
-FROM "folder_paths"
--- Only take the parent entries
-WHERE "rn" = 1
+SELECT DISTINCT ON ("item_id") "item_id", "path"
+FROM "folder_hierarchy"
+ORDER BY "item_id", "depth" DESC
 $$;
 
 
@@ -89,7 +82,7 @@ RETURNS TABLE (
     created_by docbox_user,
     last_modified_by docbox_user,
     last_modified_at TIMESTAMP WITH TIME ZONE,
-    full_path JSONB
+    full_path docbox_path_segment[]
 )
 LANGUAGE sql
 STABLE
@@ -200,7 +193,7 @@ RETURNS TABLE (
     created_by docbox_user,
     last_modified_by docbox_user,
     last_modified_at TIMESTAMP WITH TIME ZONE,
-    full_path JSONB,
+    full_path docbox_path_segment[],
     document_box VARCHAR
 )
 LANGUAGE sql
@@ -216,7 +209,7 @@ AS $$
                 "link"."id" AS "item_id",
                 "parent"."folder_id" AS "parent_folder_id",
                 0 AS "depth",
-                jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) AS "path"
+                ARRAY[ROW("parent"."id", "parent"."name")::docbox_path_segment] AS "path"
             FROM "docbox_links" "link"
             JOIN "input_links" "i" ON "link"."id" = "i"."link_id"
             JOIN "docbox_folders" "parent" ON "link"."folder_id" = "parent"."id"
@@ -228,13 +221,14 @@ AS $$
                 "fh"."item_id",
                 "parent"."folder_id",
                 "fh"."depth" + 1,
-                jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
+                ARRAY[ROW("parent"."id", "parent"."name")::docbox_path_segment] || "fh"."path"
             FROM "folder_hierarchy" "fh"
             JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
         ),
         "folder_paths" AS (
-            SELECT "item_id", "path", ROW_NUMBER() OVER (PARTITION BY "item_id" ORDER BY "depth" DESC) AS "rn"
+            SELECT DISTINCT ON ("item_id") "item_id", "path"
             FROM "folder_hierarchy"
+            ORDER BY "item_id", "depth" DESC
         )
     SELECT
         mk_docbox_link("link") AS "link",
@@ -244,17 +238,17 @@ AS $$
         "fp"."path" AS "full_path",
         "folder"."document_box" AS "document_box"
     FROM "docbox_links" AS "link"
-    LEFT JOIN "docbox_users" AS "cu"
-        ON "link"."created_by" = "cu"."id"
     INNER JOIN "docbox_folders" "folder"
         ON "link"."folder_id" = "folder"."id"
+    INNER JOIN "input_links" "i"
+        ON "link"."id" = "i"."link_id"
+        AND "folder"."document_box" = "i"."document_box"
+    LEFT JOIN "docbox_users" AS "cu"
+        ON "link"."created_by" = "cu"."id"
     LEFT JOIN "docbox_latest_edit_per_link" AS "ehl"
         ON "link"."id" = "ehl"."link_id"
     LEFT JOIN "docbox_users" AS "mu"
         ON "ehl"."user_id" = "mu"."id"
     LEFT JOIN "folder_paths" "fp"
-        ON "link".id = "fp"."item_id" AND "fp".rn = 1
-    JOIN "input_links" "i"
-        ON "link"."id" = "i"."link_id"
-    WHERE "folder"."document_box" = "i"."document_box"
+        ON "link".id = "fp"."item_id"
 $$;

@@ -6,15 +6,17 @@ use uuid::Uuid;
 
 use super::{
     document_box::DocumentBoxScopeRaw,
-    folder::{FolderId, FolderPathSegment},
+    folder::FolderId,
     user::{User, UserId},
 };
 use crate::{
     DbExecutor, DbResult,
     models::{
         document_box::DocumentBoxScopeRawRef,
-        folder::WithFullPath,
-        shared::{CountResult, DocboxInputPair, TotalSizeResult, WithFullPathScope},
+        shared::{
+            CountResult, DocboxInputPair, FolderPathSegment, TotalSizeResult, WithFullPath,
+            WithFullPathScope,
+        },
     },
 };
 
@@ -105,7 +107,6 @@ pub struct ResolvedFileWithExtra {
     #[serde(flatten)]
     #[sqlx(flatten)]
     pub file: FileWithExtra,
-    #[sqlx(json)]
     pub full_path: Vec<FolderPathSegment>,
 }
 

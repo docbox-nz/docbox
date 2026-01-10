@@ -2,8 +2,8 @@ use chrono::Utc;
 use docbox_database::models::{
     document_box::DocumentBox,
     file::{CreateFile, File},
-    folder::{CreateFolder, Folder, FolderPathSegment},
-    shared::DocboxInputPair,
+    folder::{CreateFolder, Folder},
+    shared::{DocboxInputPair, FolderPathSegment},
     user::User,
 };
 use uuid::Uuid;

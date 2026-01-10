@@ -1,8 +1,8 @@
 use docbox_database::models::{
     document_box::DocumentBox,
-    folder::{CreateFolder, Folder, FolderPathSegment},
+    folder::{CreateFolder, Folder},
     link::{CreateLink, Link},
-    shared::DocboxInputPair,
+    shared::{DocboxInputPair, FolderPathSegment},
     user::User,
 };
 

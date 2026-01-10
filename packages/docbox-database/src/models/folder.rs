@@ -1,13 +1,3 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use sqlx::{
-    postgres::{PgQueryResult, PgRow},
-    prelude::FromRow,
-};
-use tokio::try_join;
-use utoipa::ToSchema;
-use uuid::Uuid;
-
 use super::{
     document_box::DocumentBoxScopeRaw,
     file::{File, FileWithExtra},
@@ -16,8 +6,14 @@ use super::{
 };
 use crate::{
     DbExecutor, DbPool, DbResult,
-    models::shared::{CountResult, DocboxInputPair},
+    models::shared::{CountResult, DocboxInputPair, FolderPathSegment, WithFullPath},
 };
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use sqlx::{postgres::PgQueryResult, prelude::FromRow};
+use tokio::try_join;
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 pub type FolderId = Uuid;
 
@@ -81,24 +77,6 @@ impl ResolvedFolderWithExtra {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
-pub struct FolderPathSegment {
-    #[schema(value_type = Uuid)]
-    pub id: FolderId,
-    pub name: String,
-}
-
-impl<'r> FromRow<'r, PgRow> for FolderPathSegment {
-    fn from_row(row: &'r PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        let id = row.try_get(0)?;
-        let name = row.try_get(1)?;
-
-        Ok(FolderPathSegment { id, name })
-    }
-}
-
 #[derive(Debug, Clone, Serialize, ToSchema, FromRow, sqlx::Type)]
 #[sqlx(type_name = "docbox_folder")]
 pub struct Folder {
@@ -153,15 +131,6 @@ pub struct FolderWithExtra {
     pub last_modified_by: Option<User>,
     /// Last time the folder was modified
     pub last_modified_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, FromRow, Serialize, Deserialize, ToSchema)]
-pub struct WithFullPath<T> {
-    #[serde(flatten)]
-    #[sqlx(flatten)]
-    pub data: T,
-    #[sqlx(json)]
-    pub full_path: Vec<FolderPathSegment>,
 }
 
 #[derive(Debug, Clone, Default)]

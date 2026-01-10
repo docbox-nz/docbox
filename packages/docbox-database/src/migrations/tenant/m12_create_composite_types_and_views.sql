@@ -48,6 +48,11 @@ CREATE TYPE docbox_input_pair AS (
     "id" UUID
 );
 
+CREATE TYPE docbox_path_segment AS (
+    "id" UUID,
+    "name" VARCHAR
+);
+
 -- ================================================================
 -- Views to query the latest edit history on a per  item type basis
 -- ================================================================

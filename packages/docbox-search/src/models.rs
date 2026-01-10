@@ -7,8 +7,9 @@ use chrono::{DateTime, Utc};
 use docbox_database::models::{
     document_box::{DocumentBoxScopeRaw, WithScope},
     file::FileWithExtra,
-    folder::{FolderId, FolderPathSegment, FolderWithExtra},
+    folder::{FolderId, FolderWithExtra},
     link::LinkWithExtra,
+    shared::FolderPathSegment,
     user::UserId,
 };
 use garde::Validate;

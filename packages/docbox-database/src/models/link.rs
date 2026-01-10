@@ -1,13 +1,12 @@
 use super::{
     document_box::DocumentBoxScopeRaw,
-    folder::{FolderId, FolderPathSegment},
+    folder::FolderId,
     user::{User, UserId},
 };
 use crate::{
     DbExecutor, DbResult,
-    models::{
-        folder::WithFullPath,
-        shared::{CountResult, DocboxInputPair, WithFullPathScope},
+    models::shared::{
+        CountResult, DocboxInputPair, FolderPathSegment, WithFullPath, WithFullPathScope,
     },
 };
 use chrono::{DateTime, Utc};
@@ -86,7 +85,6 @@ pub struct ResolvedLinkWithExtra {
     #[serde(flatten)]
     #[sqlx(flatten)]
     pub link: LinkWithExtra,
-    #[sqlx(json)]
     pub full_path: Vec<FolderPathSegment>,
 }
 

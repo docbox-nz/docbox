@@ -3,9 +3,9 @@ use docbox_database::{
     models::{
         document_box::DocumentBoxScopeRaw,
         file::{File, FileId, FileWithExtra},
-        folder::{Folder, FolderId, FolderPathSegment, FolderWithExtra},
+        folder::{Folder, FolderId, FolderWithExtra},
         link::{Link, LinkId, LinkWithExtra},
-        shared::DocboxInputPair,
+        shared::{DocboxInputPair, FolderPathSegment},
     },
 };
 use docbox_search::{

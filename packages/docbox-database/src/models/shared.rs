@@ -8,7 +8,7 @@ use sqlx::{postgres::types::PgRecordEncoder, prelude::FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::models::{document_box::DocumentBoxScopeRaw, folder::FolderPathSegment};
+use crate::models::{document_box::DocumentBoxScopeRaw, folder::FolderId};
 
 #[derive(Debug, FromRow)]
 pub struct TotalSizeResult {
@@ -18,6 +18,14 @@ pub struct TotalSizeResult {
 #[derive(Debug, FromRow)]
 pub struct CountResult {
     pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq, FromRow, sqlx::Type)]
+#[sqlx(type_name = "docbox_path_segment")]
+pub struct FolderPathSegment {
+    #[schema(value_type = Uuid)]
+    pub id: FolderId,
+    pub name: String,
 }
 
 pub struct DocboxInputPair<'a> {
@@ -67,7 +75,14 @@ pub struct WithFullPathScope<T> {
     #[serde(flatten)]
     #[sqlx(flatten)]
     pub data: T,
-    #[sqlx(json)]
     pub full_path: Vec<FolderPathSegment>,
     pub document_box: DocumentBoxScopeRaw,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize, ToSchema)]
+pub struct WithFullPath<T> {
+    #[serde(flatten)]
+    #[sqlx(flatten)]
+    pub data: T,
+    pub full_path: Vec<FolderPathSegment>,
 }
