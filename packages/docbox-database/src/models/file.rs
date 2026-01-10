@@ -1,9 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::{
-    postgres::{PgQueryResult, PgRow},
-    prelude::FromRow,
-};
+use sqlx::{postgres::PgQueryResult, prelude::FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -16,23 +13,30 @@ use crate::{
     DbExecutor, DbResult,
     models::{
         document_box::DocumentBoxScopeRawRef,
-        folder::{WithFullPath, WithFullPathScope},
-        shared::{CountResult, TotalSizeResult},
+        folder::WithFullPath,
+        shared::{CountResult, DocboxInputPair, TotalSizeResult, WithFullPathScope},
     },
 };
 
 pub type FileId = Uuid;
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, FromRow, Serialize, sqlx::Type, ToSchema)]
+#[sqlx(type_name = "docbox_file")]
 pub struct File {
     /// Unique identifier for the file
+    #[schema(value_type = Uuid)]
     pub id: FileId,
     /// Name of the file
     pub name: String,
     /// Mime type of the file content
     pub mime: String,
     /// Parent folder ID
+    #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
+    /// Optional parent file ID if the file is a child of
+    /// some other file (i.e attachment for an email file)
+    #[schema(value_type = Option<Uuid>)]
+    pub parent_id: Option<FileId>,
     /// Hash of the file bytes stored in S3
     pub hash: String,
     /// Size of the file in bytes
@@ -47,10 +51,32 @@ pub struct File {
     /// When the file was created
     pub created_at: DateTime<Utc>,
     /// User who created the file
+    #[serde(skip)]
     pub created_by: Option<UserId>,
-    /// Optional parent file ID if the file is a child of
-    /// some other file (i.e attachment for an email file)
-    pub parent_id: Option<Uuid>,
+}
+
+impl Eq for File {}
+
+impl PartialEq for File {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+            && self.name.eq(&other.name)
+            && self.mime.eq(&other.mime)
+            && self.folder_id.eq(&other.folder_id)
+            && self.parent_id.eq(&other.parent_id)
+            && self.hash.eq(&other.hash)
+            && self.size.eq(&other.size)
+            && self.encrypted.eq(&other.encrypted)
+            && self.pinned.eq(&other.pinned)
+            && self.file_key.eq(&other.file_key)
+            && self.created_by.eq(&self.created_by)
+            // Reduce precision when checking creation timestamp
+            // (Database does not store the full precision)
+            && self
+                .created_at
+                .timestamp_millis()
+                .eq(&other.created_at.timestamp_millis())
+    }
 }
 
 #[derive(Debug, FromRow, Serialize)]
@@ -63,39 +89,14 @@ pub struct FileWithScope {
 /// File with the resolved creator and last modified data
 #[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
 pub struct FileWithExtra {
-    /// Unique identifier for the file
-    #[schema(value_type = Uuid)]
-    pub id: FileId,
-    /// Name of the file
-    pub name: String,
-    /// Mime type of the file content
-    pub mime: String,
-    /// Parent folder ID
-    #[schema(value_type = Uuid)]
-    pub folder_id: FolderId,
-    /// Hash of the file bytes stored in S3
-    pub hash: String,
-    /// Size of the file in bytes
-    pub size: i32,
-    /// Whether the file was determined to be encrypted when processing
-    pub encrypted: bool,
-    /// Whether the file is marked as pinned
-    pub pinned: bool,
-    /// When the file was created
-    pub created_at: DateTime<Utc>,
-    /// User who created the file
-    #[sqlx(flatten)]
+    #[serde(flatten)]
+    pub file: File,
     #[schema(nullable, value_type = User)]
-    pub created_by: CreatedByUser,
+    pub created_by: Option<User>,
+    #[schema(nullable, value_type = User)]
+    pub last_modified_by: Option<User>,
     /// Last time the file was modified
     pub last_modified_at: Option<DateTime<Utc>>,
-    /// User who last modified the file
-    #[sqlx(flatten)]
-    #[schema(nullable, value_type = User)]
-    pub last_modified_by: LastModifiedByUser,
-    /// Optional parent file if the file is a child
-    #[schema(value_type = Option<Uuid>)]
-    pub parent_id: Option<FileId>,
 }
 
 /// File with extra with an additional resolved full path
@@ -108,55 +109,7 @@ pub struct ResolvedFileWithExtra {
     pub full_path: Vec<FolderPathSegment>,
 }
 
-/// Wrapper type for extracting a [User] that was joined
-/// from another table where the fields are prefixed with "cb_"
-#[derive(Debug, Clone, Serialize)]
-#[serde(transparent)]
-pub struct CreatedByUser(pub Option<User>);
-
-impl<'r> FromRow<'r, PgRow> for CreatedByUser {
-    fn from_row(row: &'r PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        let id: Option<UserId> = row.try_get("cb_id")?;
-        if let Some(id) = id {
-            let name: Option<String> = row.try_get("cb_name")?;
-            let image_id: Option<String> = row.try_get("cb_image_id")?;
-            return Ok(CreatedByUser(Some(User { id, name, image_id })));
-        }
-
-        Ok(CreatedByUser(None))
-    }
-}
-
-/// Wrapper type for extracting a [User] that was joined
-/// from another table where the fields are prefixed with "lmb_"
-#[derive(Debug, Clone, Serialize)]
-#[serde(transparent)]
-pub struct LastModifiedByUser(pub Option<User>);
-
-impl<'r> FromRow<'r, PgRow> for LastModifiedByUser {
-    fn from_row(row: &'r PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        let id: Option<UserId> = row.try_get("lmb_id")?;
-        if let Some(id) = id {
-            let name: Option<String> = row.try_get("lmb_name")?;
-            let image_id: Option<String> = row.try_get("lmb_image_id")?;
-            return Ok(LastModifiedByUser(Some(User { id, name, image_id })));
-        }
-
-        Ok(LastModifiedByUser(None))
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct FileIdWithScope {
-    pub file_id: FileId,
-    pub scope: DocumentBoxScopeRaw,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CreateFile {
     /// ID for the file to use
     pub id: FileId,
@@ -177,6 +130,61 @@ pub struct CreateFile {
 }
 
 impl File {
+    pub async fn create(
+        db: impl DbExecutor<'_>,
+        CreateFile {
+            id,
+            parent_id,
+            name,
+            mime,
+            folder_id,
+            hash,
+            size,
+            file_key,
+            created_by,
+            created_at,
+            encrypted,
+        }: CreateFile,
+    ) -> DbResult<File> {
+        sqlx::query(
+            r#"INSERT INTO "docbox_files" (
+                    "id", "name", "mime", "folder_id", "hash", "size",
+                    "encrypted", "file_key", "created_by", "created_at",
+                    "parent_id"
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                "#,
+        )
+        .bind(id)
+        .bind(name.as_str())
+        .bind(mime.as_str())
+        .bind(folder_id)
+        .bind(hash.as_str())
+        .bind(size)
+        .bind(encrypted)
+        .bind(file_key.as_str())
+        .bind(created_by.as_ref())
+        .bind(created_at)
+        .bind(parent_id)
+        .execute(db)
+        .await?;
+
+        Ok(File {
+            id,
+            name,
+            mime,
+            folder_id,
+            hash,
+            size,
+            encrypted,
+            file_key,
+            created_by,
+            created_at,
+            parent_id,
+            pinned: false,
+        })
+    }
+
     pub async fn all(
         db: impl DbExecutor<'_>,
         offset: u64,
@@ -297,61 +305,6 @@ impl File {
         Ok(self)
     }
 
-    pub async fn create(
-        db: impl DbExecutor<'_>,
-        CreateFile {
-            id,
-            parent_id,
-            name,
-            mime,
-            folder_id,
-            hash,
-            size,
-            file_key,
-            created_by,
-            created_at,
-            encrypted,
-        }: CreateFile,
-    ) -> DbResult<File> {
-        sqlx::query(
-            r#"INSERT INTO "docbox_files" (
-                    "id", "name", "mime", "folder_id", "hash", "size",
-                    "encrypted", "file_key", "created_by", "created_at",
-                    "parent_id"
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                "#,
-        )
-        .bind(id)
-        .bind(name.as_str())
-        .bind(mime.as_str())
-        .bind(folder_id)
-        .bind(hash.as_str())
-        .bind(size)
-        .bind(encrypted)
-        .bind(file_key.as_str())
-        .bind(created_by.as_ref())
-        .bind(created_at)
-        .bind(parent_id)
-        .execute(db)
-        .await?;
-
-        Ok(File {
-            id,
-            name,
-            mime,
-            folder_id,
-            hash,
-            size,
-            encrypted,
-            file_key,
-            created_by,
-            created_at,
-            parent_id,
-            pinned: false,
-        })
-    }
-
     pub async fn all_convertable_paged(
         db: impl DbExecutor<'_>,
         offset: u64,
@@ -439,164 +392,27 @@ impl File {
             return Ok(Vec::new());
         }
 
-        sqlx::query_as(
-            r#"
-        -- Recursively resolve the file paths for each file creating a JSON array for the path
-        WITH RECURSIVE "folder_hierarchy" AS (
-            SELECT
-                "f"."id" AS "file_id",
-                "folder"."id" AS "folder_id",
-                "folder"."name" AS "folder_name",
-                "folder"."folder_id" AS "parent_folder_id",
-                0 AS "depth",
-                jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
-            FROM "docbox_files" "f"
-            JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
-            WHERE "f"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2
-            UNION ALL
-            SELECT
-                "fh"."file_id",
-                "parent"."id",
-                "parent"."name",
-                "parent"."folder_id",
-                "fh"."depth" + 1,
-                jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
-            FROM "folder_hierarchy" "fh"
-            JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
-        ),
-        "folder_paths" AS (
-            SELECT "file_id", "path", ROW_NUMBER() OVER (PARTITION BY "file_id" ORDER BY "depth" DESC) AS "rn"
-            FROM "folder_hierarchy"
-        )
-        SELECT
-            -- File itself
-            "file".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id" ,
-            -- File path from path lookup
-            "fp"."path" AS "full_path"
-        FROM "docbox_files" AS "file"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "file"."created_by" = "cu"."id"
-        -- Join on the parent folder
-        INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        -- Join on the resolved folder path
-        LEFT JOIN "folder_paths" "fp" ON "file".id = "fp"."file_id" AND "fp".rn = 1
-        WHERE "file"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2"#,
-        )
-        .bind(file_ids)
-        .bind(scope)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_files_with_extra($1, $2)"#)
+            .bind(scope)
+            .bind(file_ids)
+            .fetch_all(db)
+            .await
     }
 
     /// Finds a collection of files that are within various document box scopes, resolves
     /// both the files themselves and the folder path to traverse to get to each file
     pub async fn resolve_with_extra_mixed_scopes(
         db: impl DbExecutor<'_>,
-        files_scope_with_id: Vec<(DocumentBoxScopeRaw, FileId)>,
+        files_scope_with_id: Vec<DocboxInputPair<'_>>,
     ) -> DbResult<Vec<WithFullPathScope<FileWithExtra>>> {
         if files_scope_with_id.is_empty() {
             return Ok(Vec::new());
         }
 
-        let (scopes, file_ids): (Vec<String>, Vec<FileId>) =
-            files_scope_with_id.into_iter().unzip();
-
         sqlx::query_as(
-            r#"
-        -- Recursively resolve the file paths for each file creating a JSON array for the path
-        WITH RECURSIVE
-            "input_files" AS (
-                SELECT file_id, document_box
-                FROM UNNEST($1::text[], $2::uuid[]) AS t(document_box, file_id)
-            ),
-            "folder_hierarchy" AS (
-                SELECT
-                    "f"."id" AS "file_id",
-                    "folder"."id" AS "folder_id",
-                    "folder"."name" AS "folder_name",
-                    "folder"."folder_id" AS "parent_folder_id",
-                    0 AS "depth",
-                    jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
-                FROM "docbox_files" "f"
-                JOIN "input_files" "i" ON "f"."id" = "i"."file_id"
-                JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
-                WHERE "folder"."document_box" = "i"."document_box"
-                UNION ALL
-                SELECT
-                    "fh"."file_id",
-                    "parent"."id",
-                    "parent"."name",
-                    "parent"."folder_id",
-                    "fh"."depth" + 1,
-                    jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
-                FROM "folder_hierarchy" "fh"
-                JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
-            ),
-            "folder_paths" AS (
-                SELECT "file_id", "path", ROW_NUMBER() OVER (PARTITION BY "file_id" ORDER BY "depth" DESC) AS "rn"
-                FROM "folder_hierarchy"
-            )
-        SELECT
-            -- File itself
-            "file".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id" ,
-            -- File path from path lookup
-            "fp"."path" AS "full_path",
-            -- Include document box in response
-            "folder"."document_box" AS "document_box"
-        FROM "docbox_files" AS "file"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "file"."created_by" = "cu"."id"
-        -- Join on the parent folder
-        INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        -- Join on the resolved folder path
-        LEFT JOIN "folder_paths" "fp" ON "file".id = "fp"."file_id" AND "fp".rn = 1
-        -- Join on the input files for filtering
-        JOIN "input_files" "i" ON "file"."id" = "i"."file_id"
-        -- Ensure correct document box
-        WHERE "folder"."document_box" = "i"."document_box""#,
+            r#"SELECT * FROM resolve_files_with_extra_mixed_scopes($1::docbox_input_pair[])"#,
         )
-        .bind(scopes)
-        .bind(file_ids)
+        .bind(files_scope_with_id)
         .fetch_all(db)
         .await
     }
@@ -609,120 +425,31 @@ impl File {
         scope: &DocumentBoxScopeRaw,
         file_id: FileId,
     ) -> DbResult<Option<FileWithExtra>> {
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- File itself
-            "file".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id"
-        FROM "docbox_files" AS "file"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "file"."created_by" = "cu"."id"
-        -- Join on the parent folder
-        INNER JOIN "docbox_folders" "folder" ON "file"."folder_id" = "folder"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        WHERE "file"."id" = $1 AND "folder"."document_box" = $2"#,
-        )
-        .bind(file_id)
-        .bind(scope)
-        .fetch_optional(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_file_by_id_with_extra($1, $2)"#)
+            .bind(scope)
+            .bind(file_id)
+            .fetch_optional(db)
+            .await
     }
 
     pub async fn find_by_parent_folder_with_extra(
         db: impl DbExecutor<'_>,
         parent_id: FolderId,
     ) -> DbResult<Vec<FileWithExtra>> {
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- File itself
-            "file".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id"
-        FROM "docbox_files" AS "file"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "file"."created_by" = "cu"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        WHERE "file"."folder_id" = $1"#,
-        )
-        .bind(parent_id)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_files_by_parent_folder_with_extra($1)"#)
+            .bind(parent_id)
+            .fetch_all(db)
+            .await
     }
 
     pub async fn find_by_parent_file_with_extra(
         db: impl DbExecutor<'_>,
         parent_id: FileId,
     ) -> DbResult<Vec<FileWithExtra>> {
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- File itself
-            "file".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id"
-        FROM "docbox_files" AS "file"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "file"."created_by" = "cu"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("file_id") "file_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "file_id", "created_at" DESC
-        ) AS "ehl" ON "file"."id" = "ehl"."file_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        WHERE "file"."parent_id" = $1"#,
-        )
-        .bind(parent_id)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_files_by_parent_file_with_extra($1)"#)
+            .bind(parent_id)
+            .fetch_all(db)
+            .await
     }
 
     /// Get the total number of files in the tenant

@@ -20,7 +20,7 @@ use docbox_core::folders::{
 };
 use docbox_database::models::{
     edit_history::EditHistory,
-    folder::{self, Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
+    folder::{Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
 };
 
 pub const FOLDER_TAG: &str = "Folder";
@@ -91,14 +91,10 @@ pub async fn create(
         StatusCode::CREATED,
         Json(FolderResponse {
             folder: FolderWithExtra {
-                id: folder.id,
-                name: folder.name,
-                folder_id: folder.folder_id,
-                created_at: folder.created_at,
-                created_by: folder::CreatedByUser(created_by),
+                folder,
+                created_by,
                 last_modified_at: None,
-                last_modified_by: folder::LastModifiedByUser(None),
-                pinned: folder.pinned,
+                last_modified_by: None,
             },
             children: ResolvedFolderWithExtra::default(),
         }),
@@ -142,7 +138,7 @@ pub async fn get(
         // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
-    let children = ResolvedFolderWithExtra::resolve(&db, folder.id)
+    let children = ResolvedFolderWithExtra::resolve(&db, folder.folder.id)
         .await
         .map_err(|error| {
             tracing::error!(?error, "failed to resolve folder children");

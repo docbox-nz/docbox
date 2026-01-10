@@ -74,8 +74,20 @@ pub const TENANT_MIGRATIONS: &[(&str, &str)] = &[
         include_str!("./tenant/m11_create_links_resolved_metadata_table.sql"),
     ),
     (
-        "m12_create_path_functions",
-        include_str!("./tenant/m12_create_path_functions.sql"),
+        "m12_create_composite_types_and_views",
+        include_str!("./tenant/m12_create_composite_types_and_views.sql"),
+    ),
+    (
+        "m13_create_folder_functions",
+        include_str!("./tenant/m13_create_folder_functions.sql"),
+    ),
+    (
+        "m14_create_link_functions",
+        include_str!("./tenant/m14_create_link_functions.sql"),
+    ),
+    (
+        "m15_create_file_functions",
+        include_str!("./tenant/m15_create_file_functions.sql"),
     ),
 ];
 

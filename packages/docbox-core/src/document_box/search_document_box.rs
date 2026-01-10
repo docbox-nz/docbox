@@ -5,6 +5,7 @@ use docbox_database::{
         file::{File, FileId, FileWithExtra},
         folder::{Folder, FolderId, FolderPathSegment, FolderWithExtra},
         link::{Link, LinkId, LinkWithExtra},
+        shared::DocboxInputPair,
     },
 };
 use docbox_search::{
@@ -140,17 +141,17 @@ pub async fn resolve_search_results_same_scope(
     // Create maps to take the results from
     let mut files: HashMap<FileId, (FileWithExtra, Vec<FolderPathSegment>)> = files
         .into_iter()
-        .map(|item| (item.data.id, (item.data, item.full_path)))
+        .map(|item| (item.data.file.id, (item.data, item.full_path)))
         .collect();
 
     let mut folders: HashMap<FolderId, (FolderWithExtra, Vec<FolderPathSegment>)> = folders
         .into_iter()
-        .map(|item| (item.data.id, (item.data, item.full_path)))
+        .map(|item| (item.data.folder.id, (item.data, item.full_path)))
         .collect();
 
     let mut links: HashMap<LinkId, (LinkWithExtra, Vec<FolderPathSegment>)> = links
         .into_iter()
-        .map(|item| (item.data.id, (item.data, item.full_path)))
+        .map(|item| (item.data.link.id, (item.data, item.full_path)))
         .collect();
 
     Ok(results
@@ -189,9 +190,15 @@ pub async fn resolve_search_results_mixed_scopes(
 
     for hit in &results {
         match hit.item_ty {
-            SearchIndexType::File => file_ids.push((hit.document_box.clone(), hit.item_id)),
-            SearchIndexType::Folder => folder_ids.push((hit.document_box.clone(), hit.item_id)),
-            SearchIndexType::Link => link_ids.push((hit.document_box.clone(), hit.item_id)),
+            SearchIndexType::File => {
+                file_ids.push(DocboxInputPair::new(&hit.document_box, hit.item_id))
+            }
+            SearchIndexType::Folder => {
+                folder_ids.push(DocboxInputPair::new(&hit.document_box, hit.item_id))
+            }
+            SearchIndexType::Link => {
+                link_ids.push(DocboxInputPair::new(&hit.document_box, hit.item_id))
+            }
         }
     }
 
@@ -207,7 +214,7 @@ pub async fn resolve_search_results_mixed_scopes(
             .into_iter()
             .map(|item| {
                 (
-                    (item.document_box, item.data.id),
+                    (item.document_box, item.data.file.id),
                     (item.data, item.full_path),
                 )
             })
@@ -220,7 +227,7 @@ pub async fn resolve_search_results_mixed_scopes(
         .into_iter()
         .map(|item| {
             (
-                (item.document_box, item.data.id),
+                (item.data.folder.document_box.clone(), item.data.folder.id),
                 (item.data, item.full_path),
             )
         })
@@ -231,7 +238,7 @@ pub async fn resolve_search_results_mixed_scopes(
             .into_iter()
             .map(|item| {
                 (
-                    (item.document_box, item.data.id),
+                    (item.document_box, item.data.link.id),
                     (item.data, item.full_path),
                 )
             })

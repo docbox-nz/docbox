@@ -14,7 +14,10 @@ use super::{
     link::{Link, LinkWithExtra},
     user::{User, UserId},
 };
-use crate::{DbExecutor, DbPool, DbResult, models::shared::CountResult};
+use crate::{
+    DbExecutor, DbPool, DbResult,
+    models::shared::{CountResult, DocboxInputPair},
+};
 
 pub type FolderId = Uuid;
 
@@ -78,7 +81,7 @@ impl ResolvedFolderWithExtra {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 pub struct FolderPathSegment {
     #[schema(value_type = Uuid)]
     pub id: FolderId,
@@ -96,9 +99,11 @@ impl<'r> FromRow<'r, PgRow> for FolderPathSegment {
     }
 }
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema, FromRow, sqlx::Type)]
+#[sqlx(type_name = "docbox_folder")]
 pub struct Folder {
     /// Unique identifier for the folder
+    #[schema(value_type = Uuid)]
     pub id: FolderId,
     /// Name of the file
     pub name: String,
@@ -109,42 +114,45 @@ pub struct Folder {
     /// ID of the document box the folder belongs to
     pub document_box: DocumentBoxScopeRaw,
     /// Parent folder ID if the folder is a child
-    pub folder_id: Option<FolderId>,
-
-    /// When the file was created
-    pub created_at: DateTime<Utc>,
-
-    /// User who created the folder
-    pub created_by: Option<UserId>,
-}
-
-#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
-pub struct FolderWithExtra {
-    /// Unique identifier for the folder
-    #[schema(value_type = Uuid)]
-    pub id: FolderId,
-    /// Name of the file
-    pub name: String,
-
-    /// Whether the folder is marked as pinned
-    pub pinned: bool,
-
-    /// Parent folder ID if the folder is a child
     #[schema(value_type = Option<Uuid>)]
     pub folder_id: Option<FolderId>,
 
     /// When the folder was created
     pub created_at: DateTime<Utc>,
     /// User who created the folder
-    #[sqlx(flatten)]
+    #[serde(skip)]
+    pub created_by: Option<UserId>,
+}
+
+impl Eq for Folder {}
+
+impl PartialEq for Folder {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+            && self.name.eq(&other.name)
+            && self.pinned.eq(&other.pinned)
+            && self.document_box.eq(&other.document_box)
+            && self.folder_id.eq(&other.folder_id)
+            && self.created_by.eq(&self.created_by)
+            // Reduce precision when checking creation timestamp
+            // (Database does not store the full precision)
+            && self
+                .created_at
+                .timestamp_millis()
+                .eq(&other.created_at.timestamp_millis())
+    }
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
+pub struct FolderWithExtra {
+    #[serde(flatten)]
+    pub folder: Folder,
     #[schema(nullable, value_type = User)]
-    pub created_by: CreatedByUser,
+    pub created_by: Option<User>,
+    #[schema(nullable, value_type = User)]
+    pub last_modified_by: Option<User>,
     /// Last time the folder was modified
     pub last_modified_at: Option<DateTime<Utc>>,
-    /// User who last modified the folder
-    #[sqlx(flatten)]
-    #[schema(nullable, value_type = User)]
-    pub last_modified_by: LastModifiedByUser,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize, ToSchema)]
@@ -156,58 +164,7 @@ pub struct WithFullPath<T> {
     pub full_path: Vec<FolderPathSegment>,
 }
 
-#[derive(Debug, Clone, FromRow, Serialize, Deserialize, ToSchema)]
-pub struct WithFullPathScope<T> {
-    #[serde(flatten)]
-    #[sqlx(flatten)]
-    pub data: T,
-    #[sqlx(json)]
-    pub full_path: Vec<FolderPathSegment>,
-    pub document_box: DocumentBoxScopeRaw,
-}
-
-/// Wrapper type for extracting a [User] that was joined
-/// from another table where the fields are prefixed with "cb_"
-#[derive(Debug, Clone, Serialize)]
-#[serde(transparent)]
-pub struct CreatedByUser(pub Option<User>);
-
-impl<'r> FromRow<'r, PgRow> for CreatedByUser {
-    fn from_row(row: &'r PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        let id: Option<UserId> = row.try_get("cb_id")?;
-        if let Some(id) = id {
-            let name: Option<String> = row.try_get("cb_name")?;
-            let image_id: Option<String> = row.try_get("cb_image_id")?;
-            return Ok(CreatedByUser(Some(User { id, name, image_id })));
-        }
-
-        Ok(CreatedByUser(None))
-    }
-}
-
-/// Wrapper type for extracting a [User] that was joined
-/// from another table where the fields are prefixed with "lmb_id"
-#[derive(Debug, Clone, Serialize)]
-#[serde(transparent)]
-pub struct LastModifiedByUser(pub Option<User>);
-
-impl<'r> FromRow<'r, PgRow> for LastModifiedByUser {
-    fn from_row(row: &'r PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        let id: Option<UserId> = row.try_get("lmb_id")?;
-        if let Some(id) = id {
-            let name: Option<String> = row.try_get("lmb_name")?;
-            let image_id: Option<String> = row.try_get("lmb_image_id")?;
-            return Ok(LastModifiedByUser(Some(User { id, name, image_id })));
-        }
-
-        Ok(LastModifiedByUser(None))
-    }
-}
-
+#[derive(Debug, Clone, Default)]
 pub struct CreateFolder {
     pub name: String,
     pub document_box: DocumentBoxScopeRaw,
@@ -223,6 +180,47 @@ pub struct FolderChildrenCount {
 }
 
 impl Folder {
+    pub async fn create(
+        db: impl DbExecutor<'_>,
+        CreateFolder {
+            name,
+            document_box,
+            folder_id,
+            created_by,
+        }: CreateFolder,
+    ) -> DbResult<Folder> {
+        let folder = Folder {
+            id: Uuid::new_v4(),
+            name,
+            document_box,
+            folder_id,
+            created_by,
+            created_at: Utc::now(),
+            pinned: false,
+        };
+
+        sqlx::query(
+            r#"
+            INSERT INTO "docbox_folders" (
+                "id", "name", "document_box",  "folder_id",
+                "created_by", "created_at"
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+        "#,
+        )
+        .bind(folder.id)
+        .bind(folder.name.as_str())
+        .bind(folder.document_box.as_str())
+        .bind(folder.folder_id)
+        .bind(folder.created_by.as_ref())
+        .bind(folder.created_at)
+        .bind(folder.pinned)
+        .execute(db)
+        .await?;
+
+        Ok(folder)
+    }
+
     /// Collects the IDs of all child folders within the current folder
     ///
     /// Results are passed to the search engine when searching within a
@@ -372,47 +370,6 @@ impl Folder {
         .await
     }
 
-    pub async fn create(
-        db: impl DbExecutor<'_>,
-        CreateFolder {
-            name,
-            document_box,
-            folder_id,
-            created_by,
-        }: CreateFolder,
-    ) -> DbResult<Folder> {
-        let folder = Folder {
-            id: Uuid::new_v4(),
-            name,
-            document_box,
-            folder_id,
-            created_by,
-            created_at: Utc::now(),
-            pinned: false,
-        };
-
-        sqlx::query(
-            r#"
-            INSERT INTO "docbox_folders" (
-                "id", "name", "document_box",  "folder_id",
-                "created_by", "created_at"
-            )
-            VALUES ($1, $2, $3, $4, $5, $6)
-        "#,
-        )
-        .bind(folder.id)
-        .bind(folder.name.as_str())
-        .bind(folder.document_box.as_str())
-        .bind(folder.folder_id)
-        .bind(folder.created_by.as_ref())
-        .bind(folder.created_at)
-        .bind(folder.pinned)
-        .execute(db)
-        .await?;
-
-        Ok(folder)
-    }
-
     /// Deletes the folder
     pub async fn delete(&self, db: impl DbExecutor<'_>) -> DbResult<PgQueryResult> {
         sqlx::query(r#"DELETE FROM "docbox_folders" WHERE "id" = $1"#)
@@ -425,89 +382,16 @@ impl Folder {
     /// both the folders themselves and the folder path to traverse to get to each folder
     pub async fn resolve_with_extra_mixed_scopes(
         db: impl DbExecutor<'_>,
-        folders_scope_with_id: Vec<(DocumentBoxScopeRaw, FolderId)>,
-    ) -> DbResult<Vec<WithFullPathScope<FolderWithExtra>>> {
+        folders_scope_with_id: Vec<DocboxInputPair<'_>>,
+    ) -> DbResult<Vec<WithFullPath<FolderWithExtra>>> {
         if folders_scope_with_id.is_empty() {
             return Ok(Vec::new());
         }
 
-        let (scopes, folder_ids): (Vec<String>, Vec<FolderId>) =
-            folders_scope_with_id.into_iter().unzip();
-
-        sqlx::query_as(
-            r#"
-        -- Recursively resolve the folder paths for each folder creating a JSON array for the path
-        WITH RECURSIVE
-            "input_folders" AS (
-                SELECT folder_id, document_box
-                FROM UNNEST($1::text[], $2::uuid[]) AS t(document_box, folder_id)
-            ),
-            "folder_hierarchy" AS (
-                SELECT
-                    "folder"."id" AS "item_id",
-                    "parent"."folder_id" AS "parent_folder_id",
-                    0 AS "depth",
-                    jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) AS "path"
-                FROM "docbox_folders" "folder"
-                JOIN "input_folders" "i" ON "folder"."id" = "i"."folder_id"
-                JOIN "docbox_folders" "parent" ON "folder"."folder_id" = "parent"."id"
-                WHERE "folder"."document_box" = "i"."document_box"
-
-                UNION ALL
-
-                SELECT
-                    "fh"."item_id",
-                    "parent"."folder_id",
-                    "fh"."depth" + 1,
-                    jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
-                FROM "folder_hierarchy" "fh"
-                JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
-            ),
-            "folder_paths" AS (
-                SELECT "item_id", "path", ROW_NUMBER() OVER (PARTITION BY "item_id" ORDER BY "depth" DESC) AS "rn"
-                FROM "folder_hierarchy"
-            )
-        SELECT
-            -- folder itself
-            "folder".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id" ,
-            -- folder path from path lookup
-            "fp"."path" AS "full_path" ,
-            -- Include document box in response
-            "folder"."document_box" AS "document_box"
-        FROM "docbox_folders" AS "folder"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "folder"."created_by" = "cu"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        -- Join on the resolved folder path
-        LEFT JOIN "folder_paths" "fp" ON "folder".id = "fp"."item_id" AND "fp".rn = 1
-        -- Join on the input files for filtering
-        JOIN "input_folders" "i" ON "folder"."id" = "i"."folder_id"
-        -- Ensure correct document box
-        WHERE "folder"."document_box" = "i"."document_box""#,
-        )
-        .bind(scopes)
-        .bind(folder_ids)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_folders_with_extra_mixed_scopes($1)"#)
+            .bind(folders_scope_with_id)
+            .fetch_all(db)
+            .await
     }
 
     /// Finds a collection of folders that are all within the same document box, resolves
@@ -521,44 +405,11 @@ impl Folder {
             return Ok(Vec::new());
         }
 
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- folder itself
-            "folder".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id" ,
-            -- folder path from path lookup
-            "fp"."path" AS "full_path"
-        FROM "docbox_folders" AS "folder"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "folder"."created_by" = "cu"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        -- Join on the resolved folder path
-        LEFT JOIN resolve_folders_paths($1, $2) AS "fp" ON "folder".id = "fp"."item_id"
-        WHERE "folder"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2"#,
-        )
-        .bind(folder_ids)
-        .bind(scope)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_folders_with_extra($1, $2)"#)
+            .bind(scope)
+            .bind(folder_ids)
+            .fetch_all(db)
+            .await
     }
 
     pub async fn find_by_id_with_extra(
@@ -566,118 +417,31 @@ impl Folder {
         scope: &DocumentBoxScopeRaw,
         id: FolderId,
     ) -> DbResult<Option<FolderWithExtra>> {
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- Folder itself
-            "folder".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id"
-        FROM "docbox_folders" AS "folder"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "folder"."created_by" = "cu"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        WHERE "folder"."id" = $1 AND "folder"."document_box" = $2"#,
-        )
-        .bind(id)
-        .bind(scope)
-        .fetch_optional(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_folder_by_id_with_extra($1, $2)"#)
+            .bind(scope)
+            .bind(id)
+            .fetch_optional(db)
+            .await
     }
 
     pub async fn find_by_parent_with_extra(
         db: impl DbExecutor<'_>,
         parent_id: FolderId,
     ) -> DbResult<Vec<FolderWithExtra>> {
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- Folder itself
-            "folder".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id"
-        FROM "docbox_folders" AS "folder"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "folder"."created_by" = "cu"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        WHERE "folder"."folder_id" = $1"#,
-        )
-        .bind(parent_id)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_folder_by_parent_with_extra($1)"#)
+            .bind(parent_id)
+            .fetch_all(db)
+            .await
     }
 
     pub async fn find_root_with_extra(
         db: impl DbExecutor<'_>,
         document_box: &DocumentBoxScopeRaw,
     ) -> DbResult<Option<FolderWithExtra>> {
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- Folder itself
-            "folder".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id"
-        FROM "docbox_folders" AS "folder"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "folder"."created_by" = "cu"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("folder_id") "folder_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "folder_id", "created_at" DESC
-        ) AS "ehl" ON "folder"."id" = "ehl"."folder_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        WHERE "folder"."document_box" = $1 AND "folder"."folder_id" IS NULL"#,
-        )
-        .bind(document_box)
-        .fetch_optional(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_root_folder_with_extra($1)"#)
+            .bind(document_box)
+            .fetch_optional(db)
+            .await
     }
 
     /// Get the total number of folders in the tenant

@@ -5,7 +5,8 @@ use utoipa::ToSchema;
 
 pub type UserId = String;
 
-#[derive(Debug, Clone, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, FromRow, ToSchema, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "docbox_user")]
 pub struct User {
     /// Unique ID of the user
     pub id: String,

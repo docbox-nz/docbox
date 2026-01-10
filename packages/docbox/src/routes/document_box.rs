@@ -21,7 +21,7 @@ use docbox_core::document_box::{
 use docbox_database::models::{
     document_box::DocumentBox,
     file::File,
-    folder::{self, Folder, FolderWithExtra, ResolvedFolderWithExtra},
+    folder::{Folder, FolderWithExtra, ResolvedFolderWithExtra},
 };
 use docbox_search::models::{SearchRequest, SearchResultItem, SearchResultResponse};
 use tokio::join;
@@ -79,14 +79,10 @@ pub async fn create(
         Json(DocumentBoxResponse {
             document_box,
             root: FolderWithExtra {
-                id: root.id,
-                name: root.name,
-                folder_id: root.folder_id,
-                created_at: root.created_at,
-                created_by: folder::CreatedByUser(created_by),
+                folder: root,
+                created_by,
                 last_modified_at: None,
-                last_modified_by: folder::LastModifiedByUser(None),
-                pinned: root.pinned,
+                last_modified_by: None,
             },
             children: Default::default(),
         }),
@@ -136,7 +132,7 @@ pub async fn get(
             HttpCommonError::ServerError
         })?;
 
-    let children = ResolvedFolderWithExtra::resolve(&db, root.id)
+    let children = ResolvedFolderWithExtra::resolve(&db, root.folder.id)
         .await
         .map_err(|error| {
             tracing::error!(?error, "failed to query document box root folder");
@@ -197,7 +193,7 @@ pub async fn stats(
             HttpCommonError::ServerError
         })?;
 
-    let children_future = Folder::count_children(&db, root.id);
+    let children_future = Folder::count_children(&db, root.folder.id);
     let file_size_future = File::total_size_within_scope(&db, &scope);
 
     // Load the children count and file sizes in parallel

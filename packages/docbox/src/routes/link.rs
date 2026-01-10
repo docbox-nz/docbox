@@ -29,7 +29,7 @@ use docbox_core::links::{
 use docbox_database::models::{
     edit_history::EditHistory,
     folder::Folder,
-    link::{CreatedByUser, LastModifiedByUser, Link, LinkId, LinkWithExtra},
+    link::{Link, LinkId, LinkWithExtra},
 };
 use std::sync::Arc;
 
@@ -96,15 +96,10 @@ pub async fn create(
     Ok((
         StatusCode::CREATED,
         Json(LinkWithExtra {
-            id: link.id,
-            name: link.name,
-            value: link.value,
-            folder_id: link.folder_id,
-            created_at: link.created_at,
-            created_by: CreatedByUser(created_by),
+            link,
+            created_by,
             last_modified_at: None,
-            last_modified_by: LastModifiedByUser(None),
-            pinned: link.pinned,
+            last_modified_by: None,
         }),
     ))
 }
@@ -177,7 +172,7 @@ pub async fn get_metadata(
 ) -> HttpResult<LinkMetadataResponse> {
     let DocumentBoxScope(scope) = scope;
 
-    let link = Link::find_with_extra(&db, &scope, link_id)
+    let link = Link::find(&db, &scope, link_id)
         .await
         // Failed to query link
         .map_err(|error| {
@@ -237,7 +232,7 @@ pub async fn get_favicon(
 ) -> Result<Response<Body>, DynHttpError> {
     let DocumentBoxScope(scope) = scope;
 
-    let link = Link::find_with_extra(&db, &scope, link_id)
+    let link = Link::find(&db, &scope, link_id)
         .await
         // Failed to query link
         .map_err(|error| {
@@ -308,7 +303,7 @@ pub async fn get_image(
 ) -> Result<Response<Body>, DynHttpError> {
     let DocumentBoxScope(scope) = scope;
 
-    let link = Link::find_with_extra(&db, &scope, link_id)
+    let link = Link::find(&db, &scope, link_id)
         .await
         // Failed to query link
         .map_err(|error| {

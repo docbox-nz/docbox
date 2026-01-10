@@ -6,24 +6,23 @@ use super::{
 use crate::{
     DbExecutor, DbResult,
     models::{
-        folder::{WithFullPath, WithFullPathScope},
-        shared::CountResult,
+        folder::WithFullPath,
+        shared::{CountResult, DocboxInputPair, WithFullPathScope},
     },
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::{
-    postgres::{PgQueryResult, PgRow},
-    prelude::FromRow,
-};
+use sqlx::{postgres::PgQueryResult, prelude::FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub type LinkId = Uuid;
 
-#[derive(Debug, Clone, FromRow, Serialize)]
+#[derive(Debug, Clone, FromRow, Serialize, sqlx::Type, ToSchema)]
+#[sqlx(type_name = "docbox_link")]
 pub struct Link {
     /// Unique identifier for the link
+    #[schema(value_type = Uuid)]
     pub id: LinkId,
     /// Name of the link
     pub name: String,
@@ -32,11 +31,32 @@ pub struct Link {
     /// Whether the link is pinned
     pub pinned: bool,
     /// Parent folder ID
+    #[schema(value_type = Uuid)]
     pub folder_id: FolderId,
     /// When the link was created
     pub created_at: DateTime<Utc>,
     /// User who created the link
+    #[serde(skip)]
     pub created_by: Option<UserId>,
+}
+
+impl Eq for Link {}
+
+impl PartialEq for Link {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+            && self.name.eq(&other.name)
+            && self.value.eq(&other.value)
+            && self.pinned.eq(&other.pinned)
+            && self.folder_id.eq(&other.folder_id)
+            && self.created_by.eq(&self.created_by)
+            // Reduce precision when checking creation timestamp
+            // (Database does not store the full precision)
+            && self
+                .created_at
+                .timestamp_millis()
+                .eq(&other.created_at.timestamp_millis())
+    }
 }
 
 #[derive(Debug, FromRow, Serialize)]
@@ -48,28 +68,16 @@ pub struct LinkWithScope {
 
 #[derive(Debug, Clone, Serialize, FromRow, ToSchema)]
 pub struct LinkWithExtra {
-    /// Unique identifier for the link
-    pub id: Uuid,
-    /// Name of the link
-    pub name: String,
-    /// value of the link
-    pub value: String,
-    /// Whether the link is pinned
-    pub pinned: bool,
-    /// Parent folder ID
-    pub folder_id: Uuid,
-    /// When the link was created
-    pub created_at: DateTime<Utc>,
+    #[serde(flatten)]
+    pub link: Link,
     /// User who created the link
-    #[sqlx(flatten)]
     #[schema(nullable, value_type = User)]
-    pub created_by: CreatedByUser,
-    /// Last time the link was modified
-    pub last_modified_at: Option<DateTime<Utc>>,
+    pub created_by: Option<User>,
     /// User who last modified the link
-    #[sqlx(flatten)]
     #[schema(nullable, value_type = User)]
-    pub last_modified_by: LastModifiedByUser,
+    pub last_modified_by: Option<User>,
+    /// Last time the file was modified
+    pub last_modified_at: Option<DateTime<Utc>>,
 }
 
 /// Link with extra with an additional resolved full path
@@ -80,48 +88,6 @@ pub struct ResolvedLinkWithExtra {
     pub link: LinkWithExtra,
     #[sqlx(json)]
     pub full_path: Vec<FolderPathSegment>,
-}
-
-/// Wrapper type for extracting a [User] that was joined
-/// from another table where the fields are prefixed with "cb_"
-#[derive(Debug, Clone, Serialize)]
-#[serde(transparent)]
-pub struct CreatedByUser(pub Option<User>);
-
-impl<'r> FromRow<'r, PgRow> for CreatedByUser {
-    fn from_row(row: &'r PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        let id: Option<UserId> = row.try_get("cb_id")?;
-        if let Some(id) = id {
-            let name: Option<String> = row.try_get("cb_name")?;
-            let image_id: Option<String> = row.try_get("cb_image_id")?;
-            return Ok(CreatedByUser(Some(User { id, name, image_id })));
-        }
-
-        Ok(CreatedByUser(None))
-    }
-}
-
-/// Wrapper type for extracting a [User] that was joined
-/// from another table where the fields are prefixed with "lmb_"
-#[derive(Debug, Clone, Serialize)]
-#[serde(transparent)]
-pub struct LastModifiedByUser(pub Option<User>);
-
-impl<'r> FromRow<'r, PgRow> for LastModifiedByUser {
-    fn from_row(row: &'r PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        let id: Option<UserId> = row.try_get("lmb_id")?;
-        if let Some(id) = id {
-            let name: Option<String> = row.try_get("lmb_name")?;
-            let image_id: Option<String> = row.try_get("lmb_image_id")?;
-            return Ok(LastModifiedByUser(Some(User { id, name, image_id })));
-        }
-
-        Ok(LastModifiedByUser(None))
-    }
 }
 
 pub struct CreateLink {
@@ -301,93 +267,16 @@ impl Link {
     /// both the links themselves and the folder path to traverse to get to each link
     pub async fn resolve_with_extra_mixed_scopes(
         db: impl DbExecutor<'_>,
-        links_scope_with_id: Vec<(DocumentBoxScopeRaw, LinkId)>,
+        links_scope_with_id: Vec<DocboxInputPair<'_>>,
     ) -> DbResult<Vec<WithFullPathScope<LinkWithExtra>>> {
         if links_scope_with_id.is_empty() {
             return Ok(Vec::new());
         }
 
-        let (scopes, link_ids): (Vec<String>, Vec<LinkId>) =
-            links_scope_with_id.into_iter().unzip();
-
-        sqlx::query_as(
-            r#"
-        -- Recursively resolve the link paths for each link creating a JSON array for the path
-        WITH RECURSIVE
-            "input_links" AS (
-                SELECT link_id, document_box
-                FROM UNNEST($1::text[], $2::uuid[]) AS t(document_box, link_id)
-            ),
-            "folder_hierarchy" AS (
-                SELECT
-                    "f"."id" AS "link_id",
-                    "folder"."id" AS "folder_id",
-                    "folder"."name" AS "folder_name",
-                    "folder"."folder_id" AS "parent_folder_id",
-                    0 AS "depth",
-                    jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
-                FROM "docbox_links" "f"
-                JOIN "input_links" "i" ON "f"."id" = "i"."link_id"
-                JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
-                WHERE "folder"."document_box" = "i"."document_box"
-                UNION ALL
-                SELECT
-                    "fh"."link_id",
-                    "parent"."id",
-                    "parent"."name",
-                    "parent"."folder_id",
-                    "fh"."depth" + 1,
-                    jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
-                FROM "folder_hierarchy" "fh"
-                JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
-            ),
-            "folder_paths" AS (
-                SELECT "link_id", "path", ROW_NUMBER() OVER (PARTITION BY "link_id" ORDER BY "depth" DESC) AS "rn"
-                FROM "folder_hierarchy"
-            )
-        SELECT
-            -- link itself
-            "link".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id" ,
-            -- link path from path lookup
-            "fp"."path" AS "full_path",
-            -- Include document box in response
-            "folder"."document_box" AS "document_box"
-        FROM "docbox_links" AS "link"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "link"."created_by" = "cu"."id"
-        -- Join on the parent folder
-        INNER JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "link_id", "created_at" DESC
-        ) AS "ehl" ON "link"."id" = "ehl"."link_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        -- Join on the resolved folder path
-        LEFT JOIN "folder_paths" "fp" ON "link".id = "fp"."link_id" AND "fp".rn = 1
-        -- Join on the input files for filtering
-        JOIN "input_links" "i" ON "link"."id" = "i"."link_id"
-        -- Ensure correct document box
-        WHERE "folder"."document_box" = "i"."document_box""#,
-        )
-        .bind(scopes)
-        .bind(link_ids)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_links_with_extra_mixed_scopes($1)"#)
+            .bind(links_scope_with_id)
+            .fetch_all(db)
+            .await
     }
 
     /// Finds a collection of links that are all within the same document box, resolves
@@ -401,73 +290,11 @@ impl Link {
             return Ok(Vec::new());
         }
 
-        sqlx::query_as(
-            r#"
-        -- Recursively resolve the link paths for each link creating a JSON array for the path
-        WITH RECURSIVE "folder_hierarchy" AS (
-            SELECT
-                "f"."id" AS "link_id",
-                "folder"."id" AS "folder_id",
-                "folder"."name" AS "folder_name",
-                "folder"."folder_id" AS "parent_folder_id",
-                0 AS "depth",
-                jsonb_build_array(jsonb_build_object('id', "folder"."id", 'name', "folder"."name")) AS "path"
-            FROM "docbox_links" "f"
-            JOIN "docbox_folders" "folder" ON "f"."folder_id" = "folder"."id"
-            WHERE "f"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2
-            UNION ALL
-            SELECT
-                "fh"."link_id",
-                "parent"."id",
-                "parent"."name",
-                "parent"."folder_id",
-                "fh"."depth" + 1,
-                jsonb_build_array(jsonb_build_object('id', "parent"."id", 'name', "parent"."name")) || "fh"."path"
-            FROM "folder_hierarchy" "fh"
-            JOIN "docbox_folders" "parent" ON "fh"."parent_folder_id" = "parent"."id"
-        ),
-        "folder_paths" AS (
-            SELECT "link_id", "path", ROW_NUMBER() OVER (PARTITION BY "link_id" ORDER BY "depth" DESC) AS "rn"
-            FROM "folder_hierarchy"
-        )
-        SELECT
-            -- link itself
-            "link".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id" ,
-            -- link path from path lookup
-            "fp"."path" AS "full_path"
-        FROM "docbox_links" AS "link"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "link"."created_by" = "cu"."id"
-        -- Join on the parent folder
-        INNER JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "link_id", "created_at" DESC
-        ) AS "ehl" ON "link"."id" = "ehl"."link_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        -- Join on the resolved folder path
-        LEFT JOIN "folder_paths" "fp" ON "link".id = "fp"."link_id" AND "fp".rn = 1
-        WHERE "link"."id" = ANY($1::uuid[]) AND "folder"."document_box" = $2"#,
-        )
-        .bind(link_ids)
-        .bind(scope)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_links_with_extra($1, $2)"#)
+            .bind(scope)
+            .bind(link_ids)
+            .fetch_all(db)
+            .await
     }
 
     /// Finds all links within the provided parent folder
@@ -475,39 +302,10 @@ impl Link {
         db: impl DbExecutor<'_>,
         parent_id: FolderId,
     ) -> DbResult<Vec<LinkWithExtra>> {
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- Link itself details
-            "link".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id"
-        FROM "docbox_links" AS "link"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "link"."created_by" = "cu"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN LATERAL (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "link_id", "created_at" DESC
-        ) AS "ehl" ON "link"."id" = "ehl"."link_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        WHERE "link"."folder_id" = $1"#,
-        )
-        .bind(parent_id)
-        .fetch_all(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_links_by_parent_folder_with_extra($1)"#)
+            .bind(parent_id)
+            .fetch_all(db)
+            .await
     }
 
     pub async fn find_with_extra(
@@ -515,42 +313,11 @@ impl Link {
         scope: &DocumentBoxScopeRaw,
         link_id: LinkId,
     ) -> DbResult<Option<LinkWithExtra>> {
-        sqlx::query_as(
-            r#"
-        SELECT
-            -- Link itself details
-            "link".*,
-            -- Creator user details
-            "cu"."id" AS "cb_id",
-            "cu"."name" AS "cb_name",
-            "cu"."image_id" AS "cb_image_id",
-            -- Last modified date
-            "ehl"."created_at" AS "last_modified_at",
-            -- Last modified user details
-            "mu"."id" AS "lmb_id",
-            "mu"."name" AS "lmb_name",
-            "mu"."image_id" AS "lmb_image_id"
-        FROM "docbox_links" AS "link"
-        -- Join on the creator
-        LEFT JOIN "docbox_users" AS "cu"
-            ON "link"."created_by" = "cu"."id"
-        -- Join on the parent folder
-        INNER JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
-        -- Join on the edit history (Latest only)
-        LEFT JOIN (
-            -- Get the latest edit history entry
-            SELECT DISTINCT ON ("link_id") "link_id", "user_id", "created_at"
-            FROM "docbox_edit_history"
-            ORDER BY "link_id", "created_at" DESC
-        ) AS "ehl" ON "link"."id" = "ehl"."link_id"
-        -- Join on the editor history latest edit user
-        LEFT JOIN "docbox_users" AS "mu" ON "ehl"."user_id" = "mu"."id"
-        WHERE "link"."id" = $1 AND "folder"."document_box" = $2"#,
-        )
-        .bind(link_id)
-        .bind(scope)
-        .fetch_optional(db)
-        .await
+        sqlx::query_as(r#"SELECT * FROM resolve_link_by_id_with_extra($1, $2)"#)
+            .bind(scope)
+            .bind(link_id)
+            .fetch_optional(db)
+            .await
     }
 
     /// Get the total number of folders in the tenant

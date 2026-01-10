@@ -2,7 +2,9 @@ use docbox_database::models::{
     document_box::DocumentBox,
     folder::{CreateFolder, Folder},
     link::{CreateLink, Link},
+    shared::DocboxInputPair,
 };
+use tokio::time::Instant;
 
 use crate::common::database::test_tenant_db;
 
@@ -292,23 +294,28 @@ async fn test_resolve_folder_with_extra_mixed_scopes() {
     .await
     .unwrap();
 
+    let start = Instant::now();
+
     let resolved = Folder::resolve_with_extra_mixed_scopes(
         &db,
         vec![
-            (scope_1.clone(), nested_folder.id),
-            (scope_1.clone(), nested_folder_2.id),
-            (scope_2.clone(), base_folder_2.id),
-            (scope_2.clone(), nested_folder_3.id),
+            DocboxInputPair::new(&scope_1, nested_folder.id),
+            DocboxInputPair::new(&scope_1, nested_folder_2.id),
+            DocboxInputPair::new(&scope_2, base_folder_2.id),
+            DocboxInputPair::new(&scope_2, nested_folder_3.id),
         ],
     )
     .await
     .unwrap();
 
-    dbg!(&resolved);
+    let end = Instant::now();
+    let elapsed = end - start;
+
+    println!("elapsed = {}", elapsed.as_micros());
 
     let resolved_1 = resolved
         .iter()
-        .find(|item| item.data.id == nested_folder.id)
+        .find(|item| item.data.folder.id == nested_folder.id)
         .unwrap();
     let nested_path = &resolved_1.full_path;
 
@@ -322,7 +329,7 @@ async fn test_resolve_folder_with_extra_mixed_scopes() {
 
     let resolved_2 = resolved
         .iter()
-        .find(|item| item.data.id == nested_folder_2.id)
+        .find(|item| item.data.folder.id == nested_folder_2.id)
         .unwrap();
     let nested_path = &resolved_2.full_path;
 
@@ -336,7 +343,7 @@ async fn test_resolve_folder_with_extra_mixed_scopes() {
 
     let resolved_3 = resolved
         .iter()
-        .find(|item| item.data.id == base_folder_2.id)
+        .find(|item| item.data.folder.id == base_folder_2.id)
         .unwrap();
     let nested_path = &resolved_3.full_path;
 
@@ -347,7 +354,7 @@ async fn test_resolve_folder_with_extra_mixed_scopes() {
 
     let resolved_4 = resolved
         .iter()
-        .find(|item| item.data.id == nested_folder_3.id)
+        .find(|item| item.data.folder.id == nested_folder_3.id)
         .unwrap();
     let nested_path = &resolved_4.full_path;
 
@@ -452,11 +459,9 @@ async fn test_resolve_with_extra_folder() {
     .await
     .unwrap();
 
-    dbg!(&resolved);
-
     let resolved_1 = resolved
         .iter()
-        .find(|item| item.data.id == nested_folder.id)
+        .find(|item| item.data.folder.id == nested_folder.id)
         .unwrap();
     let nested_path = &resolved_1.full_path;
 
@@ -470,7 +475,7 @@ async fn test_resolve_with_extra_folder() {
 
     let resolved_2 = resolved
         .iter()
-        .find(|item| item.data.id == nested_folder_2.id)
+        .find(|item| item.data.folder.id == nested_folder_2.id)
         .unwrap();
     let nested_path = &resolved_2.full_path;
 
@@ -484,7 +489,7 @@ async fn test_resolve_with_extra_folder() {
 
     let resolved_3 = resolved
         .iter()
-        .find(|item| item.data.id == base_folder_2.id)
+        .find(|item| item.data.folder.id == base_folder_2.id)
         .unwrap();
     let nested_path = &resolved_3.full_path;
 
@@ -495,7 +500,7 @@ async fn test_resolve_with_extra_folder() {
 
     let resolved_4 = resolved
         .iter()
-        .find(|item| item.data.id == nested_folder_3.id)
+        .find(|item| item.data.folder.id == nested_folder_3.id)
         .unwrap();
     let nested_path = &resolved_4.full_path;
 

@@ -38,7 +38,7 @@ use docbox_core::{
 };
 use docbox_database::models::{
     edit_history::EditHistory,
-    file::{self, File, FileId, FileWithExtra},
+    file::{File, FileId, FileWithExtra},
     folder::Folder,
     generated_file::{GeneratedFile, GeneratedFileType},
     presigned_upload_task::{PresignedTaskStatus, PresignedUploadTask, PresignedUploadTaskId},
@@ -243,19 +243,10 @@ fn map_uploaded_file(data: UploadedFileData, created_by: &Option<User>) -> Uploa
 
     UploadedFile {
         file: FileWithExtra {
-            id: file.id,
-            name: file.name,
-            mime: file.mime,
-            folder_id: file.folder_id,
-            hash: file.hash,
-            size: file.size,
-            encrypted: file.encrypted,
-            created_at: file.created_at,
-            created_by: file::CreatedByUser(created_by.clone()),
+            file,
+            created_by: created_by.clone(),
             last_modified_at: None,
-            last_modified_by: file::LastModifiedByUser(None),
-            parent_id: file.parent_id,
-            pinned: file.pinned,
+            last_modified_by: None,
         },
         generated,
 
