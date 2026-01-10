@@ -21,6 +21,7 @@ use docbox_core::folders::{
 use docbox_database::models::{
     edit_history::EditHistory,
     folder::{Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
+    shared::WithFullPath,
 };
 
 pub const FOLDER_TAG: &str = "Folder";
@@ -128,7 +129,10 @@ pub async fn get(
 ) -> HttpResult<FolderResponse> {
     let DocumentBoxScope(scope) = scope;
 
-    let folder = Folder::find_by_id_with_extra(&db, &scope, folder_id)
+    let WithFullPath {
+        data: folder,
+        full_path,
+    } = Folder::find_by_id_with_extra(&db, &scope, folder_id)
         .await
         // Failed to query folder
         .map_err(|error| {
@@ -138,7 +142,7 @@ pub async fn get(
         // Folder not found
         .ok_or(HttpFolderError::UnknownFolder)?;
 
-    let children = ResolvedFolderWithExtra::resolve(&db, folder.folder.id)
+    let children = ResolvedFolderWithExtra::resolve(&db, folder.folder.id, full_path)
         .await
         .map_err(|error| {
             tracing::error!(?error, "failed to resolve folder children");
@@ -174,7 +178,7 @@ pub async fn get_edit_history(
 ) -> HttpResult<Vec<EditHistory>> {
     let DocumentBoxScope(scope) = scope;
 
-    _ = Folder::find_by_id_with_extra(&db, &scope, folder_id)
+    _ = Folder::find_by_id(&db, &scope, folder_id)
         .await
         // Failed to query folder
         .map_err(|error| {

@@ -188,7 +188,8 @@ RETURNS TABLE (
     folder docbox_folder,
     created_by docbox_user,
     last_modified_by docbox_user,
-    last_modified_at TIMESTAMP WITH TIME ZONE
+    last_modified_at TIMESTAMP WITH TIME ZONE,
+    full_path docbox_path_segment[]
 )
 LANGUAGE sql
 STABLE
@@ -197,7 +198,8 @@ AS $$
         mk_docbox_folder("folder") AS "folder",
         mk_docbox_user("cu") AS "created_by",
         mk_docbox_user("mu") AS "last_modified_by",
-        "ehl"."created_at" AS "last_modified_at"
+        "ehl"."created_at" AS "last_modified_at",
+        ARRAY(SELECT resolve_folder_path("folder"."id")) AS "full_path"
     FROM "docbox_folders" AS "folder"
     LEFT JOIN "docbox_users" AS "cu"
         ON "folder"."created_by" = "cu"."id"
@@ -248,7 +250,8 @@ RETURNS TABLE (
     folder docbox_folder,
     created_by docbox_user,
     last_modified_by docbox_user,
-    last_modified_at TIMESTAMP WITH TIME ZONE
+    last_modified_at TIMESTAMP WITH TIME ZONE,
+    full_path docbox_path_segment[]
 )
 LANGUAGE sql
 STABLE
@@ -257,7 +260,8 @@ AS $$
         mk_docbox_folder("folder") AS "folder",
         mk_docbox_user("cu") AS "created_by",
         mk_docbox_user("mu") AS "last_modified_by",
-        "ehl"."created_at" AS "last_modified_at"
+        "ehl"."created_at" AS "last_modified_at",
+        ARRAY(SELECT resolve_folder_path("folder"."id")) AS "full_path"
     FROM "docbox_folders" AS "folder"
     LEFT JOIN "docbox_users" AS "cu"
         ON "folder"."created_by" = "cu"."id"

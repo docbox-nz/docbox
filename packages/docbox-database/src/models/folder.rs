@@ -59,14 +59,16 @@ pub struct ResolvedFolderWithExtra {
 }
 
 impl ResolvedFolderWithExtra {
-    pub async fn resolve(db: &DbPool, folder_id: FolderId) -> DbResult<ResolvedFolderWithExtra> {
-        let path_future = Folder::resolve_path(db, folder_id);
+    pub async fn resolve(
+        db: &DbPool,
+        folder_id: FolderId,
+        path: Vec<FolderPathSegment>,
+    ) -> DbResult<ResolvedFolderWithExtra> {
         let files_futures = File::find_by_parent_folder_with_extra(db, folder_id);
         let folders_future = Folder::find_by_parent_with_extra(db, folder_id);
         let links_future = Link::find_by_parent_with_extra(db, folder_id);
 
-        let (path, files, folders, links) =
-            try_join!(path_future, files_futures, folders_future, links_future)?;
+        let (files, folders, links) = try_join!(files_futures, folders_future, links_future)?;
 
         Ok(ResolvedFolderWithExtra {
             path,
@@ -385,7 +387,7 @@ impl Folder {
         db: impl DbExecutor<'_>,
         scope: &DocumentBoxScopeRaw,
         id: FolderId,
-    ) -> DbResult<Option<FolderWithExtra>> {
+    ) -> DbResult<Option<WithFullPath<FolderWithExtra>>> {
         sqlx::query_as(r#"SELECT * FROM resolve_folder_by_id_with_extra($1, $2)"#)
             .bind(scope)
             .bind(id)
@@ -406,7 +408,7 @@ impl Folder {
     pub async fn find_root_with_extra(
         db: impl DbExecutor<'_>,
         document_box: &DocumentBoxScopeRaw,
-    ) -> DbResult<Option<FolderWithExtra>> {
+    ) -> DbResult<Option<WithFullPath<FolderWithExtra>>> {
         sqlx::query_as(r#"SELECT * FROM resolve_root_folder_with_extra($1)"#)
             .bind(document_box)
             .fetch_optional(db)

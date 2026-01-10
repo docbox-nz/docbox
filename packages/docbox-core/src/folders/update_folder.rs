@@ -6,6 +6,7 @@ use docbox_database::{
             CreateEditHistory, CreateEditHistoryType, EditHistory, EditHistoryMetadata,
         },
         folder::{Folder, FolderId},
+        shared::WithFullPath,
         user::UserId,
     },
 };
@@ -79,16 +80,15 @@ pub async fn update_folder(
 
         // Ensure the target folder exists, also ensures the target folder is in the same scope
         // (We may allow across scopes in the future, but would need additional checks for access control of target scope)
-        let target_folder = Folder::find_by_id(db.deref_mut(), scope, target_id)
+        let WithFullPath {
+            data: target_folder,
+            full_path: target_folder_path,
+        } = Folder::find_by_id_with_extra(db.deref_mut(), scope, target_id)
             .await
             .inspect_err(|error| tracing::error!(?error, "failed to query target folder"))?
             .ok_or(UpdateFolderError::UnknownTargetFolder)?;
 
-        // Resolve the target folder and ensure that we aren't moving the folder into a child of itself
-        let target_folder_path = Folder::resolve_path(db.deref_mut(), target_folder.id)
-            .await
-            .inspect_err(|error| tracing::error!(?error, "failed to query target folder"))
-            .map_err(|_| UpdateFolderError::UnknownTargetFolder)?;
+        // Ensure that we aren't moving the folder into a child of itself
         if target_folder_path
             .iter()
             .any(|segment| segment.id == folder.id)
@@ -96,11 +96,17 @@ pub async fn update_folder(
             return Err(UpdateFolderError::CannotMoveIntoChildOfSelf);
         }
 
-        folder_id = target_folder.id;
+        folder_id = target_folder.folder.id;
 
-        folder = move_folder(&mut db, user_id.clone(), folder, folder_id, target_folder)
-            .await
-            .inspect_err(|error| tracing::error!(?error, "failed to move folder"))?;
+        folder = move_folder(
+            &mut db,
+            user_id.clone(),
+            folder,
+            folder_id,
+            target_folder.folder,
+        )
+        .await
+        .inspect_err(|error| tracing::error!(?error, "failed to move folder"))?;
     };
 
     if let Some(new_name) = update.name {

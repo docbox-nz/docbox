@@ -22,6 +22,7 @@ use docbox_database::models::{
     document_box::DocumentBox,
     file::File,
     folder::{Folder, FolderWithExtra, ResolvedFolderWithExtra},
+    shared::WithFullPath,
 };
 use docbox_search::models::{SearchRequest, SearchResultItem, SearchResultResponse};
 use tokio::join;
@@ -121,7 +122,10 @@ pub async fn get(
         })?
         .ok_or(HttpDocumentBoxError::UnknownDocumentBox)?;
 
-    let root = Folder::find_root_with_extra(&db, &scope)
+    let WithFullPath {
+        data: root,
+        full_path,
+    } = Folder::find_root_with_extra(&db, &scope)
         .await
         .map_err(|error| {
             tracing::error!(?error, "failed to query folder");
@@ -132,7 +136,7 @@ pub async fn get(
             HttpCommonError::ServerError
         })?;
 
-    let children = ResolvedFolderWithExtra::resolve(&db, root.folder.id)
+    let children = ResolvedFolderWithExtra::resolve(&db, root.folder.id, full_path)
         .await
         .map_err(|error| {
             tracing::error!(?error, "failed to query document box root folder");
@@ -182,7 +186,7 @@ pub async fn stats(
         })?
         .ok_or(HttpDocumentBoxError::UnknownDocumentBox)?;
 
-    let root = Folder::find_root_with_extra(&db, &scope)
+    let root = Folder::find_root(&db, &scope)
         .await
         .map_err(|error| {
             tracing::error!(?error, "failed to query folder");
@@ -193,7 +197,7 @@ pub async fn stats(
             HttpCommonError::ServerError
         })?;
 
-    let children_future = Folder::count_children(&db, root.folder.id);
+    let children_future = Folder::count_children(&db, root.id);
     let file_size_future = File::total_size_within_scope(&db, &scope);
 
     // Load the children count and file sizes in parallel
