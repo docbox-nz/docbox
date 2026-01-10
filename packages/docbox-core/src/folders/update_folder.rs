@@ -31,6 +31,10 @@ pub enum UpdateFolderError {
     #[error("cannot move into self")]
     CannotMoveIntoSelf,
 
+    /// Attempted to move a folder into itself
+    #[error("cannot move into child of self")]
+    CannotMoveIntoChildOfSelf,
+
     /// Failed to update the search index
     #[error(transparent)]
     SearchIndex(SearchError),
@@ -79,6 +83,18 @@ pub async fn update_folder(
             .await
             .inspect_err(|error| tracing::error!(?error, "failed to query target folder"))?
             .ok_or(UpdateFolderError::UnknownTargetFolder)?;
+
+        // Resolve the target folder and ensure that we aren't moving the folder into a child of itself
+        let target_folder_path = Folder::resolve_path(db.deref_mut(), target_folder.id)
+            .await
+            .inspect_err(|error| tracing::error!(?error, "failed to query target folder"))
+            .map_err(|_| UpdateFolderError::UnknownTargetFolder)?;
+        if target_folder_path
+            .iter()
+            .any(|segment| segment.id == folder.id)
+        {
+            return Err(UpdateFolderError::CannotMoveIntoChildOfSelf);
+        }
 
         folder_id = target_folder.id;
 

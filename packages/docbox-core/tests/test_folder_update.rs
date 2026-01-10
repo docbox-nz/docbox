@@ -445,6 +445,41 @@ async fn test_update_folder_folder_self() {
         matches!(err, UpdateFolderError::CannotMoveIntoSelf),
         "moving to self should result in a failure"
     );
+
+    // Create a folder within the folder we are trying to move
+    let child_folder = safe_create_folder(
+        &db,
+        search.clone(),
+        &events,
+        CreateFolderData {
+            folder: folder.clone(),
+            name: "Test Child Folder".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Try and move the folder into its child folder
+    let err = update_folder(
+        &db,
+        &search,
+        &"test".to_string(),
+        folder.clone(),
+        None,
+        UpdateFolder {
+            folder_id: Some(child_folder.id),
+            name: None,
+            pinned: None,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        matches!(err, UpdateFolderError::CannotMoveIntoChildOfSelf),
+        "moving to child of self should result in a failure"
+    );
 }
 
 /// Tests that a root folder cannot be updated
