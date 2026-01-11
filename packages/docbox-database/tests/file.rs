@@ -8,58 +8,341 @@ use docbox_database::models::{
 };
 use uuid::Uuid;
 
-use crate::common::database::test_tenant_db;
+use crate::common::{
+    database::test_tenant_db, make_test_document_box, make_test_file, make_test_file_type,
+    make_test_folder,
+};
 
 mod common;
 
 #[tokio::test]
-async fn test_all_file() {}
-
-#[tokio::test]
-async fn test_all_file_by_mime() {}
-
-#[tokio::test]
-async fn test_move_to_folder_file() {}
-
-#[tokio::test]
-async fn test_rename_file() {}
-
-#[tokio::test]
-async fn test_set_pinned_file() {}
-
-#[tokio::test]
-async fn test_set_encrypted_file() {}
-
-#[tokio::test]
-async fn test_set_mime_file() {}
-
-#[tokio::test]
-async fn test_create_file() {}
-
-#[tokio::test]
-async fn test_all_convertable_paged_file() {}
-
-#[tokio::test]
-async fn test_find_file() {}
-
-#[tokio::test]
-async fn test_resolve_path_file() {
+async fn test_file_create() {
     let (db, _db_container) = test_tenant_db().await;
+    let (document_box, root) = make_test_document_box(&db, "test", None).await;
 
-    let scope = "test".to_string();
-    _ = DocumentBox::create(&db, scope.clone()).await.unwrap();
-
-    let root = Folder::create(
+    let file = File::create(
         &db,
-        CreateFolder {
-            name: "Root".to_string(),
-            document_box: scope.to_string(),
-            folder_id: None,
+        CreateFile {
+            id: Uuid::new_v4(),
+            name: "test".to_string(),
+            folder_id: root.id,
+            size: 1,
+            parent_id: None,
+            mime: "text/plain".to_string(),
+            hash: "aaffbb".to_string(),
+            file_key: "test/key".to_string(),
             created_by: None,
+            created_at: Utc::now(),
+            encrypted: true,
         },
     )
     .await
     .unwrap();
+
+    assert_eq!(file.name, "test");
+    assert_eq!(file.mime, "text/plain");
+    assert_eq!(file.hash, "aaffbb");
+    assert_eq!(file.file_key, "test/key");
+    assert_eq!(file.folder_id, root.id);
+    assert_eq!(file.created_by, None);
+    assert_eq!(file.parent_id, None);
+    assert_eq!(file.size, 1);
+    assert!(file.encrypted);
+
+    let result = File::find(&db, &document_box.scope, file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert_eq!(result, file);
+}
+
+#[tokio::test]
+async fn test_file_all() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (_document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let files = File::all(&db, 0, 5).await.unwrap();
+    assert!(files.is_empty());
+
+    let file_1 = make_test_file(&db, &root, "Test 1", None).await;
+    let file_2 = make_test_file(&db, &root, "Test 2", None).await;
+    let file_3 = make_test_file(&db, &root, "Test 3", None).await;
+
+    let files = File::all(&db, 0, 5).await.unwrap();
+    assert_eq!(files.len(), 3);
+    assert!(files.iter().any(|item| item.file.id == file_1.id));
+    assert!(files.iter().any(|item| item.file.id == file_2.id));
+    assert!(files.iter().any(|item| item.file.id == file_3.id));
+}
+
+#[tokio::test]
+async fn test_file_all_by_mime() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (_document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let files = File::all_by_mime(&db, "text/plain", 0, 5).await.unwrap();
+    assert!(files.is_empty());
+
+    let file_1 = make_test_file_type(&db, &root, "Test 1", "text/plain", None).await;
+    let file_2 = make_test_file_type(&db, &root, "Test 2", "text/plain", None).await;
+    let file_3 = make_test_file_type(&db, &root, "Test 3", "text/plain", None).await;
+
+    let files = File::all_by_mime(&db, "text/plain", 0, 5).await.unwrap();
+    assert_eq!(files.len(), 3);
+    assert!(files.iter().any(|item| item.file.id == file_1.id));
+    assert!(files.iter().any(|item| item.file.id == file_2.id));
+    assert!(files.iter().any(|item| item.file.id == file_3.id));
+
+    let files = File::all_by_mime(&db, "text/other", 0, 5).await.unwrap();
+    assert!(files.is_empty());
+}
+
+#[tokio::test]
+async fn test_file_all_by_mimes() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (_document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let files = File::all_by_mimes(&db, &["text/plain", "text/plain2"], 0, 5)
+        .await
+        .unwrap();
+    assert!(files.is_empty());
+
+    let file_1 = make_test_file_type(&db, &root, "Test 1", "text/plain", None).await;
+    let file_2 = make_test_file_type(&db, &root, "Test 2", "text/plain", None).await;
+    let file_3 = make_test_file_type(&db, &root, "Test 3", "text/plain2", None).await;
+
+    let files = File::all_by_mimes(&db, &["text/plain", "text/plain2"], 0, 5)
+        .await
+        .unwrap();
+    assert_eq!(files.len(), 3);
+    assert!(files.iter().any(|item| item.file.id == file_1.id));
+    assert!(files.iter().any(|item| item.file.id == file_2.id));
+    assert!(files.iter().any(|item| item.file.id == file_3.id));
+
+    let files = File::all_by_mimes(&db, &["text/plain"], 0, 5)
+        .await
+        .unwrap();
+    assert_eq!(files.len(), 2);
+    assert!(files.iter().any(|item| item.file.id == file_1.id));
+    assert!(files.iter().any(|item| item.file.id == file_2.id));
+
+    let files = File::all_by_mimes(&db, &["text/plain2"], 0, 5)
+        .await
+        .unwrap();
+    assert_eq!(files.len(), 1);
+    assert!(files.iter().any(|item| item.file.id == file_3.id));
+
+    let files = File::all_by_mimes(&db, &["text/unknown"], 0, 5)
+        .await
+        .unwrap();
+    assert!(files.is_empty());
+}
+
+#[tokio::test]
+async fn test_file_move_to_folder() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let base_file = make_test_file(&db, &root, "base", None).await;
+    let base_folder = make_test_folder(&db, &root, "base_2", None).await;
+
+    assert_eq!(base_file.folder_id, root.id);
+
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+
+    assert_eq!(base_result, base_file);
+
+    let base_file = base_file.move_to_folder(&db, base_folder.id).await.unwrap();
+
+    // Change should be applied to the returned value
+    assert_eq!(base_file.folder_id, base_folder.id);
+
+    // Change should also apply to find results
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert_eq!(base_result.folder_id, base_folder.id);
+}
+
+#[tokio::test]
+async fn test_file_rename() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let base_file = make_test_file(&db, &root, "base", None).await;
+    assert_eq!(base_file.name, "base");
+
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+
+    assert_eq!(base_result, base_file);
+
+    let base_file = base_file.rename(&db, "base_2".to_string()).await.unwrap();
+
+    // Change should be applied to the returned value
+    assert_eq!(base_file.name, "base_2");
+
+    // Change should also apply to find results
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert_eq!(base_result.name, "base_2");
+}
+
+#[tokio::test]
+async fn test_file_set_pinned() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let base_file = make_test_file(&db, &root, "base", None).await;
+    assert!(!base_file.pinned);
+
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+
+    assert_eq!(base_result, base_file);
+
+    let base_file = base_file.set_pinned(&db, true).await.unwrap();
+
+    // Change should be applied to the returned value
+    assert!(base_file.pinned);
+
+    // Change should also apply to find results
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert!(base_result.pinned);
+
+    let base_file = base_file.set_pinned(&db, false).await.unwrap();
+
+    // Change should be applied to the returned value
+    assert!(!base_file.pinned);
+
+    // Change should also apply to find results
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert!(!base_result.pinned);
+}
+
+#[tokio::test]
+async fn test_file_set_encrypted() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let base_file = make_test_file(&db, &root, "base", None).await;
+    assert!(!base_file.encrypted);
+
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+
+    assert_eq!(base_result, base_file);
+
+    let base_file = base_file.set_encrypted(&db, true).await.unwrap();
+
+    // Change should be applied to the returned value
+    assert!(base_file.encrypted);
+
+    // Change should also apply to find results
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert!(base_result.encrypted);
+
+    let base_file = base_file.set_encrypted(&db, false).await.unwrap();
+
+    // Change should be applied to the returned value
+    assert!(!base_file.encrypted);
+
+    // Change should also apply to find results
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert!(!base_result.encrypted);
+}
+
+#[tokio::test]
+async fn test_file_set_mime() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let base_file = File::create(
+        &db,
+        CreateFile {
+            id: Uuid::new_v4(),
+            name: "Root".to_string(),
+            folder_id: root.id,
+            mime: "text/plain".to_string(),
+            file_key: "test".to_string(),
+            created_at: Utc::now(),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(base_file.mime, "text/plain");
+
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+
+    assert_eq!(base_result, base_file);
+
+    let base_file = base_file
+        .set_mime(&db, "test/mime".to_string())
+        .await
+        .unwrap();
+
+    // Change should be applied to the returned value
+    assert_eq!(base_file.mime, "test/mime");
+
+    // Change should also apply to find results
+    let base_result = File::find(&db, &document_box.scope, base_file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert_eq!(base_result.mime, "test/mime");
+}
+
+#[tokio::test]
+async fn test_find_file() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box, root) = make_test_document_box(&db, "test", None).await;
+
+    let file = make_test_file(&db, &root, "Test File", None).await;
+    let result = File::find(&db, &document_box.scope, file.id)
+        .await
+        .unwrap()
+        .expect("file should exist");
+    assert_eq!(result, file);
+
+    let result = File::find(&db, &document_box.scope, Uuid::nil())
+        .await
+        .unwrap();
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+async fn test_resolve_path_file() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (_document_box, root) = make_test_document_box(&db, "test_1", None).await;
 
     let root_file = File::create(
         &db,
@@ -76,17 +359,7 @@ async fn test_resolve_path_file() {
     .await
     .unwrap();
 
-    let base_folder = Folder::create(
-        &db,
-        CreateFolder {
-            name: "base".to_string(),
-            document_box: scope.clone(),
-            folder_id: Some(root.id),
-            created_by: None,
-        },
-    )
-    .await
-    .unwrap();
+    let base_folder = make_test_folder(&db, &root, "base", None).await;
 
     let nested_file = File::create(
         &db,
@@ -104,28 +377,90 @@ async fn test_resolve_path_file() {
     .unwrap();
 
     let nested_path = File::resolve_path(&db, root_file.id).await.unwrap();
-
-    assert_eq!(nested_path.len(), 1);
-
-    assert_eq!(nested_path[0].id, root.id);
-    assert_eq!(nested_path[0].name, root.name);
+    assert_eq!(&nested_path, &[FolderPathSegment::from(&root)]);
 
     let nested_path = File::resolve_path(&db, nested_file.id).await.unwrap();
-
-    assert_eq!(nested_path.len(), 2);
-
-    assert_eq!(nested_path[0].id, root.id);
-    assert_eq!(nested_path[0].name, root.name);
-
-    assert_eq!(nested_path[1].id, base_folder.id);
-    assert_eq!(nested_path[1].name, base_folder.name);
+    assert_eq!(
+        &nested_path,
+        &[
+            FolderPathSegment::from(&root),
+            FolderPathSegment::from(&base_folder)
+        ]
+    );
 }
 
 #[tokio::test]
-async fn test_find_by_parent_file() {}
+async fn test_find_by_parent_file() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (_document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let files = File::find_by_parent(&db, root.id).await.unwrap();
+    assert!(files.is_empty());
+
+    let file_1 = make_test_file(&db, &root, "Test 1", None).await;
+    let file_2 = make_test_file(&db, &root, "Test 2", None).await;
+    let file_3 = make_test_file(&db, &root, "Test 3", None).await;
+
+    let files = File::find_by_parent(&db, root.id).await.unwrap();
+    assert_eq!(files.len(), 3);
+    assert!(files.iter().any(|item| item.id == file_1.id));
+    assert!(files.iter().any(|item| item.id == file_2.id));
+    assert!(files.iter().any(|item| item.id == file_3.id));
+
+    let base_folder_1 = make_test_folder(&db, &root, "base_1", None).await;
+    let files = File::find_by_parent(&db, base_folder_1.id).await.unwrap();
+    assert!(files.is_empty());
+
+    let file_4 = make_test_file(&db, &base_folder_1, "Test 4", None).await;
+    let file_5 = make_test_file(&db, &base_folder_1, "Test 5", None).await;
+    let file_6 = make_test_file(&db, &base_folder_1, "Test 6", None).await;
+
+    let files = File::find_by_parent(&db, base_folder_1.id).await.unwrap();
+    assert_eq!(files.len(), 3);
+    assert!(files.iter().any(|item| item.id == file_4.id));
+    assert!(files.iter().any(|item| item.id == file_5.id));
+    assert!(files.iter().any(|item| item.id == file_6.id));
+}
 
 #[tokio::test]
-async fn test_delete_file() {}
+async fn test_delete_file() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let file = make_test_file(&db, &root, "test", None).await;
+    let other_file = make_test_file(&db, &root, "test_2", None).await;
+
+    // File should exist
+    let target = File::find(&db, &document_box.scope, file.id).await.unwrap();
+    assert!(target.is_some());
+
+    // Delete file should delete one row
+    let result = file.delete(&db).await.unwrap();
+    assert_eq!(result.rows_affected(), 1);
+
+    // File shouldn't exist
+    let target = File::find(&db, &document_box.scope, file.id).await.unwrap();
+    assert!(target.is_none());
+
+    // Other file should still exist
+    let target = File::find(&db, &document_box.scope, other_file.id)
+        .await
+        .unwrap();
+    assert!(target.is_some());
+
+    // Delete file shouldn't delete any rows now that its gone
+    let result = file.delete(&db).await.unwrap();
+    assert_eq!(result.rows_affected(), 0);
+
+    // Should not be able to delete the root while another file is still present
+    // (Enforce proper deletion)
+    let result = root.delete(&db).await.unwrap_err();
+    assert_eq!(
+        result.into_database_error().unwrap().code().unwrap(),
+        // RESTRICT foreign key constraint violation
+        "23001"
+    );
+}
 
 /// Tests that [`File::resolve_with_extra`] can locate a collection of files using
 /// a scope and collection of file IDS
@@ -898,10 +1233,113 @@ async fn test_find_by_parent_file_with_extra_file() {
 }
 
 #[tokio::test]
-async fn test_total_count_file() {}
+async fn test_total_count_file() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (_document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let count = File::total_count(&db).await.unwrap();
+    assert_eq!(count, 0);
+
+    const FILE_COUNT: i64 = 15;
+
+    for i in 0..FILE_COUNT {
+        make_test_file(&db, &root, format!("Test {i}"), None).await;
+    }
+
+    let count = File::total_count(&db).await.unwrap();
+    assert_eq!(count, FILE_COUNT);
+}
 
 #[tokio::test]
-async fn test_total_size_file() {}
+async fn test_total_size_file() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (_document_box, root) = make_test_document_box(&db, "test_1", None).await;
+
+    let count = File::total_size(&db).await.unwrap();
+    assert_eq!(count, 0);
+
+    const FILE_COUNT: i64 = 15;
+    const FILE_SIZE: i32 = 150;
+
+    for i in 0..FILE_COUNT {
+        File::create(
+            &db,
+            CreateFile {
+                id: Uuid::new_v4(),
+                name: format!("Test {i}"),
+                folder_id: root.id,
+                size: FILE_SIZE,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let count = File::total_size(&db).await.unwrap();
+    assert_eq!(count, FILE_COUNT * (FILE_SIZE as i64));
+}
 
 #[tokio::test]
-async fn test_total_size_within_scope_file() {}
+async fn test_total_size_within_scope_file() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box_1, root_1) = make_test_document_box(&db, "test_1", None).await;
+    let (document_box_2, root_2) = make_test_document_box(&db, "test_2", None).await;
+
+    let count = File::total_size_within_scope(&db, &document_box_1.scope)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    let count = File::total_size_within_scope(&db, &document_box_2.scope)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+
+    const FILE_COUNT: i64 = 15;
+    const FILE_SIZE: i32 = 150;
+
+    for i in 0..FILE_COUNT {
+        File::create(
+            &db,
+            CreateFile {
+                id: Uuid::new_v4(),
+                name: format!("Test {i}"),
+                folder_id: root_1.id,
+                size: FILE_SIZE,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let count = File::total_size_within_scope(&db, &document_box_1.scope)
+        .await
+        .unwrap();
+    assert_eq!(count, FILE_COUNT * (FILE_SIZE as i64));
+
+    let count = File::total_size_within_scope(&db, &document_box_2.scope)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+
+    for i in 0..FILE_COUNT {
+        File::create(
+            &db,
+            CreateFile {
+                id: Uuid::new_v4(),
+                name: format!("Test {i}"),
+                folder_id: root_2.id,
+                size: FILE_SIZE,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let count = File::total_size_within_scope(&db, &document_box_2.scope)
+        .await
+        .unwrap();
+    assert_eq!(count, FILE_COUNT * (FILE_SIZE as i64));
+}

@@ -54,7 +54,7 @@ async fn test_link_move_to_folder() {
     let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
 
     assert_eq!(base_result, base_link);
 
@@ -67,7 +67,7 @@ async fn test_link_move_to_folder() {
     let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
     assert_eq!(base_result.folder_id, base_folder.id);
 }
 
@@ -83,7 +83,7 @@ async fn test_link_rename() {
     let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
 
     assert_eq!(base_result, base_link);
 
@@ -96,7 +96,7 @@ async fn test_link_rename() {
     let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
     assert_eq!(base_result.name, "base_2");
 }
 
@@ -112,7 +112,7 @@ async fn test_link_set_pinned() {
     let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
 
     assert_eq!(base_result, base_link);
 
@@ -125,19 +125,19 @@ async fn test_link_set_pinned() {
     let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
     assert!(base_result.pinned);
 
-    let base_folder = base_link.set_pinned(&db, false).await.unwrap();
+    let base_link = base_link.set_pinned(&db, false).await.unwrap();
 
     // Change should be applied to the returned value
-    assert!(!base_folder.pinned);
+    assert!(!base_link.pinned);
 
     // Change should also apply to find results
-    let base_result = Link::find(&db, &document_box.scope, base_folder.id)
+    let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
     assert!(!base_result.pinned);
 }
 
@@ -164,7 +164,7 @@ async fn test_link_update_value() {
     let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
 
     assert_eq!(base_result, base_link);
 
@@ -180,7 +180,7 @@ async fn test_link_update_value() {
     let base_result = Link::find(&db, &document_box.scope, base_link.id)
         .await
         .unwrap()
-        .expect("folder should exist");
+        .expect("link should exist");
     assert_eq!(base_result.value, "http://123");
 }
 
