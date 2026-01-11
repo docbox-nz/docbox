@@ -3,8 +3,10 @@ use docbox_database::{
     models::{
         document_box::DocumentBox,
         folder::{CreateFolder, Folder},
+        user::User,
     },
 };
+use uuid::Uuid;
 
 pub mod database;
 
@@ -48,6 +50,19 @@ pub async fn make_test_folder(
             folder_id: Some(parent.id),
             created_by,
         },
+    )
+    .await
+    .unwrap()
+}
+
+/// Make a test user
+#[allow(unused)]
+pub async fn make_test_user(db: &DbPool, name: impl Into<String>) -> User {
+    User::store(
+        db,
+        Uuid::new_v4().to_string(),
+        Some(name.into()),
+        Some("image.png".to_string()),
     )
     .await
     .unwrap()

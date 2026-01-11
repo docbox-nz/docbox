@@ -68,7 +68,7 @@ pub async fn delete_folder(
         match item {
             RemoveStackItem::Folder(folder) => {
                 // Resolve the folder children
-                let resolved = ResolvedFolder::resolve(db, &folder)
+                let resolved = ResolvedFolder::resolve(db, folder.id)
                     .await
                     .map_err(|error| {
                         tracing::error!(?error, "failed to resolve folder for deletion");

@@ -29,10 +29,10 @@ pub struct ResolvedFolder {
 }
 
 impl ResolvedFolder {
-    pub async fn resolve(db: &DbPool, folder: &Folder) -> DbResult<ResolvedFolder> {
-        let files_futures = File::find_by_parent(db, folder.id);
-        let folders_future = Folder::find_by_parent(db, folder.id);
-        let links_future = Link::find_by_parent(db, folder.id);
+    pub async fn resolve(db: &DbPool, folder_id: FolderId) -> DbResult<ResolvedFolder> {
+        let files_futures = File::find_by_parent(db, folder_id);
+        let folders_future = Folder::find_by_parent(db, folder_id);
+        let links_future = Link::find_by_parent(db, folder_id);
 
         let (files, folders, links) = try_join!(files_futures, folders_future, links_future)?;
 
