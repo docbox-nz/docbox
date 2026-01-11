@@ -1,5 +1,6 @@
 use crate::common::{
-    database::test_tenant_db, make_test_document_box, make_test_folder, make_test_user,
+    database::test_tenant_db, make_test_document_box, make_test_folder, make_test_link,
+    make_test_user,
 };
 use chrono::Utc;
 use docbox_database::models::{
@@ -856,19 +857,7 @@ async fn test_folder_resolved_folder() {
     let mut links = Vec::new();
 
     for i in 0..LINK_COUNT {
-        links.push(
-            Link::create(
-                &db,
-                CreateLink {
-                    name: format!("Test {i}"),
-                    value: "http://test.com".to_string(),
-                    folder_id: root.id,
-                    created_by: None,
-                },
-            )
-            .await
-            .unwrap(),
-        );
+        links.push(make_test_link(&db, &root, format!("Test {i}"), None).await);
     }
 
     let mut files = Vec::new();
@@ -951,19 +940,7 @@ async fn test_folder_resolved_folder_with_extra() {
     let mut links = Vec::new();
 
     for i in 0..LINK_COUNT {
-        links.push(
-            Link::create(
-                &db,
-                CreateLink {
-                    name: format!("Test {i}"),
-                    value: "http://test.com".to_string(),
-                    folder_id: root.id,
-                    created_by: None,
-                },
-            )
-            .await
-            .unwrap(),
-        );
+        links.push(make_test_link(&db, &root, format!("Test {i}"), None).await);
     }
 
     let mut files = Vec::new();
@@ -1065,19 +1042,7 @@ async fn test_folder_resolved_folder_with_extra() {
     let mut links = Vec::new();
 
     for i in 0..LINK_COUNT {
-        links.push(
-            Link::create(
-                &db,
-                CreateLink {
-                    name: format!("Test {i}"),
-                    value: "http://test.com".to_string(),
-                    folder_id: base_folder.id,
-                    created_by: Some(user.id.clone()),
-                },
-            )
-            .await
-            .unwrap(),
-        );
+        links.push(make_test_link(&db, &root, format!("Test {i}"), Some(user.id.clone())).await);
     }
 
     let mut files = Vec::new();

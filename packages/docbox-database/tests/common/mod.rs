@@ -3,6 +3,7 @@ use docbox_database::{
     models::{
         document_box::DocumentBox,
         folder::{CreateFolder, Folder},
+        link::{CreateLink, Link},
         user::User,
     },
 };
@@ -48,6 +49,29 @@ pub async fn make_test_folder(
             name: name.into(),
             document_box: parent.document_box.clone(),
             folder_id: Some(parent.id),
+            created_by,
+        },
+    )
+    .await
+    .unwrap()
+}
+
+/// Make a test link
+#[allow(unused)]
+pub async fn make_test_link(
+    db: &DbPool,
+    parent: &Folder,
+    name: impl Into<String>,
+    created_by: Option<String>,
+) -> Link {
+    Link::create(
+        db,
+        CreateLink {
+            name: name.into(),
+            // Random UUID value to ensure the value is captured from the DB properly
+            // for testing asserts
+            value: Uuid::new_v4().to_string(),
+            folder_id: parent.id,
             created_by,
         },
     )
