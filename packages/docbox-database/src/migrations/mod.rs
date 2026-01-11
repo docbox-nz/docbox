@@ -89,6 +89,10 @@ pub const TENANT_MIGRATIONS: &[(&str, &str)] = &[
         "m15_create_file_functions",
         include_str!("./tenant/m15_create_file_functions.sql"),
     ),
+    (
+        "m16_docbox_tasks_constraint",
+        include_str!("./tenant/m16_docbox_tasks_constraint.sql"),
+    ),
 ];
 
 /// Initialize the table used for root migration tracking
