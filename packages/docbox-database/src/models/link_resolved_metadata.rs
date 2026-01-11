@@ -1,7 +1,7 @@
 use crate::{DbExecutor, DbResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
+use sqlx::{postgres::PgQueryResult, prelude::FromRow};
 
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct LinkResolvedMetadata {
@@ -72,10 +72,10 @@ impl LinkResolvedMetadata {
     pub async fn delete_expired(
         db: impl DbExecutor<'_>,
         before: DateTime<Utc>,
-    ) -> DbResult<Option<LinkResolvedMetadata>> {
-        sqlx::query_as(r#"DELETE FROM "docbox_links_resolved_metadata" WHERE "expires_at" < $1"#)
+    ) -> DbResult<PgQueryResult> {
+        sqlx::query(r#"DELETE FROM "docbox_links_resolved_metadata" WHERE "expires_at" < $1"#)
             .bind(before)
-            .fetch_optional(db)
+            .execute(db)
             .await
     }
 }
