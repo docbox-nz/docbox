@@ -1,3 +1,4 @@
+use chrono::{Days, Utc};
 use docbox_database::models::tasks::{Task, TaskStatus};
 use uuid::Uuid;
 
@@ -51,7 +52,7 @@ async fn test_task_cascade_delete() {
 
 /// Tests that a task can be found by ID
 #[tokio::test]
-async fn test_find_task_by_id() {
+async fn test_task_find_by_id() {
     let (db, _db_container) = test_tenant_db().await;
     let (document_box, _root) = make_test_document_box(&db, "test", None).await;
 
@@ -74,7 +75,7 @@ async fn test_find_task_by_id() {
 
 /// Tests that a task can be completed
 #[tokio::test]
-async fn test_complete_task() {
+async fn test_task_complete() {
     let (db, _db_container) = test_tenant_db().await;
     let (document_box, _root) = make_test_document_box(&db, "test", None).await;
 
@@ -122,4 +123,33 @@ async fn test_complete_task() {
         .unwrap()
         .expect("task should exist");
     assert_eq!(task, found_task);
+}
+
+/// Tests that expired tasks are deleted correctly
+#[tokio::test]
+async fn test_task_delete_expired() {
+    let (db, _db_container) = test_tenant_db().await;
+    let (document_box, _root) = make_test_document_box(&db, "test", None).await;
+    let task = Task::create(&db, document_box.scope.clone()).await.unwrap();
+
+    // Deleting in the future should delete our task
+    Task::delete_expired(&db, Utc::now().checked_add_days(Days::new(1)).unwrap())
+        .await
+        .unwrap();
+
+    let found_task = Task::find(&db, task.id, &document_box.scope).await.unwrap();
+    assert!(found_task.is_none());
+
+    let task = Task::create(&db, document_box.scope.clone()).await.unwrap();
+
+    // Deleting in the past should not delete our task
+    Task::delete_expired(&db, Utc::now().checked_sub_days(Days::new(1)).unwrap())
+        .await
+        .unwrap();
+
+    let found_task = Task::find(&db, task.id, &document_box.scope)
+        .await
+        .unwrap()
+        .expect("task should exist");
+    assert_eq!(found_task, task);
 }

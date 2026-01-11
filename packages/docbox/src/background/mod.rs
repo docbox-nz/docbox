@@ -5,16 +5,21 @@ use scheduler::{SchedulerEventStream, SchedulerQueueEvent};
 use std::sync::Arc;
 
 pub mod purge_expired_presigned_tasks;
+pub mod purge_expired_tasks;
 pub mod purge_expired_website_metadata;
 pub mod scheduler;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
 pub enum BackgroundEvent {
     /// Task to purge presigned URLs
     PurgeExpiredPresigned,
 
     /// Task to purge expired website metadata
     PurgeExpiredWebsiteMetadata,
+
+    /// Task to purge expired tasks
+    PurgeExpiredTasks,
 }
 
 pub struct BackgroundTaskData {
@@ -30,6 +35,10 @@ pub async fn perform_background_tasks(data: BackgroundTaskData) {
         },
         SchedulerQueueEvent {
             event: BackgroundEvent::PurgeExpiredWebsiteMetadata,
+            interval: 60 * 60,
+        },
+        SchedulerQueueEvent {
+            event: BackgroundEvent::PurgeExpiredTasks,
             interval: 60 * 60,
         },
     ];
@@ -54,6 +63,12 @@ pub async fn perform_background_tasks(data: BackgroundTaskData) {
                         data.db_cache.clone(),
                     ),
                 );
+            }
+            BackgroundEvent::PurgeExpiredTasks => {
+                tracing::debug!("purging expired tasks");
+                tokio::spawn(purge_expired_tasks::safe_purge_expired_tasks(
+                    data.db_cache.clone(),
+                ));
             }
         }
     }

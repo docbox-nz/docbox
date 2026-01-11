@@ -2,7 +2,7 @@ use super::document_box::DocumentBoxScopeRaw;
 use crate::{DbExecutor, DbResult, models::document_box::DocumentBoxScopeRawRef};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Database, Decode, error::BoxDynError, prelude::FromRow};
+use sqlx::{Database, Decode, error::BoxDynError, postgres::PgQueryResult, prelude::FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -166,5 +166,16 @@ impl Task {
         self.completed_at = Some(completed_at);
 
         Ok(())
+    }
+
+    /// Deletes all tasks where the creation date is older than the `before` date
+    pub async fn delete_expired(
+        db: impl DbExecutor<'_>,
+        before: DateTime<Utc>,
+    ) -> DbResult<PgQueryResult> {
+        sqlx::query(r#"DELETE FROM "docbox_tasks" WHERE "created_at" < $1"#)
+            .bind(before)
+            .execute(db)
+            .await
     }
 }
