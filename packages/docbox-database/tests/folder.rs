@@ -1042,7 +1042,15 @@ async fn test_folder_resolved_folder_with_extra() {
     let mut links = Vec::new();
 
     for i in 0..LINK_COUNT {
-        links.push(make_test_link(&db, &root, format!("Test {i}"), Some(user.id.clone())).await);
+        links.push(
+            make_test_link(
+                &db,
+                &base_folder,
+                format!("Test {i}"),
+                Some(user.id.clone()),
+            )
+            .await,
+        );
     }
 
     let mut files = Vec::new();
