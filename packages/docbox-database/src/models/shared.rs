@@ -8,7 +8,10 @@ use sqlx::{postgres::types::PgRecordEncoder, prelude::FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::models::{document_box::DocumentBoxScopeRaw, folder::FolderId};
+use crate::models::{
+    document_box::DocumentBoxScopeRaw,
+    folder::{Folder, FolderId},
+};
 
 #[derive(Debug, FromRow)]
 pub struct TotalSizeResult {
@@ -26,6 +29,21 @@ pub struct FolderPathSegment {
     #[schema(value_type = Uuid)]
     pub id: FolderId,
     pub name: String,
+}
+
+impl FolderPathSegment {
+    pub fn new(id: FolderId, name: impl Into<String>) -> Self {
+        Self {
+            id,
+            name: name.into(),
+        }
+    }
+}
+
+impl<'a> From<&'a Folder> for FolderPathSegment {
+    fn from(value: &'a Folder) -> Self {
+        Self::new(value.id, &value.name)
+    }
 }
 
 pub struct DocboxInputPair<'a> {
