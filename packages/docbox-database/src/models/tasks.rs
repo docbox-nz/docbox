@@ -1,5 +1,5 @@
 use super::document_box::DocumentBoxScopeRaw;
-use crate::{DbExecutor, DbResult};
+use crate::{DbExecutor, DbResult, models::document_box::DocumentBoxScopeRawRef};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Database, Decode, error::BoxDynError, prelude::FromRow};
@@ -9,7 +9,7 @@ use uuid::Uuid;
 pub type TaskId = Uuid;
 
 /// Represents a stored asynchronous task progress
-#[derive(Debug, FromRow, Serialize, ToSchema)]
+#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
 pub struct Task {
     /// Unique ID of the task
     pub id: Uuid,
@@ -30,8 +30,43 @@ pub struct Task {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
+impl Eq for Task {}
+
+impl PartialEq for Task {
+    fn eq(&self, other: &Self) -> bool {
+        let complete_eq = match (&self.completed_at, &other.completed_at) {
+            (Some(a), Some(b)) => a.timestamp_millis().eq(&b.timestamp_millis()),
+            (None, None) => true,
+            _ => false,
+        };
+
+        self.id.eq(&other.id)
+            && self.document_box.eq(&other.document_box)
+            && self.status.eq(&other.status)
+            && self.output_data.eq(&self.output_data)
+            // Reduce precision when checking creation timestamp
+            // (Database does not store the full precision)
+            && self
+                .created_at
+                .timestamp_millis()
+                .eq(&other.created_at.timestamp_millis())
+            // Reduce precision when checking creation timestamp
+            // (Database does not store the full precision)
+            && complete_eq
+    }
+}
+
 #[derive(
-    Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize, ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    strum::EnumString,
+    strum::Display,
+    Deserialize,
+    Serialize,
+    ToSchema,
+    PartialEq,
+    Eq,
 )]
 pub enum TaskStatus {
     Pending,
@@ -94,7 +129,7 @@ impl Task {
     pub async fn find(
         db: impl DbExecutor<'_>,
         id: TaskId,
-        document_box: &DocumentBoxScopeRaw,
+        document_box: DocumentBoxScopeRawRef<'_>,
     ) -> DbResult<Option<Task>> {
         sqlx::query_as(r#"SELECT * FROM "docbox_tasks" WHERE "id" = $1 AND "document_box" = $2"#)
             .bind(id)
