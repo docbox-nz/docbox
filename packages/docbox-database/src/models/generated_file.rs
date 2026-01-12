@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
+use sqlx::{postgres::PgQueryResult, prelude::FromRow};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -12,7 +12,16 @@ use crate::{DbExecutor, DbResult};
 pub type GeneratedFileId = Uuid;
 
 #[derive(
-    Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize, ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    strum::EnumString,
+    strum::Display,
+    Deserialize,
+    Serialize,
+    ToSchema,
+    PartialEq,
+    Eq,
 )]
 pub enum GeneratedFileType {
     /// Conversion to PDF file
@@ -40,7 +49,7 @@ impl TryFrom<String> for GeneratedFileType {
 }
 
 /// File generated as an artifact of an uploaded file
-#[derive(Debug, FromRow, Serialize, ToSchema)]
+#[derive(Debug, Clone, FromRow, Serialize, ToSchema)]
 pub struct GeneratedFile {
     /// Unique identifier for the file
     #[schema(value_type = Uuid)]
@@ -62,6 +71,25 @@ pub struct GeneratedFile {
     pub file_key: String,
     /// When the file was created
     pub created_at: DateTime<Utc>,
+}
+
+impl Eq for GeneratedFile {}
+
+impl PartialEq for GeneratedFile {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+            && self.file_id.eq(&other.file_id)
+            && self.mime.eq(&other.mime)
+            && self.ty.eq(&other.ty)
+            && self.hash.eq(&other.hash)
+            && self.file_key.eq(&other.file_key)
+            // Reduce precision when checking creation timestamp
+            // (Database does not store the full precision)
+            && self
+                .created_at
+                .timestamp_millis()
+                .eq(&other.created_at.timestamp_millis())
+    }
 }
 
 #[derive(Debug)]
@@ -117,13 +145,11 @@ impl GeneratedFile {
     }
 
     /// Deletes the generated file
-    pub async fn delete(self, db: impl DbExecutor<'_>) -> DbResult<()> {
+    pub async fn delete(self, db: impl DbExecutor<'_>) -> DbResult<PgQueryResult> {
         sqlx::query(r#"DELETE FROM "docbox_generated_files" WHERE "id" = $1"#)
             .bind(self.id)
             .execute(db)
-            .await?;
-
-        Ok(())
+            .await
     }
 
     pub async fn find_all(
