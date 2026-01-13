@@ -3932,7 +3932,6 @@
         "type": "object",
         "required": [
           "id",
-          "user",
           "type",
           "metadata",
           "created_at"
@@ -3981,8 +3980,15 @@
             "description": "The type of change that was made"
           },
           "user": {
-            "$ref": "#/components/schemas/EditHistoryUser",
-            "description": "User that made the edit"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/User",
+                "description": "User that made the edit"
+              }
+            ]
           }
         }
       },
@@ -4096,32 +4102,6 @@
           "ChangePinned"
         ]
       },
-      "EditHistoryUser": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Unique ID of the user"
-          },
-          "image_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Last saved image ID for the user"
-          },
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Last saved name for the user"
-          }
-        }
-      },
       "EmailProcessingConfig": {
         "type": "object",
         "properties": {
@@ -4132,6 +4112,70 @@
             ],
             "description": "Whether to skip extracting attachments when processing an email",
             "default": null
+          }
+        }
+      },
+      "File": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "mime",
+          "folder_id",
+          "hash",
+          "size",
+          "encrypted",
+          "pinned",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the file was created"
+          },
+          "encrypted": {
+            "type": "boolean",
+            "description": "Whether the file was determined to be encrypted when processing"
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Parent folder ID"
+          },
+          "hash": {
+            "type": "string",
+            "description": "Hash of the file bytes stored in S3"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the file"
+          },
+          "mime": {
+            "type": "string",
+            "description": "Mime type of the file content"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the file"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Optional parent file ID if the file is a child of\nsome other file (i.e attachment for an email file)"
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Whether the file is marked as pinned"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Size of the file in bytes"
           }
         }
       },
@@ -4221,99 +4265,89 @@
         ]
       },
       "FileWithExtra": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/File"
+          },
+          {
+            "type": "object",
+            "required": [
+              "created_by",
+              "last_modified_by"
+            ],
+            "properties": {
+              "created_by": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/User"
+                  }
+                ]
+              },
+              "last_modified_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Last time the file was modified"
+              },
+              "last_modified_by": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/User"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "File with the resolved creator and last modified data"
+      },
+      "Folder": {
         "type": "object",
-        "description": "File with the resolved creator and last modified data",
         "required": [
           "id",
           "name",
-          "mime",
-          "folder_id",
-          "hash",
-          "size",
-          "encrypted",
           "pinned",
-          "created_at",
-          "created_by",
-          "last_modified_by"
+          "document_box",
+          "created_at"
         ],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "description": "When the file was created"
+            "description": "When the folder was created"
           },
-          "created_by": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/User",
-                "description": "User who created the file"
-              }
-            ]
-          },
-          "encrypted": {
-            "type": "boolean",
-            "description": "Whether the file was determined to be encrypted when processing"
+          "document_box": {
+            "$ref": "#/components/schemas/String",
+            "description": "ID of the document box the folder belongs to"
           },
           "folder_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Parent folder ID"
-          },
-          "hash": {
-            "type": "string",
-            "description": "Hash of the file bytes stored in S3"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Unique identifier for the file"
-          },
-          "last_modified_at": {
             "type": [
               "string",
               "null"
             ],
-            "format": "date-time",
-            "description": "Last time the file was modified"
+            "format": "uuid",
+            "description": "Parent folder ID if the folder is a child"
           },
-          "last_modified_by": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/User",
-                "description": "User who last modified the file"
-              }
-            ]
-          },
-          "mime": {
+          "id": {
             "type": "string",
-            "description": "Mime type of the file content"
+            "format": "uuid",
+            "description": "Unique identifier for the folder"
           },
           "name": {
             "type": "string",
             "description": "Name of the file"
           },
-          "parent_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "Optional parent file if the file is a child"
-          },
           "pinned": {
             "type": "boolean",
-            "description": "Whether the file is marked as pinned"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Size of the file in bytes"
+            "description": "Whether the folder is marked as pinned"
           }
         }
       },
@@ -4352,73 +4386,48 @@
         }
       },
       "FolderWithExtra": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "pinned",
-          "created_at",
-          "created_by",
-          "last_modified_by"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the folder was created"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Folder"
           },
-          "created_by": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/User",
-                "description": "User who created the folder"
-              }
-            ]
-          },
-          "folder_id": {
-            "type": [
-              "string",
-              "null"
+          {
+            "type": "object",
+            "required": [
+              "created_by",
+              "last_modified_by"
             ],
-            "format": "uuid",
-            "description": "Parent folder ID if the folder is a child"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Unique identifier for the folder"
-          },
-          "last_modified_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time",
-            "description": "Last time the folder was modified"
-          },
-          "last_modified_by": {
-            "oneOf": [
-              {
-                "type": "null"
+            "properties": {
+              "created_by": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/User"
+                  }
+                ]
               },
-              {
-                "$ref": "#/components/schemas/User",
-                "description": "User who last modified the folder"
+              "last_modified_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Last time the folder was modified"
+              },
+              "last_modified_by": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/User"
+                  }
+                ]
               }
-            ]
-          },
-          "name": {
-            "type": "string",
-            "description": "Name of the file"
-          },
-          "pinned": {
-            "type": "boolean",
-            "description": "Whether the folder is marked as pinned"
+            }
           }
-        }
+        ]
       },
       "GeneratedFile": {
         "type": "object",
@@ -4500,7 +4509,7 @@
           }
         }
       },
-      "LinkWithExtra": {
+      "Link": {
         "type": "object",
         "required": [
           "id",
@@ -4508,26 +4517,13 @@
           "value",
           "pinned",
           "folder_id",
-          "created_at",
-          "created_by",
-          "last_modified_by"
+          "created_at"
         ],
         "properties": {
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "When the link was created"
-          },
-          "created_by": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/User",
-                "description": "User who created the link"
-              }
-            ]
           },
           "folder_id": {
             "type": "string",
@@ -4538,25 +4534,6 @@
             "type": "string",
             "format": "uuid",
             "description": "Unique identifier for the link"
-          },
-          "last_modified_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time",
-            "description": "Last time the link was modified"
-          },
-          "last_modified_by": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/User",
-                "description": "User who last modified the link"
-              }
-            ]
           },
           "name": {
             "type": "string",
@@ -4571,6 +4548,52 @@
             "description": "value of the link"
           }
         }
+      },
+      "LinkWithExtra": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Link"
+          },
+          {
+            "type": "object",
+            "required": [
+              "created_by",
+              "last_modified_by"
+            ],
+            "properties": {
+              "created_by": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/User",
+                    "description": "User who created the link"
+                  }
+                ]
+              },
+              "last_modified_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Last time the file was modified"
+              },
+              "last_modified_by": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/User",
+                    "description": "User who last modified the link"
+                  }
+                ]
+              }
+            }
+          }
+        ]
       },
       "PageResult": {
         "type": "object",
