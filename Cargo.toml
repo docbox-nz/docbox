@@ -28,7 +28,7 @@ docbox-database = { version = "0.7.0", path = "packages/docbox-database" }
 docbox-processing = { version = "0.3.0", path = "packages/docbox-processing" }
 
 # Search access
-docbox-search = { version = "0.6.0", path = "packages/docbox-search" }
+docbox-search = { version = "0.7.0", path = "packages/docbox-search" }
 
 # Secret management
 docbox-secrets = { version = "0.3.0", path = "packages/docbox-secrets" }
