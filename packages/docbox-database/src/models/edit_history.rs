@@ -9,12 +9,22 @@ use uuid::Uuid;
 
 use super::{file::FileId, folder::FolderId, user::UserId};
 use crate::models::link::LinkId;
+use crate::models::user::User;
 use crate::{DbErr, DbExecutor, DbResult};
 
 pub type EditHistoryId = Uuid;
 
 #[derive(
-    Debug, Clone, Copy, strum::EnumString, strum::Display, Deserialize, Serialize, ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    strum::EnumString,
+    strum::Display,
+    Deserialize,
+    Serialize,
+    ToSchema,
+    PartialEq,
+    Eq,
 )]
 pub enum EditHistoryType {
     /// File was moved to a different folder
@@ -35,7 +45,7 @@ impl TryFrom<String> for EditHistoryType {
 }
 
 /// Metadata associated with an edit history
-#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum EditHistoryMetadata {
     MoveToFolder {
@@ -90,8 +100,7 @@ pub struct EditHistory {
     pub folder_id: Option<FolderId>,
 
     /// User that made the edit
-    #[sqlx(flatten)]
-    pub user: EditHistoryUser,
+    pub user: Option<User>,
 
     /// The type of change that was made
     #[serde(rename = "type")]
@@ -107,25 +116,13 @@ pub struct EditHistory {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
-pub struct EditHistoryUser {
-    /// Unique ID of the user
-    #[sqlx(rename = "user_id")]
-    pub id: Option<String>,
-    /// Last saved name for the user
-    #[sqlx(rename = "user_name")]
-    pub name: Option<String>,
-    /// Last saved image ID for the user
-    #[sqlx(rename = "user_image_id")]
-    pub image_id: Option<String>,
-}
-
 pub struct CreateEditHistory {
     pub ty: CreateEditHistoryType,
     pub user_id: Option<UserId>,
     pub metadata: EditHistoryMetadata,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum CreateEditHistoryType {
     File(FileId),
     Folder(FolderId),
@@ -167,7 +164,7 @@ impl EditHistory {
             r#"
             INSERT INTO "docbox_edit_history" (
                 "id", "file_id", "link_id",
-                "folder_id", "user_id", "type", 
+                "folder_id", "user_id", "type",
                 "metadata", "created_at"
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         "#,
@@ -192,14 +189,9 @@ impl EditHistory {
     ) -> DbResult<Vec<EditHistory>> {
         sqlx::query_as(
             r#"
-            SELECT 
-                "history".*,
-                "user"."id" AS "user_id",
-                "user"."name" AS "user_name",
-                "user"."image_id" AS "user_image_id"
+            SELECT "history".*, mk_docbox_user("user") AS "user"
             FROM "docbox_edit_history" "history"
-            LEFT JOIN
-                "docbox_users" "user" ON "history"."user_id" = "user"."id" 
+            LEFT JOIN "docbox_users" "user" ON "history"."user_id" = "user"."id"
             WHERE "history"."file_id" = $1
             ORDER BY "history"."created_at" DESC
         "#,
@@ -215,14 +207,9 @@ impl EditHistory {
     ) -> DbResult<Vec<EditHistory>> {
         sqlx::query_as(
             r#"
-            SELECT 
-                "history".*,
-                "user"."id" AS "user_id",
-                "user"."name" AS "user_name",
-                "user"."image_id" AS "user_image_id"
+            SELECT "history".*, mk_docbox_user("user") AS "user"
             FROM "docbox_edit_history" "history"
-            LEFT JOIN
-                "docbox_users" "user" ON "history"."user_id" = "user"."id" 
+            LEFT JOIN "docbox_users" "user" ON "history"."user_id" = "user"."id"
             WHERE "history"."folder_id" = $1
             ORDER BY "history"."created_at" DESC
         "#,
@@ -238,14 +225,9 @@ impl EditHistory {
     ) -> DbResult<Vec<EditHistory>> {
         sqlx::query_as(
             r#"
-            SELECT 
-                "history".*,
-                "user"."id" AS "user_id",
-                "user"."name" AS "user_name",
-                "user"."image_id" AS "user_image_id"
+            SELECT "history".*, mk_docbox_user("user") AS "user"
             FROM "docbox_edit_history" "history"
-            LEFT JOIN
-                "docbox_users" "user" ON "history"."user_id" = "user"."id" 
+            LEFT JOIN "docbox_users" "user" ON "history"."user_id" = "user"."id"
             WHERE "history"."link_id" = $1
             ORDER BY "history"."created_at" DESC
         "#,
