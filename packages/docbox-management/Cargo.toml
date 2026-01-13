@@ -1,6 +1,6 @@
 [package]
 name = "docbox-management"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 description = "Management core library for managing docbox used by the cli and other tools"
 

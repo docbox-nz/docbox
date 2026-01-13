@@ -1,4 +1,5 @@
-use docbox_database::{DbPool, DbResult};
+/// docbox-database re-exports
+pub use docbox_database::*;
 
 /// Provider to get database access for the management tool
 ///
