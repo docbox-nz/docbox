@@ -22,7 +22,7 @@ pub async fn test_database_container() -> ContainerAsync<Postgres> {
 }
 
 #[allow(dead_code)]
-async fn test_database(container: &ContainerAsync<Postgres>) -> DbPool {
+pub async fn test_database(container: &ContainerAsync<Postgres>) -> DbPool {
     let host_ip = container.get_host().await.unwrap();
     let host_port = container.get_host_port_ipv4(5432).await.unwrap();
 
