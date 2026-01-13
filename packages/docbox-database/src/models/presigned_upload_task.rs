@@ -6,7 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{prelude::FromRow, types::Json};
+use sqlx::{postgres::PgQueryResult, prelude::FromRow, types::Json};
 use uuid::Uuid;
 
 use super::{document_box::DocumentBoxScopeRaw, file::FileId, folder::FolderId, user::UserId};
@@ -15,7 +15,7 @@ use crate::{DbErr, DbExecutor, DbResult};
 pub type PresignedUploadTaskId = Uuid;
 
 /// Task storing the details for a presigned upload task
-#[derive(Debug, FromRow, Serialize)]
+#[derive(Debug, Clone, FromRow, Serialize)]
 pub struct PresignedUploadTask {
     /// ID of the upload task
     pub id: PresignedUploadTaskId,
@@ -53,7 +53,37 @@ pub struct PresignedUploadTask {
     pub processing_config: Option<Json<serde_json::Value>>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+impl Eq for PresignedUploadTask {}
+
+impl PartialEq for PresignedUploadTask {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+            && self.status.eq(&other.status)
+            && self.name.eq(&other.name)
+            && self.mime.eq(&other.mime)
+            && self.size.eq(&other.size)
+            && self.document_box.eq(&other.document_box)
+            && self.folder_id.eq(&other.folder_id)
+            && self.file_key.eq(&other.file_key)
+            // Reduce precision when checking creation timestamp
+            // (Database does not store the full precision)
+            && self
+                .created_at
+                .timestamp_millis()
+                .eq(&other.created_at.timestamp_millis())
+            // Reduce precision when checking creation timestamp
+            // (Database does not store the full precision)
+            && self
+                .expires_at
+                .timestamp_millis()
+                .eq(&other.expires_at.timestamp_millis())
+            && self.created_by.eq(&self.created_by)
+            && self.parent_id.eq(&other.parent_id)
+            && self.processing_config.eq(&other.processing_config)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "status")]
 pub enum PresignedTaskStatus {
     Pending,
@@ -62,6 +92,7 @@ pub enum PresignedTaskStatus {
 }
 
 /// Required data to create a presigned upload task
+#[derive(Default)]
 pub struct CreatePresignedUploadTask {
     pub name: String,
     pub mime: String,
@@ -171,7 +202,7 @@ impl PresignedUploadTask {
         task_id: PresignedUploadTaskId,
     ) -> DbResult<Option<PresignedUploadTask>> {
         sqlx::query_as(
-            r#"SELECT * FROM "docbox_presigned_upload_tasks" 
+            r#"SELECT * FROM "docbox_presigned_upload_tasks"
             WHERE "id" = $1 AND "document_box" = $2"#,
         )
         .bind(task_id)
@@ -203,12 +234,13 @@ impl PresignedUploadTask {
     }
 
     /// Delete a specific presigned upload task
-    pub async fn delete(db: impl DbExecutor<'_>, task_id: PresignedUploadTaskId) -> DbResult<()> {
+    pub async fn delete(
+        db: impl DbExecutor<'_>,
+        task_id: PresignedUploadTaskId,
+    ) -> DbResult<PgQueryResult> {
         sqlx::query(r#"DELETE FROM "docbox_presigned_upload_tasks" WHERE "id" = $1"#)
             .bind(task_id)
             .execute(db)
-            .await?;
-
-        Ok(())
+            .await
     }
 }
