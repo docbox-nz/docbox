@@ -1,6 +1,8 @@
 /// docbox-database re-exports
 pub use docbox_database::*;
 
+use crate::config::AdminDatabaseConfiguration;
+
 /// Provider to get database access for the management tool
 ///
 /// Expects that the access granted to the database is sufficient
@@ -25,5 +27,24 @@ impl Drop for CloseOnDrop {
             pool.close().await;
             tracing::debug!("closed dropped pool");
         });
+    }
+}
+
+pub struct ServerDatabaseProvider {
+    pub config: AdminDatabaseConfiguration,
+    pub username: String,
+    pub password: String,
+}
+
+impl DatabaseProvider for ServerDatabaseProvider {
+    fn connect(&self, database: &str) -> impl Future<Output = DbResult<DbPool>> + Send {
+        let options = PgConnectOptions::new()
+            .host(&self.config.host)
+            .port(self.config.port)
+            .username(&self.username)
+            .password(&self.password)
+            .database(database);
+
+        PgPool::connect_with(options)
     }
 }

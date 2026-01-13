@@ -25,6 +25,8 @@ docbox-storage.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+# Request for making requests to the docbox server
+reqwest.workspace = true
 
 # Logging
 tracing.workspace = true
