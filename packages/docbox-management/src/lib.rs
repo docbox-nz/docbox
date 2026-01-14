@@ -4,6 +4,7 @@ pub mod config;
 pub mod database;
 pub mod password;
 pub mod root;
+pub mod server;
 pub mod tenant;
 
 /// docbox-core re-exports
