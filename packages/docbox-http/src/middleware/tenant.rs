@@ -11,12 +11,12 @@ use axum::{
     response::Response,
 };
 use docbox_core::{
+    database::{DatabasePoolCache, DbPool, models::tenant::Tenant},
     events::{EventPublisherFactory, TenantEventPublisher},
+    search::{SearchIndexFactory, TenantSearchIndex},
+    storage::{StorageLayerFactory, TenantStorageLayer},
     tenant::tenant_cache::TenantCache,
 };
-use docbox_database::{DatabasePoolCache, DbPool, models::tenant::Tenant};
-use docbox_search::{SearchIndexFactory, TenantSearchIndex};
-use docbox_storage::{StorageLayerFactory, TenantStorageLayer};
 use thiserror::Error;
 use tracing::Instrument;
 use utoipa::IntoParams;

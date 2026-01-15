@@ -1,4 +1,4 @@
-use docbox_database::models::document_box::DocumentBox;
+use docbox_core::database::models::document_box::DocumentBox;
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

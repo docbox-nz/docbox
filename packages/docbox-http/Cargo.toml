@@ -12,26 +12,8 @@ readme.workspace = true
 # Environment variables
 dotenvy = "=0.15.7"
 
-# Core business logic
+# Docbox core
 docbox-core.workspace = true
-
-# Database access
-docbox-database.workspace = true
-
-# File processing
-docbox-processing.workspace = true
-
-# Search access
-docbox-search.workspace = true
-
-# Web scraping
-docbox-web-scraper.workspace = true
-
-# Secret management
-docbox-secrets.workspace = true
-
-# Storage access
-docbox-storage.workspace = true
 
 # Asynchronous runtime & Helpers
 tokio = { workspace = true, features = ["full"] }

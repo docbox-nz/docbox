@@ -13,15 +13,17 @@ use crate::{
 };
 use axum::{Json, extract::Path, http::StatusCode};
 use axum_valid::Garde;
-use docbox_core::folders::{
-    create_folder::{CreateFolderData, safe_create_folder},
-    delete_folder::delete_folder,
-    update_folder::{UpdateFolder, UpdateFolderError},
-};
-use docbox_database::models::{
-    edit_history::EditHistory,
-    folder::{Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
-    shared::WithFullPath,
+use docbox_core::{
+    database::models::{
+        edit_history::EditHistory,
+        folder::{Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
+        shared::WithFullPath,
+    },
+    folders::{
+        create_folder::{CreateFolderData, safe_create_folder},
+        delete_folder::delete_folder,
+        update_folder::{UpdateFolder, UpdateFolderError},
+    },
 };
 
 pub const FOLDER_TAG: &str = "Folder";

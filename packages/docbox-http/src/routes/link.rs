@@ -20,16 +20,16 @@ use axum::{
     http::{Response, StatusCode, header},
 };
 use axum_valid::Garde;
+use docbox_core::database::models::{
+    edit_history::EditHistory,
+    folder::Folder,
+    link::{Link, LinkId, LinkWithExtra},
+};
 use docbox_core::links::{
     create_link::{CreateLinkData, safe_create_link},
     delete_link::delete_link,
     resolve_website::ResolveWebsiteService,
     update_link::{UpdateLink, UpdateLinkError},
-};
-use docbox_database::models::{
-    edit_history::EditHistory,
-    folder::Folder,
-    link::{Link, LinkId, LinkWithExtra},
 };
 use std::sync::Arc;
 
@@ -182,7 +182,7 @@ pub async fn get_metadata(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let url = docbox_web_scraper::Url::parse(&link.value).map_err(|error| {
+    let url = docbox_core::web_scraper::Url::parse(&link.value).map_err(|error| {
         tracing::warn!(?error, "invalid website");
         HttpLinkError::InvalidLinkUrl
     })?;
@@ -242,7 +242,7 @@ pub async fn get_favicon(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let url = docbox_web_scraper::Url::parse(&link.value).map_err(|error| {
+    let url = docbox_core::web_scraper::Url::parse(&link.value).map_err(|error| {
         tracing::warn!(?error, "invalid website");
         HttpLinkError::InvalidLinkUrl
     })?;
@@ -313,7 +313,7 @@ pub async fn get_image(
         // Link not found
         .ok_or(HttpLinkError::UnknownLink)?;
 
-    let url = docbox_web_scraper::Url::parse(&link.value).map_err(|error| {
+    let url = docbox_core::web_scraper::Url::parse(&link.value).map_err(|error| {
         tracing::warn!(?error, "invalid website");
         HttpLinkError::InvalidLinkUrl
     })?;

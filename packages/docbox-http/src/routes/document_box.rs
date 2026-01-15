@@ -13,18 +13,20 @@ use crate::{
 };
 use axum::{Json, extract::Path, http::StatusCode};
 use axum_valid::Garde;
-use docbox_core::document_box::{
-    create_document_box::{CreateDocumentBox, CreateDocumentBoxError, create_document_box},
-    delete_document_box::{DeleteDocumentBoxError, delete_document_box},
-    search_document_box::{ResolvedSearchResult, search_document_box},
+use docbox_core::{
+    database::models::{
+        document_box::DocumentBox,
+        file::File,
+        folder::{Folder, FolderWithExtra, ResolvedFolderWithExtra},
+        shared::WithFullPath,
+    },
+    document_box::{
+        create_document_box::{CreateDocumentBox, CreateDocumentBoxError, create_document_box},
+        delete_document_box::{DeleteDocumentBoxError, delete_document_box},
+        search_document_box::{ResolvedSearchResult, search_document_box},
+    },
+    search::models::{SearchRequest, SearchResultItem, SearchResultResponse},
 };
-use docbox_database::models::{
-    document_box::DocumentBox,
-    file::File,
-    folder::{Folder, FolderWithExtra, ResolvedFolderWithExtra},
-    shared::WithFullPath,
-};
-use docbox_search::models::{SearchRequest, SearchResultItem, SearchResultResponse};
 use tokio::join;
 
 pub const DOCUMENT_BOX_TAG: &str = "Document Box";

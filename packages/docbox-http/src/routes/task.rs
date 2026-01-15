@@ -8,7 +8,7 @@ use crate::{
     models::{document_box::DocumentBoxScope, task::HttpTaskError},
 };
 use axum::{Json, extract::Path};
-use docbox_database::models::tasks::{Task, TaskId};
+use docbox_core::database::models::tasks::{Task, TaskId};
 
 pub const TASK_TAG: &str = "Task";
 

@@ -3,30 +3,30 @@
 use crate::background::{BackgroundTaskData, perform_background_tasks};
 use axum::{Extension, extract::DefaultBodyLimit};
 use axum_server::tls_rustls::RustlsConfig;
-use docbox_core::{
-    aws::{SqsClient, aws_config},
-    events::{EventPublisherFactory, sqs::SqsEventPublisherFactory},
-    links::resolve_website::{ResolveWebsiteConfig, ResolveWebsiteService},
-    notifications::{
-        AppNotificationQueue, NotificationConfig,
-        process::{NotificationQueueData, process_notification_queue},
-    },
-    tenant::tenant_cache::TenantCache,
-};
-use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
 use docbox_http::{
+    core::{
+        aws::{SqsClient, aws_config},
+        database::{DatabasePoolCache, DatabasePoolCacheConfig},
+        events::{EventPublisherFactory, sqs::SqsEventPublisherFactory},
+        links::resolve_website::{ResolveWebsiteConfig, ResolveWebsiteService},
+        notifications::{
+            AppNotificationQueue, NotificationConfig,
+            process::{NotificationQueueData, process_notification_queue},
+        },
+        processing::{
+            ProcessingLayer, ProcessingLayerConfig,
+            office::{OfficeConverter, OfficeConverterConfig, OfficeProcessingLayer},
+        },
+        search::{SearchIndexFactory, SearchIndexFactoryConfig},
+        secrets::{SecretManager, SecretsManagerConfig},
+        storage::{StorageLayerFactory, StorageLayerFactoryConfig},
+        tenant::tenant_cache::TenantCache,
+        web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig},
+    },
     extensions::{max_file_size::MaxFileSizeBytes, server_version::ServerVersion},
     middleware::api_key::ApiKeyLayer,
     routes::router,
 };
-use docbox_processing::{
-    ProcessingLayer, ProcessingLayerConfig,
-    office::{OfficeConverter, OfficeConverterConfig, OfficeProcessingLayer},
-};
-use docbox_search::{SearchIndexFactory, SearchIndexFactoryConfig};
-use docbox_secrets::{SecretManager, SecretsManagerConfig};
-use docbox_storage::{StorageLayerFactory, StorageLayerFactoryConfig};
-use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
 use logging::{init_logging, init_logging_with_sentry};
 use std::{
     error::Error,

@@ -5,7 +5,7 @@ use axum::{
     extract::FromRequestParts,
     http::{StatusCode, request::Parts},
 };
-use docbox_database::{DbExecutor, models::user::User};
+use docbox_core::database::{DbExecutor, models::user::User};
 use thiserror::Error;
 use utoipa::IntoParams;
 

@@ -1,7 +1,6 @@
 use crate::error::HttpError;
 use axum::http::StatusCode;
-use docbox_core::links::create_link::CreateLinkError;
-use docbox_database::models::folder::FolderId;
+use docbox_core::{database::models::folder::FolderId, links::create_link::CreateLinkError};
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

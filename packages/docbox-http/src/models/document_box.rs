@@ -2,7 +2,7 @@ use std::{fmt::Display, str::FromStr};
 
 use crate::error::HttpError;
 use axum::http::StatusCode;
-use docbox_database::models::{
+use docbox_core::database::models::{
     document_box::DocumentBox,
     folder::{FolderWithExtra, ResolvedFolderWithExtra},
 };
