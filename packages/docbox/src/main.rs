@@ -198,23 +198,6 @@ async fn server() -> Result<(), Box<dyn Error>> {
         }));
     }
 
-    // Determine whether to use https
-    let use_https = match std::env::var("DOCBOX_USE_HTTPS") {
-        Ok(value) => value.parse::<bool>()?,
-        // Default max file size in bytes (100MB)
-        Err(_) => false,
-    };
-
-    // Determine the socket address to bind against
-    let server_address = std::env::var("SERVER_ADDRESS")
-        .ok()
-        .and_then(|value| value.parse::<SocketAddr>().ok())
-        .unwrap_or(if use_https {
-            DEFAULT_SERVER_ADDRESS_HTTPS
-        } else {
-            DEFAULT_SERVER_ADDRESS_HTTP
-        });
-
     // Setup app layers and extension
     let mut app = app
         .layer(Extension(search_index_factory))
@@ -242,9 +225,6 @@ async fn server() -> Result<(), Box<dyn Error>> {
     #[cfg(debug_assertions)]
     let app = app.layer(tower_http::cors::CorsLayer::very_permissive());
 
-    // Log the startup message
-    debug!("server started on {server_address}");
-
     let handle = axum_server::Handle::default();
 
     // Handle graceful shutdown on CTRL+C
@@ -257,6 +237,26 @@ async fn server() -> Result<(), Box<dyn Error>> {
             db_cache.close_all().await;
         }
     });
+
+    // Determine whether to use https
+    let use_https = match std::env::var("DOCBOX_USE_HTTPS") {
+        Ok(value) => value.parse::<bool>()?,
+        // Default max file size in bytes (100MB)
+        Err(_) => false,
+    };
+
+    // Determine the socket address to bind against
+    let server_address = std::env::var("SERVER_ADDRESS")
+        .ok()
+        .and_then(|value| value.parse::<SocketAddr>().ok())
+        .unwrap_or(if use_https {
+            DEFAULT_SERVER_ADDRESS_HTTPS
+        } else {
+            DEFAULT_SERVER_ADDRESS_HTTP
+        });
+
+    // Log the startup message
+    debug!("server started on {server_address}");
 
     if use_https {
         // Determine whether to use https

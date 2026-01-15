@@ -6,10 +6,8 @@ use docbox_core::purge::{
 use docbox_database::DatabasePoolCache;
 use docbox_storage::StorageLayerFactory;
 use futures::StreamExt;
-use scheduler::{SchedulerEventStream, SchedulerQueueEvent};
 use std::sync::Arc;
-
-pub mod scheduler;
+use tokio_simple_fixed_scheduler::{SchedulerEventStream, SchedulerQueueEvent};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 #[allow(clippy::enum_variant_names)]

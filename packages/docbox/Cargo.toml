@@ -40,6 +40,9 @@ docbox-storage.workspace = true
 tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
 
+# Background task scheduler
+tokio-simple-fixed-scheduler = "=0.1.0"
+
 # HTTP server framework
 axum = { version = "=0.8.8", features = ["multipart"] }
 
@@ -58,9 +61,6 @@ thiserror.workspace = true
 # Logging
 tracing.workspace = true
 tracing-subscriber.workspace = true
-
-# Date and time
-chrono.workspace = true
 
 # Sentry
 sentry = { version = "=0.46.0", default-features = false, features = [
