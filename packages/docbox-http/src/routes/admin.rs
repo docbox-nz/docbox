@@ -233,7 +233,9 @@ pub async fn search_tenant(
 /// file type (or ingested through a source that was unable to get the correct mime).
 ///
 /// Will reprocess files that have this unknown file type mime to see if a different
-/// type can be obtained
+/// type can be obtained.
+///
+/// This endpoint is not supported on serverless
 #[utoipa::path(
     post,
     operation_id = "admin_reprocess_octet_stream_files",
@@ -271,6 +273,8 @@ pub async fn reprocess_octet_stream_files_tenant(
 ///
 /// Rebuild the tenant search index from the data stored in the database
 /// and in storage
+///
+/// This endpoint is not supported on serverless
 #[utoipa::path(
     post,
     operation_id = "admin_rebuild_search_index",

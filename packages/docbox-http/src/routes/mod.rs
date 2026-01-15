@@ -3,6 +3,8 @@ use axum::{
     routing::{get, post},
 };
 
+use crate::error::{HttpCommonError, HttpStatusResult};
+
 use super::middleware::tenant::tenant_auth_middleware;
 
 pub mod admin;
@@ -13,17 +15,26 @@ pub mod link;
 pub mod task;
 pub mod utils;
 
-pub fn router() -> Router {
+pub fn router<
+    const DIRECT_FILE_UPLOAD: bool,
+    const REPROCESS_OCTET_STREAM_FILES: bool,
+    const REBUILD_SEARCH_INDEX: bool,
+>() -> Router {
     Router::new()
-        .nest("/admin", admin_router())
-        .nest("/box", document_box_router())
+        .nest(
+            "/admin",
+            admin_router::<REPROCESS_OCTET_STREAM_FILES, REBUILD_SEARCH_INDEX>(),
+        )
+        .nest("/box", document_box_router::<DIRECT_FILE_UPLOAD>())
         .route("/options", get(utils::get_options))
         .route("/health", get(utils::health))
         .route("/server-details", get(utils::server_details))
+        .route("/webhook/s3", post(utils::webhook_s3))
 }
 
 /// Routes for /admin/
-pub fn admin_router() -> Router {
+pub fn admin_router<const REPROCESS_OCTET_STREAM_FILES: bool, const REBUILD_SEARCH_INDEX: bool>()
+-> Router {
     Router::new()
         .route("/flush-db-cache", post(admin::flush_database_pool_cache))
         .route("/flush-tenant-cache", post(admin::flush_tenant_cache))
@@ -33,8 +44,12 @@ pub fn admin_router() -> Router {
         )
         .route(
             "/rebuild-search-index",
-            post(admin::rebuild_search_index_tenant)
-                .layer(axum::middleware::from_fn(tenant_auth_middleware)),
+            if REBUILD_SEARCH_INDEX {
+                post(admin::rebuild_search_index_tenant)
+                    .layer(axum::middleware::from_fn(tenant_auth_middleware))
+            } else {
+                post(unsupported)
+            },
         )
         .route(
             "/boxes",
@@ -46,8 +61,12 @@ pub fn admin_router() -> Router {
         )
         .route(
             "/reprocess_octet_stream_files_tenant",
-            post(admin::reprocess_octet_stream_files_tenant)
-                .layer(axum::middleware::from_fn(tenant_auth_middleware)),
+            if REPROCESS_OCTET_STREAM_FILES {
+                post(admin::reprocess_octet_stream_files_tenant)
+                    .layer(axum::middleware::from_fn(tenant_auth_middleware))
+            } else {
+                post(unsupported)
+            },
         )
         .route(
             "/purge-expired-presigned-tasks",
@@ -56,7 +75,7 @@ pub fn admin_router() -> Router {
 }
 
 /// Routes for /box/
-pub fn document_box_router() -> Router {
+pub fn document_box_router<const DIRECT_FILE_UPLOAD: bool>() -> Router {
     Router::new()
         .route("/", post(document_box::create))
         .nest(
@@ -65,7 +84,7 @@ pub fn document_box_router() -> Router {
                 .route("/", get(document_box::get).delete(document_box::delete))
                 .route("/stats", get(document_box::stats))
                 .route("/search", post(document_box::search))
-                .nest("/file", file_router())
+                .nest("/file", file_router::<DIRECT_FILE_UPLOAD>())
                 .nest("/task", task_router())
                 .nest("/link", link_router())
                 .nest("/folder", folder_router()),
@@ -88,9 +107,16 @@ pub fn folder_router() -> Router {
 }
 
 /// Routes for /box/:scope/file/
-pub fn file_router() -> Router {
+pub fn file_router<const DIRECT_FILE_UPLOAD: bool>() -> Router {
     Router::new()
-        .route("/", post(file::upload))
+        .route(
+            "/",
+            if DIRECT_FILE_UPLOAD {
+                post(file::upload)
+            } else {
+                post(unsupported)
+            },
+        )
         .nest(
             "/presigned",
             Router::new()
@@ -142,4 +168,9 @@ pub fn link_router() -> Router {
             .route("/image", get(link::get_image))
             .route("/edit-history", get(link::get_edit_history)),
     )
+}
+
+/// Fallback handler for routes that are unsupported
+pub async fn unsupported() -> HttpStatusResult {
+    Err(HttpCommonError::Unsupported.into())
 }

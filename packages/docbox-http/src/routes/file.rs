@@ -68,6 +68,10 @@ pub const FILE_TAG: &str = "File";
 ///
 /// Synchronous uploads return [UploadedFile]
 /// Asynchronous uploads return [UploadTaskResponse]
+///
+/// This endpoint is not available in the serverless version of docbox, instead use
+/// the presigned endpoint /box/{scope}/file/presigned
+///
 #[utoipa::path(
     post,
     operation_id = "file_upload",

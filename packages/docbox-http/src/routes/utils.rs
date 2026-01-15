@@ -1,11 +1,12 @@
 use crate::{
-    VERSION,
     error::{DynHttpError, HttpCommonError},
-    extensions::max_file_size::MaxFileSizeBytes,
+    extensions::{max_file_size::MaxFileSizeBytes, server_version::ServerVersion},
     models::{document_box::DocumentBoxOptions, utils::DocboxServerResponse},
-    notifications::{MpscNotificationQueueSender, NotificationQueueMessage, parse_bucket_message},
 };
 use axum::{Extension, Json, http::StatusCode};
+use docbox_core::notifications::{
+    MpscNotificationQueueSender, NotificationQueueMessage, parse_bucket_message,
+};
 
 pub const UTILS_TAG: &str = "Utils";
 
@@ -21,8 +22,10 @@ pub const UTILS_TAG: &str = "Utils";
         (status = 200, description = "Got server details successfully", body = DocboxServerResponse)
     )
 )]
-pub async fn server_details() -> Json<DocboxServerResponse> {
-    Json(DocboxServerResponse { version: VERSION })
+pub async fn server_details(
+    Extension(ServerVersion(version)): Extension<ServerVersion>,
+) -> Json<DocboxServerResponse> {
+    Json(DocboxServerResponse { version })
 }
 
 /// Health check
@@ -63,9 +66,13 @@ pub async fn get_options(
 ///
 /// Internal endpoint for handling requests from a webhook
 pub async fn webhook_s3(
-    Extension(tx): Extension<MpscNotificationQueueSender>,
+    maybe_tx: Option<Extension<MpscNotificationQueueSender>>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<StatusCode, DynHttpError> {
+    let Extension(tx) = maybe_tx
+        // Should not be calling this endpoint when not using the mpsc notification queue
+        .ok_or(HttpCommonError::ServerError)?;
+
     tracing::debug!(?req, "got webhook s3 event");
 
     let (bucket_name, object_key) = parse_bucket_message(&req).ok_or_else(|| {

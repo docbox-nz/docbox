@@ -9,6 +9,7 @@ members = [
     "packages/docbox-web-scraper",
     "packages/docbox-management",
     "packages/docbox-processing",
+    "packages/docbox-http",
 ]
 
 [workspace.package]
@@ -38,6 +39,9 @@ docbox-storage = { version = "0.5.0", path = "packages/docbox-storage" }
 
 # Web scraping
 docbox-web-scraper = { version = "0.5.0", path = "packages/docbox-web-scraper" }
+
+# Web scraping
+docbox-http = { version = "0.6.0", path = "packages/docbox-http" }
 
 # Async runtime
 tokio = "=1.48.0"

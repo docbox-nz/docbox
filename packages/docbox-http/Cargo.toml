@@ -1,5 +1,5 @@
 [package]
-name = "docbox"
+name = "docbox-http"
 version = "0.6.0"
 edition = "2024"
 
@@ -11,9 +11,6 @@ readme.workspace = true
 [dependencies]
 # Environment variables
 dotenvy = "=0.15.7"
-
-# HTTP layer
-docbox-http.workspace = true
 
 # Core business logic
 docbox-core.workspace = true
@@ -43,34 +40,40 @@ futures.workspace = true
 # HTTP server framework
 axum = { version = "=0.8.8", features = ["multipart"] }
 
-# HTTP server implementation
-axum-server = { version = "=0.8.0", features = ["tls-rustls"]}
+# Tower
+tower = { version = "=0.5.2" }
 
-# Crypto provider
-rustls = { version = "=0.23.35", features = ["aws-lc-rs"] }
+# Typed multipart extraction
+axum_typed_multipart = "=0.16.5"
 
-# HTTP layers for ratelimiting, CORS, and tracing
-tower-http = { version = "=0.6.8", features = ["limit", "cors", "trace"] }
+# Validation & Axum validation integration
+garde.workspace = true
+axum-valid = { version = "=0.24.0", default-features = false, features = [
+    "garde",
+    "basic",
+    "typed_multipart",
+    "full_garde",
+] }
 
 # Error handling
 thiserror.workspace = true
+
+# Serialization and JSON
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
 
 # Logging
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
-# Date and time
+bytes.workspace = true
+
+uuid.workspace = true
+
 chrono.workspace = true
 
-# Sentry
-sentry = { version = "=0.46.0", default-features = false, features = [
-    "backtrace",
-    "contexts",
-    "debug-images",
-    "panic",
-    "release-health",
-    "tracing",
-    "reqwest",
-    "rustls",
-] }
-sentry-tracing = "=0.46.0"
+mime.workspace = true
+mime_guess.workspace = true
+
+utoipa.workspace = true

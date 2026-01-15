@@ -1,23 +1,24 @@
 #![forbid(unsafe_code)]
 
-use crate::{
-    background::{BackgroundTaskData, perform_background_tasks},
-    extensions::max_file_size::MaxFileSizeBytes,
-    middleware::api_key::ApiKeyLayer,
-    notifications::{
-        AppNotificationQueue, NotificationConfig,
-        process::{NotificationQueueData, process_notification_queue},
-    },
-};
-use axum::{Extension, extract::DefaultBodyLimit, routing::post};
+use crate::background::{BackgroundTaskData, perform_background_tasks};
+use axum::{Extension, extract::DefaultBodyLimit};
 use axum_server::tls_rustls::RustlsConfig;
 use docbox_core::{
     aws::{SqsClient, aws_config},
     events::{EventPublisherFactory, sqs::SqsEventPublisherFactory},
     links::resolve_website::{ResolveWebsiteConfig, ResolveWebsiteService},
+    notifications::{
+        AppNotificationQueue, NotificationConfig,
+        process::{NotificationQueueData, process_notification_queue},
+    },
     tenant::tenant_cache::TenantCache,
 };
 use docbox_database::{DatabasePoolCache, DatabasePoolCacheConfig};
+use docbox_http::{
+    extensions::{max_file_size::MaxFileSizeBytes, server_version::ServerVersion},
+    middleware::api_key::ApiKeyLayer,
+    routes::router,
+};
 use docbox_processing::{
     ProcessingLayer, ProcessingLayerConfig,
     office::{OfficeConverter, OfficeConverterConfig, OfficeProcessingLayer},
@@ -27,7 +28,6 @@ use docbox_secrets::{SecretManager, SecretsManagerConfig};
 use docbox_storage::{StorageLayerFactory, StorageLayerFactoryConfig};
 use docbox_web_scraper::{WebsiteMetaService, WebsiteMetaServiceConfig};
 use logging::{init_logging, init_logging_with_sentry};
-use routes::router;
 use std::{
     error::Error,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -37,14 +37,7 @@ use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 use tracing::debug;
 
 mod background;
-mod docs;
-mod error;
-mod extensions;
 mod logging;
-mod middleware;
-mod models;
-mod notifications;
-pub mod routes;
 
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -161,7 +154,7 @@ async fn server() -> Result<(), Box<dyn Error>> {
     let mut notification_queue = AppNotificationQueue::from_config(sqs_client, notification_config);
 
     // Setup router
-    let mut app = router();
+    let mut app = router::<true, true, true>();
 
     if let AppNotificationQueue::Mpsc(queue) = &mut notification_queue {
         let sender = queue.take_sender().ok_or_else(|| {
@@ -169,9 +162,7 @@ async fn server() -> Result<(), Box<dyn Error>> {
         })?;
 
         // Append the webhook handling endpoint and sender extension
-        app = app
-            .route("/webhook/s3", post(routes::utils::webhook_s3))
-            .layer(Extension(sender));
+        app = app.layer(Extension(sender));
     }
 
     // Spawn background task to process notification queue messages
@@ -233,6 +224,7 @@ async fn server() -> Result<(), Box<dyn Error>> {
         .layer(Extension(event_publisher_factory))
         .layer(Extension(processing))
         .layer(Extension(tenant_cache))
+        .layer(Extension(ServerVersion(VERSION)))
         .layer(Extension(MaxFileSizeBytes(max_file_size_bytes)))
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(max_file_size_bytes as usize))

@@ -20,6 +20,7 @@ COPY packages/docbox-secrets/Cargo.toml packages/docbox-secrets/Cargo.toml
 COPY packages/docbox-storage/Cargo.toml packages/docbox-storage/Cargo.toml
 COPY packages/docbox-management/Cargo.toml packages/docbox-management/Cargo.toml
 COPY packages/docbox-processing/Cargo.toml packages/docbox-processing/Cargo.toml
+COPY packages/docbox-http/Cargo.toml packages/docbox-http/Cargo.toml
 
 # Create empty entrypoints
 RUN mkdir packages/docbox/src && echo "fn main() {}" >packages/docbox/src/main.rs
@@ -31,6 +32,7 @@ RUN mkdir packages/docbox-secrets/src && echo "//placeholder" >packages/docbox-s
 RUN mkdir packages/docbox-storage/src && echo "//placeholder" >packages/docbox-storage/src/lib.rs
 RUN mkdir packages/docbox-management/src && echo "//placeholder" >packages/docbox-management/src/lib.rs
 RUN mkdir packages/docbox-processing/src && echo "//placeholder" >packages/docbox-processing/src/lib.rs
+RUN mkdir packages/docbox-http/src && echo "//placeholder" >packages/docbox-http/src/lib.rs
 
 # Run a build to download dependencies
 RUN cargo build -p docbox --release
@@ -46,6 +48,7 @@ RUN touch packages/docbox-secrets/src/lib.rs
 RUN touch packages/docbox-storage/src/lib.rs
 RUN touch packages/docbox-management/src/lib.rs
 RUN touch packages/docbox-processing/src/lib.rs
+RUN touch packages/docbox-http/src/lib.rs
 
 RUN cargo build -p docbox --release
 
