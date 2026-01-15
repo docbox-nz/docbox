@@ -19,7 +19,7 @@ license = "MIT"
 
 [workspace.dependencies]
 # Core business logic
-docbox-core = { version = "0.8.0", path = "packages/docbox-core" }
+docbox-core = { version = "0.9.0", path = "packages/docbox-core" }
 
 # Database access
 docbox-database = { version = "0.7.0", path = "packages/docbox-database" }
