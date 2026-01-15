@@ -37,9 +37,9 @@ pub struct ActionUserData {
     pub image_id: Option<String>,
 }
 
-const USER_ID_HEADER: &str = "x-user-id";
-const USER_NAME_HEADER: &str = "x-user-name";
-const USER_IMAGE_ID_HEADER: &str = "x-user-image-id";
+pub const USER_ID_HEADER: &str = "x-user-id";
+pub const USER_NAME_HEADER: &str = "x-user-name";
+pub const USER_IMAGE_ID_HEADER: &str = "x-user-image-id";
 
 /// OpenAPI param for optional the user identifying headers
 #[derive(IntoParams)]

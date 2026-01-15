@@ -23,9 +23,9 @@ use utoipa::IntoParams;
 use uuid::Uuid;
 
 // Header for the tenant ID
-const TENANT_ID_HEADER: &str = "x-tenant-id";
+pub const TENANT_ID_HEADER: &str = "x-tenant-id";
 // Header for the tenant env
-const TENANT_ENV_HEADER: &str = "x-tenant-env";
+pub const TENANT_ENV_HEADER: &str = "x-tenant-env";
 
 /// OpenAPI param for requiring the tenant identifier headers
 #[derive(IntoParams)]
