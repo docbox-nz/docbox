@@ -31,6 +31,12 @@ pub enum StorageLayerFactoryConfig {
     S3(s3::S3StorageLayerFactoryConfig),
 }
 
+impl Default for StorageLayerFactoryConfig {
+    fn default() -> Self {
+        Self::S3(Default::default())
+    }
+}
+
 /// Errors that could occur when loading the storage layer factory
 /// configuration from the environment
 #[derive(Debug, Error)]

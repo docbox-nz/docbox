@@ -15,13 +15,12 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 /// Secrets manager backed by memory
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(default)]
 pub struct MemorySecretManagerConfig {
     /// Collection of secrets to include
-    #[serde(default)]
     pub secrets: HashMap<String, String>,
     /// Optional default secret
-    #[serde(default)]
     pub default: Option<String>,
 }
 

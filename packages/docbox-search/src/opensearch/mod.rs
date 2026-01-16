@@ -39,6 +39,7 @@ mod models;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OpenSearchConfig {
+    /// URL of the OpenSearch server
     pub url: String,
 }
 

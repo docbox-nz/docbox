@@ -38,7 +38,8 @@ use thiserror::Error;
 type S3Client = aws_sdk_s3::Client;
 
 /// Configuration for the S3 storage layer
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[serde(default)]
 pub struct S3StorageLayerFactoryConfig {
     /// Endpoint to use for requests
     pub endpoint: S3Endpoint,
@@ -66,10 +67,11 @@ impl S3StorageLayerFactoryConfig {
 }
 
 /// Endpoint to use for S3 operations
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Default, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum S3Endpoint {
     /// AWS default endpoint
+    #[default]
     Aws,
     /// Custom endpoint (Minio or other compatible)
     Custom {
