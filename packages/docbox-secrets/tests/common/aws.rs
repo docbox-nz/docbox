@@ -17,7 +17,7 @@ const TEST_ACCESS_KEY_SECRET: &str = "test";
 #[allow(dead_code)]
 pub fn test_sdk_config() -> SdkConfig {
     SdkConfig::builder()
-        .behavior_version(BehaviorVersion::v2025_08_07())
+        .behavior_version(BehaviorVersion::v2026_01_12())
         .region(Region::from_static("us-east-1"))
         .build()
 }

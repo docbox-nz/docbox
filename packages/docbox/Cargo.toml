@@ -29,7 +29,7 @@ axum = { version = "=0.8.8", features = ["multipart"] }
 axum-server = { version = "=0.8.0", features = ["tls-rustls"]}
 
 # Crypto provider
-rustls = { version = "=0.23.35", features = ["aws-lc-rs"] }
+rustls = { version = "=0.23.36", features = ["aws-lc-rs"] }
 
 # HTTP layers for ratelimiting, CORS, and tracing
 tower-http = { version = "=0.6.8", features = ["limit", "cors", "trace"] }
@@ -42,7 +42,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 # Sentry
-sentry = { version = "=0.46.0", default-features = false, features = [
+sentry = { version = "=0.46.1", default-features = false, features = [
     "backtrace",
     "contexts",
     "debug-images",
@@ -52,4 +52,4 @@ sentry = { version = "=0.46.0", default-features = false, features = [
     "reqwest",
     "rustls",
 ] }
-sentry-tracing = "=0.46.0"
+sentry-tracing = "=0.46.1"

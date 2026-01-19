@@ -12,7 +12,7 @@ pub async fn aws_config() -> SdkConfig {
     aws_config::from_env()
         // Setup the region provider
         .region(region_provider)
-        .behavior_version(BehaviorVersion::v2025_08_07())
+        .behavior_version(BehaviorVersion::v2026_01_12())
         .load()
         .await
 }
@@ -28,7 +28,7 @@ pub async fn aws_config_with_profile(profile_name: impl Into<String>) -> SdkConf
         // Setup the region provider
         .region(region_provider)
         .profile_name(profile_name)
-        .behavior_version(BehaviorVersion::v2025_08_07())
+        .behavior_version(BehaviorVersion::v2026_01_12())
         .load()
         .await
 }

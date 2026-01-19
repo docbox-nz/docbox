@@ -21,7 +21,7 @@ pub async fn test_minio_container() -> ContainerAsync<MinIO> {
 /// Create an AWS sdk config for use in tests
 fn test_sdk_config() -> SdkConfig {
     SdkConfig::builder()
-        .behavior_version(BehaviorVersion::v2025_08_07())
+        .behavior_version(BehaviorVersion::v2026_01_12())
         .region(Region::from_static("us-east-1"))
         .build()
 }
