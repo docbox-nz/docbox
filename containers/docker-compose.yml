@@ -58,7 +58,7 @@ services:
 
     # AWS Secrets Manager compatible server (https://github.com/jacobtread/loker)
     secrets:
-        image: jacobtread/loker:0.2.0
+        image: jacobtread/loker:0.2.2
         container_name: docbox-secrets
         ports:
             - "8110:8080"

@@ -86,8 +86,8 @@ jobs:
                   docker pull jacobtread/office-convert-server:0.2.2
                   docker save jacobtread/office-convert-server:0.2.2 -o /tmp/.docker-cache/office-convert-server.tar
 
-                  docker pull jacobtread/loker:0.2.0
-                  docker save jacobtread/loker:0.2.0 -o /tmp/.docker-cache/loker.tar
+                  docker pull jacobtread/loker:0.2.2
+                  docker save jacobtread/loker:0.2.2 -o /tmp/.docker-cache/loker.tar
 
             # Setup rust for building the service
             - name: Set up Rust
