@@ -42,12 +42,12 @@ jobs:
                   build-args: |
                       GITHUB_RELEASE_VERSION=${{ github.event.inputs.release_tag }}
                   tags: |
-                      ${{ env.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}
-                      ${{ env.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-bookworm-prebuilt
-                      ${{ env.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-bookworm
-                      ${{ env.DOCKER_REPOSITORY }}:latest-bookworm-prebuilt
-                      ${{ env.DOCKER_REPOSITORY }}:latest-bookworm
-                      ${{ env.DOCKER_REPOSITORY }}:latest
+                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}
+                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-bookworm-prebuilt
+                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-bookworm
+                      ${{ vars.DOCKER_REPOSITORY }}:latest-bookworm-prebuilt
+                      ${{ vars.DOCKER_REPOSITORY }}:latest-bookworm
+                      ${{ vars.DOCKER_REPOSITORY }}:latest
 
     build-and-push-alpine:
         runs-on: ubuntu-latest
@@ -77,7 +77,7 @@ jobs:
                   build-args: |
                       GITHUB_RELEASE_VERSION=${{ github.event.inputs.release_tag }}
                   tags: |
-                      ${{ env.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-alpine-prebuilt
-                      ${{ env.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-alpine
-                      ${{ env.DOCKER_REPOSITORY }}:latest-alpine-prebuilt
-                      ${{ env.DOCKER_REPOSITORY }}:latest-alpine
+                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-alpine-prebuilt
+                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-alpine
+                      ${{ vars.DOCKER_REPOSITORY }}:latest-alpine-prebuilt
+                      ${{ vars.DOCKER_REPOSITORY }}:latest-alpine
