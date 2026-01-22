@@ -74,8 +74,8 @@ jobs:
               run: |
                   mkdir -p /tmp/.docker-cache
 
-                  docker pull postgres:11-alpine
-                  docker save postgres:11-alpine -o /tmp/.docker-cache/postgres.tar
+                  docker pull postgres:18.1-alpine
+                  docker save postgres:18.1-alpine -o /tmp/.docker-cache/postgres.tar
 
                   docker pull typesense/typesense:28.0
                   docker save typesense/typesense:28.0 -o /tmp/.docker-cache/typesense.tar
