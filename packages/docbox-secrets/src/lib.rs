@@ -134,7 +134,7 @@ impl SecretManager {
     /// Set the value of `name` secret to `value`
     ///
     /// Will create a new secret if the secret does not already exist
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, value))]
     pub async fn set_secret(
         &self,
         name: &str,
