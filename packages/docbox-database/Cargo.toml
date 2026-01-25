@@ -1,6 +1,6 @@
 [package]
 name = "docbox-database"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 description = "Docbox database structures, logic, and migrations"
 
@@ -27,7 +27,7 @@ serde_json.workspace = true
 tracing.workspace = true
 
 # Database client
-sqlx = { version = "=0.8.6", default-features = false, features = [
+sqlx = { version = "0.8.6", default-features = false, features = [
     # Using tokio async runtime
     "runtime-tokio",
     # TLS support backed by rustls
@@ -54,7 +54,7 @@ chrono.workspace = true
 moka.workspace = true
 
 # Enum -> String helpers and macros
-strum = { version = "=0.27.2", features = ["derive"] }
+strum = { version = "0.27.2", features = ["derive"] }
 
 utoipa.workspace = true
 

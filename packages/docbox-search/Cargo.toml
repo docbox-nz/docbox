@@ -1,6 +1,6 @@
 [package]
 name = "docbox-search"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 description = "Docbox multi-backend search abstraction"
 
@@ -15,7 +15,7 @@ docbox-secrets.workspace = true
 
 tokio.workspace = true
 
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["json"] }
 
 thiserror.workspace = true
 
@@ -41,7 +41,7 @@ itertools.workspace = true
 
 # Opensearch client for Opensearch backend
 [dependencies.opensearch]
-version = "=2.3.0"
+version = "2.3.0"
 default-features = false
 features = ["rustls-tls", "aws-auth"]
 

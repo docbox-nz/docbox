@@ -1,10 +1,12 @@
 use aws_config::SdkConfig;
-use docbox_search::SearchIndexFactoryConfig;
-use docbox_secrets::{
-    SecretManager, SecretManagerError, SecretsManagerConfig,
-    aws::{AwsSecretManagerConfig, AwsSecretsManagerConfigError},
+use docbox_core::{
+    search::SearchIndexFactoryConfig,
+    secrets::{
+        SecretManager, SecretManagerError, SecretsManagerConfig,
+        aws::{AwsSecretManagerConfig, AwsSecretsManagerConfigError},
+    },
+    storage::StorageLayerFactoryConfig,
 };
-use docbox_storage::StorageLayerFactoryConfig;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

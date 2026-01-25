@@ -2,6 +2,7 @@
 name = "docbox-http"
 version = "0.6.0"
 edition = "2024"
+description = "Docbox HTTP layer, routes, types, and middleware"
 
 license.workspace = true
 authors.workspace = true
@@ -9,9 +10,6 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
-# Environment variables
-dotenvy = "=0.15.7"
-
 # Docbox core
 docbox-core.workspace = true
 
@@ -20,17 +18,17 @@ tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
 
 # HTTP server framework
-axum = { version = "=0.8.8", features = ["multipart"] }
+axum = { version = "0.8.8", features = ["multipart"] }
 
 # Tower
-tower = { version = "=0.5.3" }
+tower = { version = "0.5.3" }
 
 # Typed multipart extraction
-axum_typed_multipart = "=0.16.5"
+axum_typed_multipart = "0.16.5"
 
 # Validation & Axum validation integration
 garde.workspace = true
-axum-valid = { version = "=0.24.0", default-features = false, features = [
+axum-valid = { version = "0.24.0", default-features = false, features = [
     "garde",
     "basic",
     "typed_multipart",

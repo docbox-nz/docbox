@@ -3,14 +3,14 @@ use crate::{
     password::random_password,
     root::migrate_root::{MigrateRootError, migrate_root},
 };
-use docbox_database::{
+use docbox_core::database::{
     DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
     create::{create_database, create_restricted_role},
     models::tenant::Tenant,
     sqlx::types::Uuid,
     utils::DatabaseErrorExt,
 };
-use docbox_secrets::{SecretManager, SecretManagerError};
+use docbox_core::secrets::{SecretManager, SecretManagerError};
 use serde_json::json;
 use thiserror::Error;
 

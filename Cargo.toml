@@ -23,78 +23,76 @@ license = "MIT"
 docbox-core = { version = "0.9.0", path = "packages/docbox-core" }
 
 # Database access
-docbox-database = { version = "0.7.0", path = "packages/docbox-database" }
+docbox-database = { version = "0.8.0", path = "packages/docbox-database" }
 
 # File processing
-docbox-processing = { version = "0.3.0", path = "packages/docbox-processing" }
+docbox-processing = { version = "0.4.0", path = "packages/docbox-processing" }
 
 # Search access
-docbox-search = { version = "0.7.0", path = "packages/docbox-search" }
+docbox-search = { version = "0.8.0", path = "packages/docbox-search" }
 
 # Secret management
-docbox-secrets = { version = "0.4.0", path = "packages/docbox-secrets" }
+docbox-secrets = { version = "0.5.0", path = "packages/docbox-secrets" }
 
 # Storage access
-docbox-storage = { version = "0.5.0", path = "packages/docbox-storage" }
+docbox-storage = { version = "0.6.0", path = "packages/docbox-storage" }
 
 # Web scraping
-docbox-web-scraper = { version = "0.5.0", path = "packages/docbox-web-scraper" }
+docbox-web-scraper = { version = "0.6.0", path = "packages/docbox-web-scraper" }
 
 # Web scraping
 docbox-http = { version = "0.6.0", path = "packages/docbox-http" }
 
 # Async runtime
-tokio = "=1.49.0"
+tokio = "1.49.0"
 
 # Futures utilities
-futures = "=0.3.31"
+futures = "0.3.31"
 
 # UUID v4 support
-uuid = { version = "=1.19.0", features = ["v4", "serde"] }
+uuid = { version = "1.19.0", features = ["v4", "serde"] }
 
 # Date & time
-chrono = { version = "=0.4.43", features = ["serde"] }
+chrono = { version = "0.4.43", features = ["serde"] }
 
 # Caching
-moka = { version = "=0.12.12", features = ["future"] }
+moka = { version = "0.12.12", features = ["future"] }
 
 # Bytes type used for cheap shared bytes (and utilities)
-bytes = "=1.11.0"
-bytes-utils = "=0.1.4"
+bytes = "1.11.0"
+bytes-utils = "0.1.4"
 
 # Logging
-tracing = "=0.1.44"
-tracing-subscriber = { version = "=0.3.22", features = ["env-filter"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 # Serialization and JSON
-serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.149"
-serde_with = "=3.16.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+serde_with = "3.16.1"
 
 # Error handling
-thiserror = "=2.0.18"
+thiserror = "2.0.18"
 
 # Mime types, parsing, extension guessing, reverse mime lookup
-mime = "=0.3.17"
-mime_guess = "=2.0.5"
-mime2ext = "=0.1.54"
+mime = "0.3.17"
+mime_guess = "2.0.5"
+mime2ext = "0.1.54"
 
 # URL parsing
-url = "=2.5.8"
+url = "2.5.8"
 
 # HTTP client
-reqwest = { version = "=0.13.1", features = [
-    "query"
-] }
+reqwest = { version = "0.13.1", features = ["query"] }
 
 # HTTP primitives
-http = "=1.4.0"
+http = "1.4.0"
 
 # Validation
-garde = { version = "=0.22.1", features = ["derive", "full"] }
+garde = { version = "0.22.1", features = ["derive", "full"] }
 
 # OpenAPI spec generation
-utoipa = { version = "=5.4.0", features = [
+utoipa = { version = "5.4.0", features = [
     "url",
     "uuid",
     "chrono",
@@ -102,20 +100,20 @@ utoipa = { version = "=5.4.0", features = [
 ] }
 
 # AWS configuration
-aws-config = { version = "=1.8.12", features = ["behavior-version-latest"] }
+aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
 
 # AWS Lambda SDK
-aws-sdk-lambda = "=1.113.0"
+aws-sdk-lambda = "1.113.0"
 
 # HTML parser for OGP metadata and html to text conversion
-tl = "=0.7.8"
+tl = "0.7.8"
 
 # Base64 encoding and decoding
-base64 = "=0.22.1"
+base64 = "0.22.1"
 
 # Iterator utilities
-itertools = "=0.14.0"
+itertools = "0.14.0"
 
 # Test containers for integration tests
-testcontainers = "=0.26.3"
-testcontainers-modules = "=0.14.0"
+testcontainers = "0.26.3"
+testcontainers-modules = "0.14.0"

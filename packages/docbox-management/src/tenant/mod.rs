@@ -1,4 +1,4 @@
-use docbox_database::models::tenant::TenantId;
+use docbox_core::database::models::tenant::TenantId;
 use serde::{Deserialize, Serialize};
 
 pub mod create_tenant;

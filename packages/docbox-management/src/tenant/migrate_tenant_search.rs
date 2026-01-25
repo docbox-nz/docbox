@@ -2,8 +2,10 @@ use crate::{
     database::{DatabaseProvider, close_pool_on_drop},
     tenant::get_pending_tenant_search_migrations::GetPendingTenantMigrationsError,
 };
-use docbox_database::{DbErr, ROOT_DATABASE_NAME, models::tenant::Tenant};
-use docbox_search::{SearchError, SearchIndexFactory};
+use docbox_core::{
+    database::{DbErr, ROOT_DATABASE_NAME, models::tenant::Tenant},
+    search::{SearchError, SearchIndexFactory},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

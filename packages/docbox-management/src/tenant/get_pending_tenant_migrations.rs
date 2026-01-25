@@ -1,5 +1,5 @@
 use crate::database::{DatabaseProvider, close_pool_on_drop};
-use docbox_database::{DbResult, ROOT_DATABASE_NAME, models::tenant::Tenant};
+use docbox_core::database::{DbResult, ROOT_DATABASE_NAME, models::tenant::Tenant};
 
 #[tracing::instrument(skip(db_provider))]
 pub async fn get_pending_tenant_migrations(
@@ -11,6 +11,6 @@ pub async fn get_pending_tenant_migrations(
     let _guard = close_pool_on_drop(&root_db);
 
     let migrations =
-        docbox_database::migrations::get_pending_tenant_migrations(&root_db, tenant).await?;
+        docbox_core::database::migrations::get_pending_tenant_migrations(&root_db, tenant).await?;
     Ok(migrations)
 }

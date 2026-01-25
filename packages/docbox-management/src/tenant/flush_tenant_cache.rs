@@ -1,7 +1,6 @@
+use crate::config::ApiConfig;
 use reqwest::header::{HeaderName, HeaderValue, InvalidHeaderValue};
 use thiserror::Error;
-
-use crate::config::ApiConfig;
 
 #[derive(Debug, Error)]
 pub enum FlushTenantCacheError {

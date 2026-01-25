@@ -1,27 +1,26 @@
-use docbox_database::{
-    DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
-    create::{
-        check_database_exists, check_database_role_exists, create_database, create_restricted_role,
-        delete_database, delete_role,
-    },
-    migrations::apply_tenant_migrations,
-    models::tenant::{Tenant, TenantId},
-    utils::DatabaseErrorExt,
+use crate::{
+    database::{DatabaseProvider, close_pool_on_drop},
+    password::random_password,
 };
-use docbox_search::{SearchError, SearchIndexFactory, TenantSearchIndex};
-use docbox_secrets::{SecretManager, SecretManagerError};
-use docbox_storage::{
-    CreateBucketOutcome, StorageLayerError, StorageLayerFactory, TenantStorageLayer,
+use docbox_core::{
+    database::{
+        DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
+        create::{
+            check_database_exists, check_database_role_exists, create_database,
+            create_restricted_role, delete_database, delete_role,
+        },
+        migrations::apply_tenant_migrations,
+        models::tenant::{Tenant, TenantId},
+        utils::DatabaseErrorExt,
+    },
+    search::{SearchError, SearchIndexFactory, TenantSearchIndex},
+    secrets::{SecretManager, SecretManagerError},
+    storage::{CreateBucketOutcome, StorageLayerError, StorageLayerFactory, TenantStorageLayer},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::ops::DerefMut;
 use thiserror::Error;
-
-use crate::{
-    database::{DatabaseProvider, close_pool_on_drop},
-    password::random_password,
-};
 
 /// Errors that can occur when creating a tenant
 #[derive(Debug, Error)]
@@ -299,7 +298,7 @@ async fn create_tenant_inner(
     // Create the tenant
     let tenant: Tenant = Tenant::create(
         root_transaction.deref_mut(),
-        docbox_database::models::tenant::CreateTenant {
+        docbox_core::database::models::tenant::CreateTenant {
             id: config.id,
             name: config.name,
             db_name: config.db_name,

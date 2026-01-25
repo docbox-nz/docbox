@@ -1,9 +1,11 @@
 use crate::database::{DatabaseProvider, close_pool_on_drop};
-use docbox_database::{
-    DbErr, ROOT_DATABASE_NAME,
-    models::{tenant::Tenant, tenant_migration::TenantMigration},
+use docbox_core::{
+    database::{
+        DbErr, ROOT_DATABASE_NAME,
+        models::{tenant::Tenant, tenant_migration::TenantMigration},
+    },
+    search::{SearchError, SearchIndexFactory},
 };
-use docbox_search::{SearchError, SearchIndexFactory};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

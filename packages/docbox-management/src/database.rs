@@ -1,5 +1,5 @@
 /// docbox-database re-exports
-pub use docbox_database::*;
+pub use docbox_core::database::*;
 
 use crate::config::AdminDatabaseConfiguration;
 

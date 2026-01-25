@@ -1,6 +1,6 @@
 [package]
 name = "docbox-storage"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "Docbox storage layer abstraction"
 
@@ -29,11 +29,11 @@ tracing.workspace = true
 aws-config.workspace = true
 
 # S3 SDK
-aws-sdk-s3 = "=1.120.0"
+aws-sdk-s3 = "1.120.0"
 
 # Not used: Used to enable the "byte-stream-poll-next" feature, used for the storage
 # implementation to implement stream
-aws-smithy-types = { version = "=1.3.6", features = [
+aws-smithy-types = { version = "1.3.6", features = [
     "byte-stream-poll-next",
     "rt-tokio",
 ] }

@@ -1,5 +1,5 @@
 use crate::database::{DatabaseProvider, close_pool_on_drop};
-use docbox_database::{
+use docbox_core::database::{
     DbErr, ROOT_DATABASE_NAME, migrations::apply_tenant_migrations, models::tenant::Tenant,
 };
 use thiserror::Error;

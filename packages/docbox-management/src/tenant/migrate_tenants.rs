@@ -5,7 +5,7 @@ use crate::{
         migrate_tenant::{MigrateTenantError, migrate_tenant},
     },
 };
-use docbox_database::{
+use docbox_core::database::{
     DbErr, ROOT_DATABASE_NAME,
     models::tenant::{Tenant, TenantId},
 };

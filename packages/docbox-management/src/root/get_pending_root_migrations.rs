@@ -1,5 +1,5 @@
 use crate::database::{DatabaseProvider, close_pool_on_drop};
-use docbox_database::{
+use docbox_core::database::{
     DbResult, ROOT_DATABASE_NAME, create::check_database_table_exists, migrations::ROOT_MIGRATIONS,
 };
 
@@ -21,6 +21,6 @@ pub async fn get_pending_root_migrations(
             .collect());
     }
 
-    let migrations = docbox_database::migrations::get_pending_root_migrations(&root_db).await?;
+    let migrations = docbox_core::database::migrations::get_pending_root_migrations(&root_db).await?;
     Ok(migrations)
 }
