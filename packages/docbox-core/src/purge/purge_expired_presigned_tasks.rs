@@ -6,9 +6,11 @@ use docbox_database::{
         tenant::Tenant,
     },
 };
-use docbox_storage::{StorageLayerFactory, TenantStorageLayer};
+use docbox_storage::{StorageLayer, StorageLayerFactory};
 use std::sync::Arc;
 use thiserror::Error;
+
+use crate::tenant::tenant_options_ext::TenantOptionsExt;
 
 pub async fn safe_purge_expired_presigned_tasks(
     db_cache: Arc<DatabasePoolCache>,
@@ -53,7 +55,7 @@ pub async fn purge_expired_presigned_tasks(
             PurgeExpiredPresignedError::ConnectDatabase
         })?;
 
-        let storage = storage.create_storage_layer(&tenant);
+        let storage = storage.create_layer(tenant.storage_layer_options());
 
         if let Err(error) = purge_expired_presigned_tasks_tenant(&db, &storage).await {
             tracing::error!(
@@ -69,7 +71,7 @@ pub async fn purge_expired_presigned_tasks(
 
 pub async fn purge_expired_presigned_tasks_tenant(
     db: &DbPool,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
 ) -> DbResult<()> {
     let current_date = Utc::now();
     let tasks = PresignedUploadTask::find_expired(db, current_date).await?;

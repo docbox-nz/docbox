@@ -13,7 +13,8 @@ use docbox_core::{
     events::{EventPublisherFactory, TenantEventPublisher},
     search::{SearchError, SearchIndexFactory, TenantSearchIndex},
     secrets::{SecretManager, SecretManagerError},
-    storage::{StorageLayerError, StorageLayerFactory, TenantStorageLayer},
+    storage::{StorageLayer, StorageLayerError, StorageLayerFactory},
+    tenant::tenant_options_ext::TenantOptionsExt,
 };
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
@@ -114,7 +115,7 @@ pub async fn delete_tenant(
         .ok_or(DeleteTenantError::TenantNotFound)?;
 
     let search = search_factory.create_search_index(&tenant);
-    let storage = storage_factory.create_storage_layer(&tenant);
+    let storage = storage_factory.create_layer(tenant.storage_layer_options());
     let events = events.create_event_publisher(&tenant);
 
     let options = config.options;
@@ -205,7 +206,7 @@ pub async fn delete_tenant(
 async fn delete_tenant_contents(
     db_provider: &impl DatabaseProvider,
     search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     events: &TenantEventPublisher,
     tenant: &Tenant,
 ) -> Result<(), DeleteTenantError> {

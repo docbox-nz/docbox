@@ -1,7 +1,4 @@
-use crate::common::{
-    minio::{test_minio_container, test_storage_factory},
-    tenant::test_tenant,
-};
+use crate::common::minio::{test_minio_container, test_storage_factory};
 
 mod common;
 
@@ -10,7 +7,7 @@ mod common;
 async fn test_delete_bucket_minio() {
     let container = test_minio_container().await;
     let storage_factory = test_storage_factory(&container).await;
-    let storage = storage_factory.create_storage_layer(&test_tenant());
+    let storage = storage_factory.create_test_layer();
 
     storage.create_bucket().await.unwrap();
     storage.delete_bucket().await.unwrap();
@@ -25,7 +22,7 @@ async fn test_delete_bucket_minio() {
 async fn test_delete_bucket_minio_safe_double_delete() {
     let container = test_minio_container().await;
     let storage_factory = test_storage_factory(&container).await;
-    let storage = storage_factory.create_storage_layer(&test_tenant());
+    let storage = storage_factory.create_test_layer();
 
     storage.create_bucket().await.unwrap();
     storage.delete_bucket().await.unwrap();
@@ -41,7 +38,7 @@ async fn test_delete_bucket_minio_safe_double_delete() {
 async fn test_delete_bucket_minio_safe_delete_missing() {
     let container = test_minio_container().await;
     let storage_factory = test_storage_factory(&container).await;
-    let storage = storage_factory.create_storage_layer(&test_tenant());
+    let storage = storage_factory.create_test_layer();
 
     storage.delete_bucket().await.unwrap();
 

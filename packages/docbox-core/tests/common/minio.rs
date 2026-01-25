@@ -1,6 +1,7 @@
 use aws_config::{BehaviorVersion, Region, SdkConfig};
+use docbox_core::tenant::tenant_options_ext::TenantOptionsExt;
 use docbox_database::models::tenant::Tenant;
-use docbox_storage::TenantStorageLayer;
+use docbox_storage::StorageLayer;
 use docbox_storage::s3::S3StorageLayerFactory;
 use docbox_storage::{StorageLayerFactory, s3::S3StorageLayerFactoryConfig};
 use testcontainers::ImageExt;
@@ -50,10 +51,10 @@ pub async fn test_storage_factory(container: &ContainerAsync<MinIO>) -> StorageL
 }
 
 #[allow(dead_code)]
-pub async fn test_tenant_storage(tenant: &Tenant) -> (TenantStorageLayer, ContainerAsync<MinIO>) {
+pub async fn test_tenant_storage(tenant: &Tenant) -> (StorageLayer, ContainerAsync<MinIO>) {
     let storage_container = test_minio_container().await;
     let storage = test_storage_factory(&storage_container).await;
-    let storage = storage.create_storage_layer(tenant);
+    let storage = storage.create_layer(tenant.storage_layer_options());
     storage.create_bucket().await.unwrap();
 
     (storage, storage_container)

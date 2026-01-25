@@ -20,7 +20,7 @@ use super::{ConvertToPdf, PdfConvertError};
 use aws_config::SdkConfig;
 use bytes::Bytes;
 use docbox_database::sqlx::types::Uuid;
-use docbox_storage::{StorageLayerError, StorageLayerFactory, TenantStorageLayer};
+use docbox_storage::{StorageLayer, StorageLayerError, StorageLayerFactory, StorageLayerOptions};
 use office_convert_lambda_client::{ConvertError, OfficeConvertLambda, OfficeConvertLambdaOptions};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -95,7 +95,7 @@ impl OfficeConvertLambdaConfig {
 #[derive(Clone)]
 pub struct OfficeConverterLambda {
     client: OfficeConvertLambda,
-    storage: TenantStorageLayer,
+    storage: StorageLayer,
 }
 
 #[derive(Debug, Error)]
@@ -110,7 +110,7 @@ pub enum OfficeConvertLambdaError {
 }
 
 impl OfficeConverterLambda {
-    pub fn new(client: OfficeConvertLambda, storage: TenantStorageLayer) -> Self {
+    pub fn new(client: OfficeConvertLambda, storage: StorageLayer) -> Self {
         Self { client, storage }
     }
 
@@ -120,7 +120,9 @@ impl OfficeConverterLambda {
         config: OfficeConvertLambdaConfig,
     ) -> Result<Self, OfficeConvertLambdaError> {
         let client = aws_sdk_lambda::Client::new(aws_config);
-        let storage = storage.create_storage_layer_bucket(config.tmp_bucket);
+        let storage = storage.create_layer(StorageLayerOptions {
+            bucket_name: config.tmp_bucket,
+        });
 
         Ok(Self {
             client: OfficeConvertLambda::new(

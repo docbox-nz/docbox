@@ -7,7 +7,7 @@ use docbox_database::models::{
     generated_file::{CreateGeneratedFile, GeneratedFile, GeneratedFileId},
 };
 use docbox_processing::QueuedUpload;
-use docbox_storage::{StorageLayerError, TenantStorageLayer};
+use docbox_storage::{StorageLayer, StorageLayerError};
 use futures::{
     StreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -24,7 +24,7 @@ pub enum GeneratedFileDeleteResult {
 }
 
 pub async fn delete_generated_files(
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     files: &[GeneratedFile],
 ) -> GeneratedFileDeleteResult {
     let files_count = files.len();
@@ -99,7 +99,7 @@ pub fn make_create_generated_files(
 /// Triggers the file uploads returning a list of the [CreateGeneratedFile] structures
 /// to persist to the database
 pub async fn upload_generated_files(
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     prepared: Vec<PreparedGeneratedFile>,
 ) -> Vec<Result<CreateGeneratedFile, StorageLayerError>> {
     prepared

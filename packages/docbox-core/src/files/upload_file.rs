@@ -26,7 +26,7 @@ use docbox_processing::{
     process_file,
 };
 use docbox_search::{SearchError, TenantSearchIndex};
-use docbox_storage::{StorageLayerError, TenantStorageLayer};
+use docbox_storage::{StorageLayer, StorageLayerError};
 use mime::Mime;
 use std::ops::DerefMut;
 use thiserror::Error;
@@ -131,7 +131,7 @@ pub struct UploadedFileData {
 pub async fn upload_file(
     db: &DbPool,
     search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     processing: &ProcessingLayer,
     events: &TenantEventPublisher,
     upload: UploadFile,
@@ -222,7 +222,7 @@ pub struct PreparedUploadData {
 /// - Upload the main file to S3 if not already performed
 async fn upload_file_inner(
     search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     processing: &ProcessingLayer,
     upload: UploadFile,
     upload_state: &mut UploadFileState,
@@ -419,7 +419,7 @@ fn make_file_record(
 /// to `storage_upload_keys` so that it can be rolled back if any errors
 /// occur
 pub async fn store_generated_files(
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     file: &CreateFile,
     storage_upload_keys: &mut Vec<String>,
     queued_uploads: Vec<QueuedUpload>,
@@ -466,7 +466,7 @@ pub async fn store_generated_files(
 /// Performs a background rollback task on an uploaded file
 fn background_rollback_upload_file(
     search: TenantSearchIndex,
-    storage: TenantStorageLayer,
+    storage: StorageLayer,
     upload_state: UploadFileState,
 ) {
     let span = tracing::Span::current();
@@ -484,7 +484,7 @@ fn background_rollback_upload_file(
 /// on the current upload state
 async fn rollback_upload_file(
     search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     upload_state: UploadFileState,
 ) {
     // Revert upload S3 files

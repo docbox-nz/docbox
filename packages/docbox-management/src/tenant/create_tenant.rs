@@ -15,7 +15,8 @@ use docbox_core::{
     },
     search::{SearchError, SearchIndexFactory, TenantSearchIndex},
     secrets::{SecretManager, SecretManagerError},
-    storage::{CreateBucketOutcome, StorageLayerError, StorageLayerFactory, TenantStorageLayer},
+    storage::{CreateBucketOutcome, StorageLayer, StorageLayerError, StorageLayerFactory},
+    tenant::tenant_options_ext::TenantOptionsExt,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -123,7 +124,7 @@ pub struct CreateTenantConfig {
 #[derive(Default)]
 struct CreateTenantRollbackData {
     search_index: Option<TenantSearchIndex>,
-    storage: Option<TenantStorageLayer>,
+    storage: Option<StorageLayer>,
     secret: Option<(SecretManager, String)>,
     database: Option<String>,
     db_role: Option<String>,
@@ -505,7 +506,7 @@ async fn create_tenant_storage(
     origins: Vec<String>,
     rollback: &mut CreateTenantRollbackData,
 ) -> Result<(), CreateTenantError> {
-    let storage = storage.create_storage_layer(tenant);
+    let storage = storage.create_layer(tenant.storage_layer_options());
     let outcome = storage
         .create_bucket()
         .await

@@ -6,6 +6,7 @@ use super::{AppNotificationQueue, NotificationQueueMessage};
 use crate::{
     events::EventPublisherFactory,
     files::upload_file_presigned::{CompletePresigned, safe_complete_presigned},
+    tenant::tenant_options_ext::TenantOptionsExt,
 };
 use docbox_database::{
     DatabasePoolCache,
@@ -145,7 +146,7 @@ pub async fn handle_file_uploaded_tenant(
     let complete = CompletePresigned { task, folder };
 
     let search = data.search.create_search_index(&tenant);
-    let storage = data.storage.create_storage_layer(&tenant);
+    let storage = data.storage.create_layer(tenant.storage_layer_options());
     let events = data.events.create_event_publisher(&tenant);
 
     // Create task future that performs the file upload

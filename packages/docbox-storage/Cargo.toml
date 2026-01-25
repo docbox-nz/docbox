@@ -10,9 +10,6 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
-# Database access
-docbox-database.workspace = true
-
 # Futures streams
 futures.workspace = true
 

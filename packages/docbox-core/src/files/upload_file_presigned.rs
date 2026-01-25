@@ -20,7 +20,7 @@ use docbox_database::{
 };
 use docbox_processing::{ProcessingConfig, ProcessingError, ProcessingLayer};
 use docbox_search::TenantSearchIndex;
-use docbox_storage::{StorageLayerError, TenantStorageLayer};
+use docbox_storage::{StorageLayer, StorageLayerError};
 use mime::Mime;
 use serde::Serialize;
 use std::{collections::HashMap, str::FromStr};
@@ -103,7 +103,7 @@ pub enum CreatePresignedUploadError {
 /// Create a new presigned file upload request
 pub async fn create_presigned_upload(
     db: &DbPool,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     create: CreatePresigned,
 ) -> Result<PresignedUploadOutcome, CreatePresignedUploadError> {
     let file_key = create_file_key(
@@ -175,7 +175,7 @@ pub struct CompletePresigned {
 pub async fn safe_complete_presigned(
     db_pool: DbPool,
     search: TenantSearchIndex,
-    storage: TenantStorageLayer,
+    storage: StorageLayer,
     events: TenantEventPublisher,
     processing: ProcessingLayer,
     mut complete: CompletePresigned,
@@ -222,7 +222,7 @@ pub async fn safe_complete_presigned(
 pub async fn complete_presigned(
     db: &DbPool,
     search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     processing: &ProcessingLayer,
     events: &TenantEventPublisher,
     complete: &mut CompletePresigned,

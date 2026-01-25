@@ -11,7 +11,7 @@ use docbox_database::{
     },
 };
 use docbox_search::{SearchError, TenantSearchIndex};
-use docbox_storage::TenantStorageLayer;
+use docbox_storage::StorageLayer;
 use std::collections::VecDeque;
 use thiserror::Error;
 
@@ -51,7 +51,7 @@ pub enum InternalDeleteFolderError {
 
 pub async fn delete_folder(
     db: &DbPool,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     search: &TenantSearchIndex,
     events: &TenantEventPublisher,
     folder: Folder,

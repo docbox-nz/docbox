@@ -11,7 +11,7 @@ use docbox_database::{
     },
 };
 use docbox_search::{SearchError, TenantSearchIndex};
-use docbox_storage::{StorageLayerError, TenantStorageLayer};
+use docbox_storage::{StorageLayer, StorageLayerError};
 use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
 
@@ -48,7 +48,7 @@ pub enum DeleteFileError {
 /// in order to restore them on failure.
 pub async fn delete_file(
     db: &DbPool,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     search: &TenantSearchIndex,
     events: &TenantEventPublisher,
     file: File,

@@ -15,7 +15,6 @@ use aws_sdk_s3::presigning::PresignedRequest;
 use bytes::{Buf, Bytes};
 use bytes_utils::SegmentedBuf;
 use chrono::{DateTime, Utc};
-use docbox_database::models::tenant::Tenant;
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, pin::Pin, time::Duration};
@@ -81,6 +80,13 @@ impl From<s3::S3StorageError> for StorageLayerError {
     }
 }
 
+/// Options required to initialize a storage layer from a [StorageLayerFactory]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageLayerOptions {
+    /// Name of the storage bucket
+    pub bucket_name: String,
+}
+
 impl StorageLayerFactory {
     /// Create a [StorageLayerFactory] from the provided config
     pub fn from_config(aws_config: &SdkConfig, config: StorageLayerFactoryConfig) -> Self {
@@ -91,17 +97,20 @@ impl StorageLayerFactory {
         }
     }
 
-    /// Create a new storage layer from the factory
-    pub fn create_storage_layer(&self, tenant: &Tenant) -> TenantStorageLayer {
-        self.create_storage_layer_bucket(tenant.s3_name.clone())
+    /// Create a simple layer for testing purposes
+    #[cfg(debug_assertions)]
+    pub fn create_test_layer(&self) -> StorageLayer {
+        self.create_layer(StorageLayerOptions {
+            bucket_name: "test".to_string(),
+        })
     }
 
-    /// Create a new storage layer from a bucket name directly
-    pub fn create_storage_layer_bucket(&self, bucket_name: String) -> TenantStorageLayer {
+    /// Create a storage layer from the provided `options`
+    pub fn create_layer(&self, options: StorageLayerOptions) -> StorageLayer {
         match self {
             StorageLayerFactory::S3(s3) => {
-                let layer = s3.create_storage_layer(bucket_name);
-                TenantStorageLayer::S3(layer)
+                let layer = s3.create_storage_layer(options.bucket_name);
+                StorageLayer::S3(layer)
             }
         }
     }
@@ -109,7 +118,7 @@ impl StorageLayerFactory {
 
 /// Storage layer for a tenant with different underlying backends
 #[derive(Clone)]
-pub enum TenantStorageLayer {
+pub enum StorageLayer {
     /// Storage layer backed by S3
     S3(s3::S3StorageLayer),
 }
@@ -123,11 +132,11 @@ pub enum CreateBucketOutcome {
     Existing,
 }
 
-impl TenantStorageLayer {
+impl StorageLayer {
     /// Get the name of the bucket
     pub fn bucket_name(&self) -> String {
         match self {
-            TenantStorageLayer::S3(layer) => layer.bucket_name(),
+            StorageLayer::S3(layer) => layer.bucket_name(),
         }
     }
 
@@ -138,7 +147,7 @@ impl TenantStorageLayer {
     #[tracing::instrument(skip(self))]
     pub async fn create_bucket(&self) -> Result<CreateBucketOutcome, StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.create_bucket().await,
+            StorageLayer::S3(layer) => layer.create_bucket().await,
         }
     }
 
@@ -146,7 +155,7 @@ impl TenantStorageLayer {
     #[tracing::instrument(skip(self))]
     pub async fn bucket_exists(&self) -> Result<bool, StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.bucket_exists().await,
+            StorageLayer::S3(layer) => layer.bucket_exists().await,
         }
     }
 
@@ -157,7 +166,7 @@ impl TenantStorageLayer {
     #[tracing::instrument(skip(self))]
     pub async fn delete_bucket(&self) -> Result<(), StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.delete_bucket().await,
+            StorageLayer::S3(layer) => layer.delete_bucket().await,
         }
     }
 
@@ -169,7 +178,7 @@ impl TenantStorageLayer {
         size: i64,
     ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.create_presigned(key, size).await,
+            StorageLayer::S3(layer) => layer.create_presigned(key, size).await,
         }
     }
 
@@ -184,7 +193,7 @@ impl TenantStorageLayer {
         expires_in: Duration,
     ) -> Result<(PresignedRequest, DateTime<Utc>), StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.create_presigned_download(key, expires_in).await,
+            StorageLayer::S3(layer) => layer.create_presigned_download(key, expires_in).await,
         }
     }
 
@@ -197,7 +206,7 @@ impl TenantStorageLayer {
         body: Bytes,
     ) -> Result<(), StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.upload_file(key, content_type, body).await,
+            StorageLayer::S3(layer) => layer.upload_file(key, content_type, body).await,
         }
     }
 
@@ -205,7 +214,7 @@ impl TenantStorageLayer {
     #[tracing::instrument(skip(self))]
     pub async fn add_bucket_notifications(&self, sns_arn: &str) -> Result<(), StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.add_bucket_notifications(sns_arn).await,
+            StorageLayer::S3(layer) => layer.add_bucket_notifications(sns_arn).await,
         }
     }
 
@@ -216,7 +225,7 @@ impl TenantStorageLayer {
         origins: Vec<String>,
     ) -> Result<(), StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.set_bucket_cors_origins(origins).await,
+            StorageLayer::S3(layer) => layer.set_bucket_cors_origins(origins).await,
         }
     }
 
@@ -227,7 +236,7 @@ impl TenantStorageLayer {
     #[tracing::instrument(skip(self))]
     pub async fn delete_file(&self, key: &str) -> Result<(), StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.delete_file(key).await,
+            StorageLayer::S3(layer) => layer.delete_file(key).await,
         }
     }
 
@@ -235,7 +244,7 @@ impl TenantStorageLayer {
     #[tracing::instrument(skip(self))]
     pub async fn get_file(&self, key: &str) -> Result<FileStream, StorageLayerError> {
         match self {
-            TenantStorageLayer::S3(layer) => layer.get_file(key).await,
+            StorageLayer::S3(layer) => layer.get_file(key).await,
         }
     }
 }

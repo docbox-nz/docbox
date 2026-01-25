@@ -14,8 +14,8 @@ use docbox_core::{
     database::{DatabasePoolCache, DbPool, models::tenant::Tenant},
     events::{EventPublisherFactory, TenantEventPublisher},
     search::{SearchIndexFactory, TenantSearchIndex},
-    storage::{StorageLayerFactory, TenantStorageLayer},
-    tenant::tenant_cache::TenantCache,
+    storage::{StorageLayer, StorageLayerFactory},
+    tenant::{tenant_cache::TenantCache, tenant_options_ext::TenantOptionsExt},
 };
 use thiserror::Error;
 use tracing::Instrument;
@@ -196,7 +196,7 @@ where
 }
 
 /// Tenant storage access
-pub struct TenantStorage(pub TenantStorageLayer);
+pub struct TenantStorage(pub StorageLayer);
 
 impl<S> FromRequestParts<S> for TenantStorage
 where
@@ -218,7 +218,7 @@ where
         })?;
 
         // Create tenant storage layer
-        let storage = factory.create_storage_layer(tenant);
+        let storage = factory.create_layer(tenant.storage_layer_options());
 
         Ok(TenantStorage(storage))
     }

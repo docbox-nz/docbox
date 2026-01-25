@@ -1,15 +1,10 @@
-use std::{str::FromStr, time::Duration};
-
+use crate::common::minio::{test_minio_container, test_storage_factory};
 use aws_sdk_s3::presigning::PresignedRequest;
 use reqwest::{
     Response,
     header::{HeaderName, HeaderValue},
 };
-
-use crate::common::{
-    minio::{test_minio_container, test_storage_factory},
-    tenant::test_tenant,
-};
+use std::{str::FromStr, time::Duration};
 
 mod common;
 
@@ -39,7 +34,7 @@ async fn presigned_request(request: PresignedRequest) -> Response {
 async fn test_get_file_presigned_minio() {
     let container = test_minio_container().await;
     let storage_factory = test_storage_factory(&container).await;
-    let storage = storage_factory.create_storage_layer(&test_tenant());
+    let storage = storage_factory.create_test_layer();
 
     storage.create_bucket().await.unwrap();
     storage
@@ -70,7 +65,7 @@ async fn test_get_file_presigned_minio() {
 async fn test_get_unknown_file_presigned_minio() {
     let container = test_minio_container().await;
     let storage_factory = test_storage_factory(&container).await;
-    let storage = storage_factory.create_storage_layer(&test_tenant());
+    let storage = storage_factory.create_test_layer();
 
     storage.create_bucket().await.unwrap();
     let (request, _date) = storage

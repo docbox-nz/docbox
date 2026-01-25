@@ -13,7 +13,7 @@ use docbox_search::{
     SearchError, TenantSearchIndex,
     models::{DocumentPage, SearchIndexData, SearchIndexType},
 };
-use docbox_storage::{StorageLayerError, TenantStorageLayer};
+use docbox_storage::{StorageLayer, StorageLayerError};
 use futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use std::{str::FromStr, string::FromUtf8Error};
 use thiserror::Error;
@@ -35,7 +35,7 @@ pub enum RebuildTenantIndexError {
 pub async fn rebuild_tenant_index(
     db: &DbPool,
     search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
 ) -> Result<(), RebuildTenantIndexError> {
     tracing::info!("started re-indexing tenant");
 
@@ -79,7 +79,7 @@ pub async fn apply_rebuilt_tenant_index(
 /// Rebuild the entire tenant search index
 pub async fn recreate_search_index_data(
     db: &DbPool,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
 ) -> DbResult<Vec<SearchIndexData>> {
     let links = create_links_index_data(db).await?;
     let folders = create_folders_index_data(db).await?;
@@ -191,7 +191,7 @@ pub async fn create_folders_index_data(db: &DbPool) -> DbResult<Vec<SearchIndexD
 
 pub async fn create_files_index_data(
     db: &DbPool,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
 ) -> DbResult<Vec<SearchIndexData>> {
     let mut page_index = 0;
     let mut data = Vec::new();
@@ -310,7 +310,7 @@ pub enum PdfCompatibleRebuildError {
 /// Attempts to obtain the [DocumentPage] collection for a PDF compatible file
 pub async fn try_pdf_compatible_document_pages(
     db: &DbPool,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     scope: &DocumentBoxScopeRaw,
     file: &File,
 ) -> Result<Vec<DocumentPage>, PdfCompatibleRebuildError> {

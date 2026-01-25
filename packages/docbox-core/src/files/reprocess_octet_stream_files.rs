@@ -27,7 +27,7 @@ use docbox_processing::{
     process_file,
 };
 use docbox_search::TenantSearchIndex;
-use docbox_storage::{StorageLayerError, TenantStorageLayer};
+use docbox_storage::{StorageLayer, StorageLayerError};
 use futures::{StreamExt, future::BoxFuture};
 use mime::Mime;
 use std::{ops::DerefMut, time::Duration};
@@ -38,7 +38,7 @@ use tracing::Instrument;
 pub async fn reprocess_octet_stream_files(
     db: &DbPool,
     search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     processing: &ProcessingLayer,
 ) -> DbResult<()> {
     _ = search.create_index().await;
@@ -163,7 +163,7 @@ pub enum ProcessFileError {
 /// TODO: Handle rollback for failure
 pub async fn perform_process_file(
     db: DbPool,
-    storage: TenantStorageLayer,
+    storage: StorageLayer,
     search: TenantSearchIndex,
     processing: ProcessingLayer,
     mut file: FileWithScope,

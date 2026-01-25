@@ -2099,7 +2099,6 @@ dependencies = [
  "bytes",
  "bytes-utils",
  "chrono",
- "docbox-database",
  "futures",
  "reqwest 0.13.1",
  "serde",

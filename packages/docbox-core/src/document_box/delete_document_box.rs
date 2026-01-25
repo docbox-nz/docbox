@@ -10,7 +10,7 @@ use docbox_database::{
     },
 };
 use docbox_search::{SearchError, TenantSearchIndex};
-use docbox_storage::TenantStorageLayer;
+use docbox_storage::StorageLayer;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -33,7 +33,7 @@ pub enum DeleteDocumentBoxError {
 pub async fn delete_document_box(
     db: &DbPool,
     search: &TenantSearchIndex,
-    storage: &TenantStorageLayer,
+    storage: &StorageLayer,
     events: &TenantEventPublisher,
     scope: DocumentBoxScopeRawRef<'_>,
 ) -> Result<(), DeleteDocumentBoxError> {
