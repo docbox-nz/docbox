@@ -26,6 +26,10 @@ pub const ROOT_MIGRATIONS: &[(&str, &str)] = &[
         "m4_tenant_migrations_update_constraint",
         include_str!("./root/m4_tenant_migrations_update_constraint.sql"),
     ),
+    (
+        "m5_tenant_iam_support",
+        include_str!("./root/m5_tenant_iam_support.sql"),
+    ),
 ];
 
 pub const TENANT_MIGRATIONS: &[(&str, &str)] = &[

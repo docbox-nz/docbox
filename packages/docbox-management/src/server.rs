@@ -59,10 +59,12 @@ pub async fn load_managed_server(
 
     // Setup database cache / connector
     let db_cache = Arc::new(DatabasePoolCache::from_config(
+        aws_config.clone(),
         DatabasePoolCacheConfig {
             host: config.database.host.clone(),
             port: config.database.port,
             root_secret_name: config.database.root_secret_name.clone(),
+            root_iam: config.database.root_iam,
             ..Default::default()
         },
         secrets.clone(),

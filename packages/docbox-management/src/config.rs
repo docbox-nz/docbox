@@ -21,8 +21,15 @@ pub struct AdminDatabaseConfiguration {
     pub setup_user: Option<AdminDatabaseSetupUserConfig>,
     /// Name of the setup user secret if using one
     pub setup_user_secret_name: Option<String>,
-    /// Name of the root database secret
-    pub root_secret_name: String,
+
+    /// Name of the secrets manager secret to use when connecting to
+    /// the root "docbox" database if using secret based authentication
+    pub root_secret_name: Option<String>,
+
+    /// Whether to use IAM authentication instead of secret based
+    /// authentication for connecting to the root database
+    #[serde(default)]
+    pub root_iam: bool,
 }
 
 /// Setup user configuration

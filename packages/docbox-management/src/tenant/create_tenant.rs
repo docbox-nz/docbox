@@ -7,7 +7,7 @@ use docbox_core::{
         DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
         create::{
             check_database_exists, check_database_role_exists, create_database,
-            create_restricted_role, delete_database, delete_role,
+            create_restricted_role, create_restricted_role_aws_iam, delete_database, delete_role,
         },
         migrations::apply_tenant_migrations,
         models::tenant::{Tenant, TenantId},
@@ -85,6 +85,10 @@ pub enum CreateTenantError {
     /// Failed to migrate the search index
     #[error("failed to migrate tenant search index: {0}")]
     MigrateSearchIndex(SearchError),
+
+    /// Missing db_secret_name when not using IAM authentication
+    #[error("when not using db_iam_user the db_secret_name must be specified")]
+    MissingDatabaseSecretName,
 }
 
 /// Request to create a tenant
@@ -99,11 +103,17 @@ pub struct CreateTenantConfig {
 
     /// Database name for the tenant
     pub db_name: String,
-    /// Database secret credentials name for the tenant
-    /// (Where the username and password will be stored/)
-    pub db_secret_name: String,
     /// Name for the tenant role
     pub db_role_name: String,
+
+    /// Database secret credentials name for the tenant
+    /// (Where the username and password will be stored)
+    pub db_secret_name: Option<String>,
+
+    /// Whether to use IAM for role authorization instead
+    /// of a database secret
+    #[serde(default)]
+    pub db_iam_user: bool,
 
     /// Name of the tenant storage bucket
     pub storage_bucket_name: String,
@@ -259,28 +269,45 @@ async fn create_tenant_inner(
         (tenant_db, tenant_db_guard)
     };
 
-    // Generate password for the database role
-    let db_role_password = random_password(30);
+    if config.db_iam_user {
+        initialize_tenant_db_role_aws_iam(
+            &tenant_db,
+            &config.db_name,
+            &config.db_role_name,
+            rollback,
+        )
+        .await?;
 
-    initialize_tenant_db_role(
-        &tenant_db,
-        &config.db_name,
-        &config.db_role_name,
-        &db_role_password,
-        rollback,
-    )
-    .await?;
-    tracing::info!("created tenant user");
+        tracing::info!("created tenant user (iam)");
+    } else {
+        let db_secret_name = config
+            .db_secret_name
+            .as_ref()
+            .ok_or(CreateTenantError::MissingDatabaseSecretName)?;
 
-    initialize_tenant_db_secret(
-        secrets,
-        &config.db_secret_name,
-        &config.db_role_name,
-        &db_role_password,
-        rollback,
-    )
-    .await?;
-    tracing::info!("created tenant database secret");
+        // Generate password for the database role
+        let db_role_password = random_password(30);
+
+        initialize_tenant_db_role(
+            &tenant_db,
+            &config.db_name,
+            &config.db_role_name,
+            &db_role_password,
+            rollback,
+        )
+        .await?;
+        tracing::info!("created tenant user");
+
+        initialize_tenant_db_secret(
+            secrets,
+            db_secret_name,
+            &config.db_role_name,
+            &db_role_password,
+            rollback,
+        )
+        .await?;
+        tracing::info!("created tenant database secret");
+    }
 
     // Connect to the root database
     let root_db = db_provider
@@ -303,6 +330,11 @@ async fn create_tenant_inner(
             id: config.id,
             name: config.name,
             db_name: config.db_name,
+            db_iam_user_name: if config.db_iam_user {
+                Some(config.db_role_name)
+            } else {
+                None
+            },
             db_secret_name: config.db_secret_name,
             s3_name: config.storage_bucket_name,
             os_index_name: config.search_index_name,
@@ -431,7 +463,7 @@ pub async fn is_tenant_database_role_existing(
 }
 
 /// Initializes a tenant db role that the docbox API will use when accessing
-/// the tenant databases
+/// the tenant databases using secrets for authentication
 #[tracing::instrument(skip(db, role_password, rollback))]
 async fn initialize_tenant_db_role(
     db: &DbPool,
@@ -442,6 +474,25 @@ async fn initialize_tenant_db_role(
 ) -> Result<(), CreateTenantError> {
     // Setup the restricted root db role
     create_restricted_role(db, db_name, role_name, role_password)
+        .await
+        .map_err(CreateTenantError::CreateTenantRole)?;
+
+    rollback.db_role = Some(role_name.to_string());
+
+    Ok(())
+}
+
+/// Initializes a tenant db role that the docbox API will use when accessing
+/// the tenant databases using IAM for authentication
+#[tracing::instrument(skip(db, rollback))]
+async fn initialize_tenant_db_role_aws_iam(
+    db: &DbPool,
+    db_name: &str,
+    role_name: &str,
+    rollback: &mut CreateTenantRollbackData,
+) -> Result<(), CreateTenantError> {
+    // Setup the restricted root db role
+    create_restricted_role_aws_iam(db, db_name, role_name)
         .await
         .map_err(CreateTenantError::CreateTenantRole)?;
 

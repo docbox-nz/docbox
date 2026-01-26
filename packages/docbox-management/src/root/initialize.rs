@@ -4,8 +4,8 @@ use crate::{
     root::migrate_root::{MigrateRootError, migrate_root},
 };
 use docbox_core::database::{
-    DbErr, DbPool, DbResult, ROOT_DATABASE_NAME,
-    create::{create_database, create_restricted_role},
+    DbErr, DbPool, DbResult, ROOT_DATABASE_NAME, ROOT_DATABASE_ROLE_NAME,
+    create::{create_database, create_restricted_role, create_restricted_role_aws_iam},
     models::tenant::Tenant,
     sqlx::types::Uuid,
     utils::DatabaseErrorExt,
@@ -79,7 +79,7 @@ pub async fn is_initialized(db_provider: &impl DatabaseProvider) -> DbResult<boo
     Ok(true)
 }
 
-/// Initializes the root database of provida
+/// Initializes the root database of docbox using a secret based authentication
 #[tracing::instrument(skip(db_provider, secrets))]
 pub async fn initialize(
     db_provider: &impl DatabaseProvider,
@@ -89,16 +89,39 @@ pub async fn initialize(
     let db_docbox = initialize_root_database(db_provider).await?;
     let _guard = close_pool_on_drop(&db_docbox);
 
-    let root_role_name = "docbox_config_api";
     let root_password = random_password(30);
 
     // Setup the restricted root db role
-    initialize_root_role(&db_docbox, root_role_name, &root_password).await?;
+    initialize_root_role(&db_docbox, ROOT_DATABASE_ROLE_NAME, &root_password).await?;
     tracing::info!("created root user");
 
     // Setup the secret to store the role credentials
-    initialize_root_secret(secrets, root_secret_name, root_role_name, &root_password).await?;
+    initialize_root_secret(
+        secrets,
+        root_secret_name,
+        ROOT_DATABASE_ROLE_NAME,
+        &root_password,
+    )
+    .await?;
     tracing::info!("created database secret");
+
+    // Migrate the root database
+    migrate_root(db_provider, None)
+        .await
+        .map_err(InitializeError::MigrateRoot)?;
+
+    Ok(())
+}
+
+/// Initializes the root database of docbox using IAM based authentication
+#[tracing::instrument(skip(db_provider))]
+pub async fn initialize_iam(db_provider: &impl DatabaseProvider) -> Result<(), InitializeError> {
+    let db_docbox = initialize_root_database(db_provider).await?;
+    let _guard = close_pool_on_drop(&db_docbox);
+
+    // Setup the restricted root db role
+    initialize_root_role_aws_iam(&db_docbox, ROOT_DATABASE_ROLE_NAME).await?;
+    tracing::info!("created root user");
 
     // Migrate the root database
     migrate_root(db_provider, None)
@@ -147,6 +170,21 @@ pub async fn initialize_root_role(
 ) -> Result<(), InitializeError> {
     // Setup the restricted root db role
     create_restricted_role(db, ROOT_DATABASE_NAME, root_role_name, root_role_password)
+        .await
+        .map_err(InitializeError::CreateRootRole)?;
+
+    Ok(())
+}
+
+/// Initializes a root IAM accessible role that the docbox API will use when accessing
+/// the tenants table
+#[tracing::instrument(skip(db))]
+pub async fn initialize_root_role_aws_iam(
+    db: &DbPool,
+    root_role_name: &str,
+) -> Result<(), InitializeError> {
+    // Setup the restricted root db role
+    create_restricted_role_aws_iam(db, ROOT_DATABASE_NAME, root_role_name)
         .await
         .map_err(InitializeError::CreateRootRole)?;
 
