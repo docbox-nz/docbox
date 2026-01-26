@@ -20,16 +20,16 @@ license = "MIT"
 
 [workspace.dependencies]
 # Core business logic
-docbox-core = { version = "0.9.0", path = "packages/docbox-core" }
+docbox-core = { version = "0.10.0", path = "packages/docbox-core" }
 
 # Database access
-docbox-database = { version = "0.8.0", path = "packages/docbox-database" }
+docbox-database = { version = "0.9.0", path = "packages/docbox-database" }
 
 # File processing
-docbox-processing = { version = "0.4.0", path = "packages/docbox-processing" }
+docbox-processing = { version = "0.5.0", path = "packages/docbox-processing" }
 
 # Search access
-docbox-search = { version = "0.8.0", path = "packages/docbox-search" }
+docbox-search = { version = "0.9.0", path = "packages/docbox-search" }
 
 # Secret management
 docbox-secrets = { version = "0.5.0", path = "packages/docbox-secrets" }
