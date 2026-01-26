@@ -41,7 +41,7 @@ docbox-storage = { version = "0.6.0", path = "packages/docbox-storage" }
 docbox-web-scraper = { version = "0.6.0", path = "packages/docbox-web-scraper" }
 
 # Web scraping
-docbox-http = { version = "0.6.0", path = "packages/docbox-http" }
+docbox-http = { version = "0.7.0", path = "packages/docbox-http" }
 
 # Async runtime
 tokio = "1.49.0"
