@@ -164,34 +164,33 @@ pub async fn delete_tenant(
             }
         }
 
-        let db_secret = match secrets
-            .parsed_secret::<DbSecrets>(&tenant.db_secret_name)
-            .await
-        {
-            Ok(value) => value,
-            Err(error) => {
-                tracing::error!(?error, "failed to get tenant database secret");
-                return Err(DeleteTenantError::GetDatabaseSecret(error));
-            }
-        };
+        if let Some(db_secret_name) = tenant.db_secret_name.as_ref() {
+            let db_secret = match secrets.parsed_secret::<DbSecrets>(db_secret_name).await {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::error!(?error, "failed to get tenant database secret");
+                    return Err(DeleteTenantError::GetDatabaseSecret(error));
+                }
+            };
 
-        if let Some(role) = db_secret {
-            if let Err(error) = delete_role(&db_docbox, &role.username).await {
-                tracing::error!(?error, "failed to delete tenant database secret");
-                return Err(DeleteTenantError::DeleteDatabaseRole(error));
-            }
+            if let Some(role) = db_secret {
+                if let Err(error) = delete_role(&db_docbox, &role.username).await {
+                    tracing::error!(?error, "failed to delete tenant database secret");
+                    return Err(DeleteTenantError::DeleteDatabaseRole(error));
+                }
 
-            if let Err(error) = secrets
-                .delete_secret(&tenant.db_secret_name, options.permanently_delete_secret)
-                .await
-            {
-                tracing::error!(?error, "failed to delete tenant database secret");
-                return Err(DeleteTenantError::DeleteDatabaseSecret(error));
+                if let Err(error) = secrets
+                    .delete_secret(db_secret_name, options.permanently_delete_secret)
+                    .await
+                {
+                    tracing::error!(?error, "failed to delete tenant database secret");
+                    return Err(DeleteTenantError::DeleteDatabaseSecret(error));
+                }
+            } else {
+                tracing::debug!(
+                    "tenant secret not present, tenant database must have been deleted or secret was lost"
+                );
             }
-        } else {
-            tracing::debug!(
-                "tenant secret not present, tenant database must have been deleted or secret was lost"
-            );
         }
     }
 

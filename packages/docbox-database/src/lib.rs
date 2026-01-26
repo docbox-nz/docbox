@@ -32,3 +32,6 @@ pub type DbTransaction<'c> = Transaction<'c, Postgres>;
 
 /// Name of the root database
 pub const ROOT_DATABASE_NAME: &str = "docbox";
+
+/// Name of the root database role
+pub const ROOT_DATABASE_ROLE_NAME: &str = "docbox_config_api";

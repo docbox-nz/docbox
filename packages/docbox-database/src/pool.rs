@@ -23,7 +23,12 @@
 //! * `DOCBOX_DB_CREDENTIALS_CACHE_DURATION` - Duration database credentials should be cached for
 //! * `DOCBOX_DB_CREDENTIALS_CACHE_CAPACITY` - Maximum database credentials to cache
 
-use crate::{DbErr, DbPool, ROOT_DATABASE_NAME, models::tenant::Tenant};
+use crate::{DbErr, DbPool, ROOT_DATABASE_NAME, ROOT_DATABASE_ROLE_NAME, models::tenant::Tenant};
+use aws_credential_types::provider::{ProvideCredentials, error::CredentialsError};
+use aws_sigv4::{
+    http_request::{SignableBody, SignableRequest, SigningError, SigningSettings, sign},
+    sign::v4::signing_params,
+};
 use docbox_secrets::{SecretManager, SecretManagerError};
 use moka::{future::Cache, policy::EvictionPolicy};
 use serde::{Deserialize, Serialize};
@@ -31,9 +36,9 @@ use sqlx::{
     PgPool,
     postgres::{PgConnectOptions, PgPoolOptions},
 };
-use std::num::ParseIntError;
-use std::sync::Arc;
 use std::time::Duration;
+use std::{num::ParseIntError, str::ParseBoolError};
+use std::{sync::Arc, time::SystemTime};
 use thiserror::Error;
 
 ///  Config for the database pool
@@ -45,8 +50,13 @@ pub struct DatabasePoolCacheConfig {
     pub port: u16,
 
     /// Name of the secrets manager secret to use when connecting to
-    /// the root "docbox" database
-    pub root_secret_name: String,
+    /// the root "docbox" database if using secret based authentication
+    pub root_secret_name: Option<String>,
+
+    /// Whether to use IAM authentication to connect to the
+    /// root database instead of secrets
+    #[serde(default)]
+    pub root_iam: bool,
 
     /// Max number of active connections per tenant database pool
     ///
@@ -123,6 +133,7 @@ impl Default for DatabasePoolCacheConfig {
             host: Default::default(),
             port: 5432,
             root_secret_name: Default::default(),
+            root_iam: false,
             max_connections: None,
             max_connections_root: None,
             acquire_timeout: None,
@@ -157,6 +168,8 @@ pub enum DatabasePoolCacheConfigError {
     InvalidCredentialsCacheDuration(ParseIntError),
     #[error("invalid DOCBOX_DB_CREDENTIALS_CACHE_CAPACITY environment variable")]
     InvalidCredentialsCacheCapacity(ParseIntError),
+    #[error("invalid DOCBOX_DB_ROOT_IAM environment variable")]
+    InvalidRootIam(ParseBoolError),
 }
 
 impl DatabasePoolCacheConfig {
@@ -169,8 +182,20 @@ impl DatabasePoolCacheConfig {
             .map_err(|_| DatabasePoolCacheConfigError::MissingDatabasePort)?
             .parse()
             .map_err(|_| DatabasePoolCacheConfigError::InvalidDatabasePort)?;
-        let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME")
-            .map_err(|_| DatabasePoolCacheConfigError::MissingDatabaseSecretName)?;
+
+        let db_root_secret_name = std::env::var("DOCBOX_DB_CREDENTIAL_NAME").ok();
+        let db_root_iam = std::env::var("DOCBOX_DB_ROOT_IAM")
+            .ok()
+            .map(|value| value.parse::<bool>())
+            .transpose()
+            .map_err(DatabasePoolCacheConfigError::InvalidRootIam)?
+            .unwrap_or_default();
+
+        // Root secret name is required when not using IAM
+        if !db_root_iam && db_root_secret_name.is_none() {
+            return Err(DatabasePoolCacheConfigError::MissingDatabaseSecretName);
+        }
+
         let max_connections: Option<u32> = std::env::var("DOCBOX_DB_MAX_CONNECTIONS")
             .ok()
             .and_then(|value| value.parse().ok());
@@ -237,6 +262,7 @@ impl DatabasePoolCacheConfig {
         Ok(DatabasePoolCacheConfig {
             host: db_host,
             port: db_port,
+            root_iam: db_root_iam,
             root_secret_name: db_root_secret_name,
             max_connections,
             max_connections_root,
@@ -252,6 +278,9 @@ impl DatabasePoolCacheConfig {
 
 /// Cache for database pools
 pub struct DatabasePoolCache {
+    /// AWS config
+    aws_config: aws_config::SdkConfig,
+
     /// Database host
     host: String,
 
@@ -260,7 +289,13 @@ pub struct DatabasePoolCache {
 
     /// Name of the secrets manager secret that contains
     /// the credentials for the root "docbox" database
-    root_secret_name: String,
+    ///
+    /// Only present if using secrets based authentication
+    root_secret_name: Option<String>,
+
+    /// Whether to use IAM authentication to connect to the
+    /// root database instead of secrets
+    root_iam: bool,
 
     /// Cache from the database name to the pool for that database
     cache: Cache<String, DbPool>,
@@ -301,10 +336,35 @@ pub enum DbConnectErr {
 
     #[error(transparent)]
     Shared(#[from] Arc<DbConnectErr>),
+
+    #[error("missing aws credentials provider")]
+    MissingCredentialsProvider,
+
+    #[error("failed to provide aws credentials")]
+    AwsCredentials(#[from] CredentialsError),
+
+    #[error("aws configuration missing region")]
+    MissingRegion,
+
+    #[error("failed to build aws signature")]
+    AwsSigner(#[from] signing_params::BuildError),
+
+    #[error("failed to sign aws request")]
+    AwsRequestSign(#[from] SigningError),
+
+    #[error("failed to parse signed aws url")]
+    AwsSignerInvalidUrl(url::ParseError),
+
+    #[error("failed to connect to tenant missing both IAM and secrets fields")]
+    InvalidTenantConfiguration,
 }
 
 impl DatabasePoolCache {
-    pub fn from_config(config: DatabasePoolCacheConfig, secrets_manager: SecretManager) -> Self {
+    pub fn from_config(
+        aws_config: aws_config::SdkConfig,
+        config: DatabasePoolCacheConfig,
+        secrets_manager: SecretManager,
+    ) -> Self {
         let cache_duration = Duration::from_secs(config.cache_duration.unwrap_or(60 * 60 * 48));
         let credentials_cache_duration =
             Duration::from_secs(config.credentials_cache_duration.unwrap_or(60 * 60 * 12));
@@ -331,9 +391,11 @@ impl DatabasePoolCache {
             .build();
 
         Self {
+            aws_config,
             host: config.host,
             port: config.port,
             root_secret_name: config.root_secret_name,
+            root_iam: config.root_iam,
             cache,
             connect_info_cache,
             secrets_manager,
@@ -346,25 +408,61 @@ impl DatabasePoolCache {
 
     /// Request a database pool for the root database
     pub async fn get_root_pool(&self) -> Result<PgPool, DbConnectErr> {
-        self.get_pool(ROOT_DATABASE_NAME, &self.root_secret_name)
-            .await
+        match (self.root_secret_name.as_ref(), self.root_iam) {
+            (_, true) => {
+                self.get_pool_iam(ROOT_DATABASE_NAME, ROOT_DATABASE_ROLE_NAME)
+                    .await
+            }
+
+            (Some(db_secret_name), _) => self.get_pool(ROOT_DATABASE_NAME, db_secret_name).await,
+
+            _ => Err(DbConnectErr::InvalidTenantConfiguration),
+        }
     }
 
     /// Request a database pool for a specific tenant
     pub async fn get_tenant_pool(&self, tenant: &Tenant) -> Result<DbPool, DbConnectErr> {
-        self.get_pool(&tenant.db_name, &tenant.db_secret_name).await
+        match (
+            tenant.db_iam_user_name.as_ref(),
+            tenant.db_secret_name.as_ref(),
+        ) {
+            (Some(db_iam_user_name), _) => {
+                self.get_pool_iam(&tenant.db_name, db_iam_user_name).await
+            }
+            (_, Some(db_secret_name)) => self.get_pool(&tenant.db_name, db_secret_name).await,
+
+            _ => Err(DbConnectErr::InvalidTenantConfiguration),
+        }
     }
 
     /// Closes the database pool for the specific tenant if one is
     /// available and removes the pool from the cache
     pub async fn close_tenant_pool(&self, tenant: &Tenant) {
-        let cache_key = format!("{}-{}", &tenant.db_name, &tenant.db_secret_name);
+        let cache_key = Self::tenant_cache_key(tenant);
         if let Some(pool) = self.cache.remove(&cache_key).await {
             pool.close().await;
         }
 
         // Run cache async shutdown jobs
         self.cache.run_pending_tasks().await;
+    }
+
+    /// Compute the pool cache key for a tenant based on the specific
+    /// authentication methods for that tenant
+    fn tenant_cache_key(tenant: &Tenant) -> String {
+        match (
+            tenant.db_secret_name.as_ref(),
+            tenant.db_iam_user_name.as_ref(),
+        ) {
+            (Some(db_secret_name), _) => {
+                format!("secret-{}-{}", &tenant.db_name, db_secret_name)
+            }
+            (_, Some(db_iam_user_name)) => {
+                format!("user-{}-{}", &tenant.db_name, db_iam_user_name)
+            }
+
+            _ => format!("db-{}", &tenant.db_name),
+        }
     }
 
     /// Empties all the caches
@@ -385,8 +483,9 @@ impl DatabasePoolCache {
     }
 
     /// Obtains a database pool connection to the database with the provided name
+    /// using secrets manager based credentials
     async fn get_pool(&self, db_name: &str, secret_name: &str) -> Result<DbPool, DbConnectErr> {
-        let cache_key = format!("{db_name}-{secret_name}");
+        let cache_key = format!("secret-{db_name}-{secret_name}");
 
         let pool = self
             .cache
@@ -395,6 +494,32 @@ impl DatabasePoolCache {
 
                 let pool = self
                     .create_pool(db_name, secret_name)
+                    .await
+                    .map_err(Arc::new)?;
+
+                Ok(pool)
+            })
+            .await?;
+
+        Ok(pool)
+    }
+
+    /// Obtains a database pool connection to the database with the provided name
+    /// using IAM based credentials
+    async fn get_pool_iam(
+        &self,
+        db_name: &str,
+        db_role_name: &str,
+    ) -> Result<DbPool, DbConnectErr> {
+        let cache_key = format!("user-{db_name}-{db_role_name}");
+
+        let pool = self
+            .cache
+            .try_get_with(cache_key, async {
+                tracing::debug!(?db_name, "acquiring database pool (iam)");
+
+                let pool = self
+                    .create_pool_iam(db_name, db_role_name)
                     .await
                     .map_err(Arc::new)?;
 
@@ -425,6 +550,88 @@ impl DatabasePoolCache {
             .await;
 
         Ok(credentials)
+    }
+
+    async fn create_rds_signed_token(
+        &self,
+        host: &str,
+        port: u16,
+        user: &str,
+    ) -> Result<String, DbConnectErr> {
+        let credentials_provider = self
+            .aws_config
+            .credentials_provider()
+            .ok_or(DbConnectErr::MissingCredentialsProvider)?;
+        let credentials = credentials_provider.provide_credentials().await?;
+        let identity = credentials.into();
+        let region = self
+            .aws_config
+            .region()
+            .ok_or(DbConnectErr::MissingRegion)?;
+
+        let mut signing_settings = SigningSettings::default();
+        signing_settings.expires_in = Some(Duration::from_secs(60 * 15));
+        signing_settings.signature_location =
+            aws_sigv4::http_request::SignatureLocation::QueryParams;
+
+        let signing_params = aws_sigv4::sign::v4::SigningParams::builder()
+            .identity(&identity)
+            .region(region.as_ref())
+            .name("rds-db")
+            .time(SystemTime::now())
+            .settings(signing_settings)
+            .build()?;
+
+        let url = format!("https://{host}:{port}/?Action=connect&DBUser={user}");
+
+        let signable_request =
+            SignableRequest::new("GET", &url, std::iter::empty(), SignableBody::Bytes(&[]))?;
+
+        let (signing_instructions, _signature) =
+            sign(signable_request, &signing_params.into())?.into_parts();
+
+        let mut url = url::Url::parse(&url).map_err(DbConnectErr::AwsSignerInvalidUrl)?;
+        for (name, value) in signing_instructions.params() {
+            url.query_pairs_mut().append_pair(name, value);
+        }
+
+        let response = url.to_string().split_off("https://".len());
+        Ok(response)
+    }
+
+    /// Creates a database pool connection using IAM based authentication
+    async fn create_pool_iam(
+        &self,
+        db_name: &str,
+        db_role_name: &str,
+    ) -> Result<DbPool, DbConnectErr> {
+        tracing::debug!(?db_name, ?db_role_name, "creating db pool connection");
+
+        let token = self
+            .create_rds_signed_token(&self.host, self.port, db_role_name)
+            .await?;
+
+        let options = PgConnectOptions::new()
+            .host(&self.host)
+            .port(self.port)
+            .username(db_role_name)
+            .password(&token)
+            .database(db_name);
+
+        let max_connections = match db_name {
+            ROOT_DATABASE_NAME => self.max_connections_root,
+            _ => self.max_connections,
+        };
+
+        PgPoolOptions::new()
+            .max_connections(max_connections)
+            // Slightly larger acquire timeout for times when lots of files are being processed
+            .acquire_timeout(self.acquire_timeout)
+            // Close any connections that have been idle for more than 30min
+            .idle_timeout(self.idle_timeout)
+            .connect_with(options)
+            .await
+            .map_err(DbConnectErr::Db)
     }
 
     /// Creates a database pool connection

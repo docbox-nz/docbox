@@ -13,8 +13,13 @@ pub struct Tenant {
     pub name: String,
     /// Name of the tenant database
     pub db_name: String,
-    /// Name for the AWS secret used for the database user
-    pub db_secret_name: String,
+    /// Name for the AWS secret used for the database user if
+    /// using secret based authentication
+    pub db_secret_name: Option<String>,
+    /// Name for the database user username if using IAM based
+    /// authentication
+    #[sqlx(default)]
+    pub db_iam_user_name: Option<String>,
     /// Name of the tenant s3 bucket
     pub s3_name: String,
     /// Name of the tenant search index
@@ -29,7 +34,8 @@ pub struct CreateTenant {
     pub id: TenantId,
     pub name: String,
     pub db_name: String,
-    pub db_secret_name: String,
+    pub db_iam_user_name: Option<String>,
+    pub db_secret_name: Option<String>,
     pub s3_name: String,
     pub os_index_name: String,
     pub event_queue_url: Option<String>,
@@ -45,19 +51,21 @@ impl Tenant {
                 "id",
                 "name",
                 "db_name",
+                "db_iam_user_name",
                 "db_secret_name",
                 "s3_name",
                 "os_index_name",
                 "env",
                 "event_queue_url"
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
         )
         .bind(create.id)
         .bind(create.name.as_str())
         .bind(create.db_name.as_str())
-        .bind(create.db_secret_name.as_str())
+        .bind(create.db_iam_user_name.clone())
+        .bind(create.db_secret_name.clone())
         .bind(create.s3_name.as_str())
         .bind(create.os_index_name.as_str())
         .bind(create.env.as_str())
@@ -69,6 +77,7 @@ impl Tenant {
             id: create.id,
             name: create.name,
             db_name: create.db_name,
+            db_iam_user_name: create.db_iam_user_name,
             db_secret_name: create.db_secret_name,
             s3_name: create.s3_name,
             os_index_name: create.os_index_name,
@@ -100,7 +109,7 @@ impl Tenant {
 
     /// Finds all tenants for the specified environment
     pub async fn find_by_env(db: impl DbExecutor<'_>, env: &str) -> DbResult<Vec<Tenant>> {
-        sqlx::query_as(r#"SELECT * FROM "docbox_tenants" WHERE "env" = $1"#)
+        sqlx::query_as(r#"SELECT * FROM "docbox_tenants" WHERE "env" = $1 ORDER BY "name""#)
             .bind(env)
             .fetch_all(db)
             .await
@@ -108,7 +117,7 @@ impl Tenant {
 
     /// Finds all tenants
     pub async fn all(db: impl DbExecutor<'_>) -> DbResult<Vec<Tenant>> {
-        sqlx::query_as(r#"SELECT * FROM "docbox_tenants""#)
+        sqlx::query_as(r#"SELECT * FROM "docbox_tenants" ORDER BY "name""#)
             .fetch_all(db)
             .await
     }

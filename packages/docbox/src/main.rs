@@ -112,6 +112,7 @@ async fn server() -> Result<(), Box<dyn Error>> {
 
     // Setup database cache / connector
     let db_cache = Arc::new(DatabasePoolCache::from_config(
+        aws_config.clone(),
         db_pool_config,
         secrets.clone(),
     ));
