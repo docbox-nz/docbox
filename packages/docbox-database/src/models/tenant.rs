@@ -109,7 +109,7 @@ impl Tenant {
 
     /// Finds all tenants for the specified environment
     pub async fn find_by_env(db: impl DbExecutor<'_>, env: &str) -> DbResult<Vec<Tenant>> {
-        sqlx::query_as(r#"SELECT * FROM "docbox_tenants" WHERE "env" = $1"#)
+        sqlx::query_as(r#"SELECT * FROM "docbox_tenants" WHERE "env" = $1 ORDER BY "name""#)
             .bind(env)
             .fetch_all(db)
             .await
@@ -117,7 +117,7 @@ impl Tenant {
 
     /// Finds all tenants
     pub async fn all(db: impl DbExecutor<'_>) -> DbResult<Vec<Tenant>> {
-        sqlx::query_as(r#"SELECT * FROM "docbox_tenants""#)
+        sqlx::query_as(r#"SELECT * FROM "docbox_tenants" ORDER BY "name""#)
             .fetch_all(db)
             .await
     }
