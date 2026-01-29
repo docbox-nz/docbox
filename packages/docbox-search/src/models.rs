@@ -10,7 +10,7 @@ use docbox_database::models::{
     folder::{FolderId, FolderWithExtra},
     link::LinkWithExtra,
     shared::FolderPathSegment,
-    user::UserId,
+    user::{User, UserId},
 };
 use garde::Validate;
 use mime::Mime;
@@ -296,4 +296,25 @@ pub struct SearchResultItem {
 
     pub name_match: bool,
     pub content_match: bool,
+}
+
+/// Request to list users
+#[derive(Default, Debug, Validate, Deserialize, Serialize, ToSchema)]
+#[serde(default)]
+pub struct UsersRequest {
+    /// Offset to start returning results from
+    #[garde(skip)]
+    pub offset: Option<u64>,
+
+    /// Number of items to include in the response
+    #[garde(skip)]
+    pub size: Option<u16>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminUsersResults {
+    /// The users
+    pub results: Vec<User>,
+    /// The total number of users
+    pub total: i64,
 }

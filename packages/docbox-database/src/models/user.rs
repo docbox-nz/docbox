@@ -1,4 +1,4 @@
-use crate::{DbExecutor, DbResult};
+use crate::{DbExecutor, DbResult, models::shared::CountResult};
 use serde::Serialize;
 use sqlx::prelude::FromRow;
 use utoipa::ToSchema;
@@ -47,5 +47,29 @@ impl User {
             .bind(id)
             .fetch_optional(db)
             .await
+    }
+
+    /// Get a page from the users list
+    pub async fn query(db: impl DbExecutor<'_>, offset: u64, limit: u64) -> DbResult<Vec<User>> {
+        sqlx::query_as(
+            r#"
+            SELECT * FROM "docbox_users"
+            ORDER BY "id" DESC
+            OFFSET $1 LIMIT $2"#,
+        )
+        .bind(offset as i64)
+        .bind(limit as i64)
+        .fetch_all(db)
+        .await
+    }
+
+    /// Get the total number of users
+    pub async fn total(db: impl DbExecutor<'_>) -> DbResult<i64> {
+        let result: CountResult =
+            sqlx::query_as(r#"SELECT COUNT(*) as "count" FROM "docbox_users""#)
+                .fetch_one(db)
+                .await?;
+
+        Ok(result.count)
     }
 }

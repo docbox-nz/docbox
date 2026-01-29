@@ -98,3 +98,73 @@ async fn test_get_user_unknown() {
     let user = User::find(&db, "random".to_string()).await.unwrap();
     assert!(user.is_none())
 }
+
+/// Tests that a collection of users can be queried
+#[tokio::test]
+async fn test_query_users() {
+    let (db, _db_container) = test_tenant_db().await;
+
+    let mut created_users = Vec::new();
+
+    const ITEMS: usize = 100;
+    const ITEMS_PER_PAGE: usize = 20;
+    const PAGES: usize = ITEMS / ITEMS_PER_PAGE;
+
+    for i in 0..ITEMS {
+        let created = User::store(
+            &db,
+            format!("user-{i}"),
+            Some(format!("user-{i}")),
+            Some(format!("user-{i}")),
+        )
+        .await
+        .unwrap();
+
+        created_users.push(created);
+    }
+
+    created_users.sort_by_key(|value| value.id.clone());
+    created_users.reverse();
+
+    let users = User::query(&db, 0, ITEMS as u64).await.unwrap();
+    assert_eq!(users, created_users);
+
+    for i in 0..PAGES {
+        let users = User::query(&db, (i * ITEMS_PER_PAGE) as u64, ITEMS_PER_PAGE as u64)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            users,
+            created_users
+                .get((i * ITEMS_PER_PAGE)..((i + 1) * ITEMS_PER_PAGE))
+                .unwrap()
+        );
+    }
+}
+
+/// Tests that the total users can be queries
+#[tokio::test]
+async fn test_query_total_users() {
+    let (db, _db_container) = test_tenant_db().await;
+
+    let mut created_users = Vec::new();
+
+    const ITEMS: usize = 100;
+
+    for i in 0..ITEMS {
+        let created = User::store(
+            &db,
+            format!("user-{i}"),
+            Some(format!("user-{i}")),
+            Some(format!("user-{i}")),
+        )
+        .await
+        .unwrap();
+
+        created_users.push(created);
+    }
+
+    let users = User::total(&db).await.unwrap();
+    assert_eq!(users, ITEMS as i64);
+}

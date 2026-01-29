@@ -72,6 +72,10 @@ pub fn admin_router<const REPROCESS_OCTET_STREAM_FILES: bool, const REBUILD_SEAR
             "/purge-expired-presigned-tasks",
             post(admin::http_purge_expired_presigned_tasks),
         )
+        .route(
+            "/users",
+            post(admin::list_users).layer(axum::middleware::from_fn(tenant_auth_middleware)),
+        )
 }
 
 /// Routes for /box/

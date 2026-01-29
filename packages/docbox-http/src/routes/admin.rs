@@ -15,17 +15,21 @@ use docbox_core::{
             file::File,
             folder::Folder,
             link::Link,
+            user::User,
         },
     },
     document_box::search_document_box::{ResolvedSearchResult, search_document_boxes_admin},
     processing::ProcessingLayer,
     purge::purge_expired_presigned_tasks::purge_expired_presigned_tasks,
-    search::models::{AdminSearchRequest, AdminSearchResultResponse, SearchResultItem},
+    search::models::{
+        AdminSearchRequest, AdminSearchResultResponse, AdminUsersResults, SearchResultItem,
+        UsersRequest,
+    },
     storage::StorageLayerFactory,
     tenant::tenant_cache::TenantCache,
 };
 use std::sync::Arc;
-use tokio::join;
+use tokio::{join, try_join};
 
 pub const ADMIN_TAG: &str = "Admin";
 
@@ -367,4 +371,37 @@ pub async fn http_purge_expired_presigned_tasks(
         .map_err(|_| HttpCommonError::ServerError)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// List Users
+///
+/// Request lists of users stored in the docbox database
+#[utoipa::path(
+    post,
+    operation_id = "admin_list_users",
+    tag = ADMIN_TAG,
+    path = "/admin/users",
+    responses(
+        (status = 201, description = "Listed users successfully", body = AdminSearchResultResponse),
+        (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(TenantParams)
+)]
+#[tracing::instrument(skip_all, fields(?req))]
+pub async fn list_users(
+    TenantDb(db): TenantDb,
+    Garde(Json(req)): Garde<Json<UsersRequest>>,
+) -> HttpResult<AdminUsersResults> {
+    let offset = req.offset.unwrap_or(0);
+    let limit = req.size.unwrap_or(100) as u64;
+
+    let total_future = User::total(&db);
+    let results_future = User::query(&db, offset, limit);
+    let (total, results) = try_join!(total_future, results_future).map_err(|error| {
+        tracing::error!(?error, "failed to query users");
+        HttpCommonError::ServerError
+    })?;
+
+    Ok(Json(AdminUsersResults { total, results }))
 }
