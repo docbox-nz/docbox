@@ -35,46 +35,39 @@ pub fn router<
 /// Routes for /admin/
 pub fn admin_router<const REPROCESS_OCTET_STREAM_FILES: bool, const REBUILD_SEARCH_INDEX: bool>()
 -> Router {
+    let rebuild_search_index_tenant = if REBUILD_SEARCH_INDEX {
+        post(admin::rebuild_search_index_tenant)
+    } else {
+        post(unsupported)
+    };
+
+    let reprocess_octet_stream_files_tenant = if REPROCESS_OCTET_STREAM_FILES {
+        post(admin::reprocess_octet_stream_files_tenant)
+    } else {
+        post(unsupported)
+    };
+
     Router::new()
+        // Routes that target the server as a whole
         .route("/flush-db-cache", post(admin::flush_database_pool_cache))
         .route("/flush-tenant-cache", post(admin::flush_tenant_cache))
-        .route(
-            "/tenant-stats",
-            get(admin::tenant_stats).layer(axum::middleware::from_fn(tenant_auth_middleware)),
-        )
-        .route(
-            "/rebuild-search-index",
-            if REBUILD_SEARCH_INDEX {
-                post(admin::rebuild_search_index_tenant)
-                    .layer(axum::middleware::from_fn(tenant_auth_middleware))
-            } else {
-                post(unsupported)
-            },
-        )
-        .route(
-            "/boxes",
-            post(admin::tenant_boxes).layer(axum::middleware::from_fn(tenant_auth_middleware)),
-        )
-        .route(
-            "/search",
-            post(admin::search_tenant).layer(axum::middleware::from_fn(tenant_auth_middleware)),
-        )
-        .route(
-            "/reprocess_octet_stream_files_tenant",
-            if REPROCESS_OCTET_STREAM_FILES {
-                post(admin::reprocess_octet_stream_files_tenant)
-                    .layer(axum::middleware::from_fn(tenant_auth_middleware))
-            } else {
-                post(unsupported)
-            },
-        )
         .route(
             "/purge-expired-presigned-tasks",
             post(admin::http_purge_expired_presigned_tasks),
         )
-        .route(
-            "/users",
-            post(admin::list_users).layer(axum::middleware::from_fn(tenant_auth_middleware)),
+        // Routes that require a target tenant
+        .merge(
+            Router::new()
+                .route("/tenant-stats", get(admin::tenant_stats))
+                .route("/rebuild-search-index", rebuild_search_index_tenant)
+                .route("/boxes", post(admin::tenant_boxes))
+                .route("/search", post(admin::search_tenant))
+                .route(
+                    "/reprocess_octet_stream_files_tenant",
+                    reprocess_octet_stream_files_tenant,
+                )
+                .route("/users", post(admin::list_users))
+                .layer(axum::middleware::from_fn(tenant_auth_middleware)),
         )
 }
 
