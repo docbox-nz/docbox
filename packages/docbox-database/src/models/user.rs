@@ -1,6 +1,6 @@
 use crate::{DbExecutor, DbResult, models::shared::CountResult};
 use serde::Serialize;
-use sqlx::prelude::FromRow;
+use sqlx::{postgres::PgQueryResult, prelude::FromRow};
 use utoipa::ToSchema;
 
 pub type UserId = String;
@@ -42,7 +42,7 @@ impl User {
     }
 
     /// Find a user by ID
-    pub async fn find(db: impl DbExecutor<'_>, id: UserId) -> DbResult<Option<User>> {
+    pub async fn find(db: impl DbExecutor<'_>, id: &str) -> DbResult<Option<User>> {
         sqlx::query_as(r#"SELECT * FROM "docbox_users" WHERE "id" = $1"#)
             .bind(id)
             .fetch_optional(db)
@@ -71,5 +71,13 @@ impl User {
                 .await?;
 
         Ok(result.count)
+    }
+
+    /// Delete a user
+    pub async fn delete(self, db: impl DbExecutor<'_>) -> DbResult<PgQueryResult> {
+        sqlx::query(r#"DELETE FROM "docbox_users" WHERE "id" = $1"#)
+            .bind(self.id)
+            .execute(db)
+            .await
     }
 }

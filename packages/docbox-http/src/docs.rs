@@ -45,6 +45,8 @@ use crate::{
         admin::flush_database_pool_cache,
         admin::flush_tenant_cache,
         admin::http_purge_expired_presigned_tasks,
+        admin::list_users,
+        admin::delete_user,
         // Document box routes
         document_box::create,
         document_box::get,

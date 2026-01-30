@@ -1,7 +1,7 @@
-use docbox_database::models::user::User;
+use docbox_database::{models::user::User, utils::DatabaseErrorExt};
 use uuid::Uuid;
 
-use crate::common::database::test_tenant_db;
+use crate::common::{database::test_tenant_db, make_test_document_box, make_test_link};
 
 mod common;
 
@@ -21,7 +21,7 @@ async fn test_create_user() {
     assert_eq!(user.name, Some(name.clone()));
     assert_eq!(user.image_id, Some(image_id.clone()));
 
-    let user = User::find(&db, id.clone())
+    let user = User::find(&db, &id)
         .await
         .unwrap()
         .expect("expected user to be found");
@@ -58,7 +58,7 @@ async fn test_update_user() {
     assert_eq!(user.name, Some(name.clone()));
     assert_eq!(user.image_id, Some(image_id.clone()));
 
-    let user = User::find(&db, id.clone())
+    let user = User::find(&db, &id)
         .await
         .unwrap()
         .expect("expected user to be found");
@@ -80,7 +80,7 @@ async fn test_get_user() {
         .await
         .unwrap();
 
-    let user = User::find(&db, id.clone())
+    let user = User::find(&db, &id)
         .await
         .unwrap()
         .expect("expected user to be found");
@@ -95,7 +95,7 @@ async fn test_get_user() {
 async fn test_get_user_unknown() {
     let (db, _db_container) = test_tenant_db().await;
 
-    let user = User::find(&db, "random".to_string()).await.unwrap();
+    let user = User::find(&db, "random").await.unwrap();
     assert!(user.is_none())
 }
 
@@ -167,4 +167,69 @@ async fn test_query_total_users() {
 
     let users = User::total(&db).await.unwrap();
     assert_eq!(users, ITEMS as i64);
+}
+
+/// Tests that a user can be deleted
+#[tokio::test]
+async fn test_delete_user() {
+    let (db, _db_container) = test_tenant_db().await;
+    let id = Uuid::new_v4().to_string();
+    let name = "test".to_string();
+    let image_id = "test.png".to_string();
+
+    let created = User::store(&db, id.clone(), Some(name.clone()), Some(image_id.clone()))
+        .await
+        .unwrap();
+    let _created_2 = User::store(&db, "test-2".to_string(), None, None)
+        .await
+        .unwrap();
+
+    let user = User::find(&db, &id)
+        .await
+        .unwrap()
+        .expect("expected user to be found");
+
+    assert_eq!(user, created);
+
+    // Delete should affect one row
+    let result = created.clone().delete(&db).await.unwrap();
+    assert_eq!(result.rows_affected(), 1);
+
+    // Attempting to delete again should have no affected rows
+    let result = created.delete(&db).await.unwrap();
+    assert_eq!(result.rows_affected(), 0);
+
+    // Should not be able to find the user
+    let user = User::find(&db, &id).await.unwrap();
+    assert!(user.is_none());
+}
+
+/// Tests that a user cannot be deleted while its still referenced by resources
+#[tokio::test]
+async fn test_delete_user_restrict_when_owned() {
+    let (db, _db_container) = test_tenant_db().await;
+    let id = Uuid::new_v4().to_string();
+    let name = "test".to_string();
+    let image_id = "test.png".to_string();
+
+    let created = User::store(&db, id.clone(), Some(name.clone()), Some(image_id.clone()))
+        .await
+        .unwrap();
+
+    let (document_box, root) =
+        make_test_document_box(&db, "test_1", Some(created.id.clone())).await;
+    let base_link = make_test_link(&db, &root, "base", Some(created.id.clone())).await;
+
+    // Should not be able to delete the user while it still has resources associated
+    let error = created.clone().delete(&db).await.unwrap_err();
+    assert!(error.is_restrict());
+
+    // Delete the resources
+    base_link.delete(&db).await.unwrap();
+    root.delete(&db).await.unwrap();
+    document_box.delete(&db).await.unwrap();
+
+    // Delete should affect one row
+    let result = created.clone().delete(&db).await.unwrap();
+    assert_eq!(result.rows_affected(), 1);
 }

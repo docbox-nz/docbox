@@ -1,7 +1,11 @@
+use axum::http::StatusCode;
 use docbox_core::database::models::document_box::DocumentBox;
 use garde::Validate;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use utoipa::ToSchema;
+
+use crate::error::HttpError;
 
 #[derive(Default, Debug, Validate, Deserialize, Serialize, ToSchema)]
 #[serde(default)]
@@ -37,4 +41,23 @@ pub struct TenantStatsResponse {
     pub total_folders: i64,
     /// Total size of all files within the tenant
     pub file_size: i64,
+}
+
+#[derive(Debug, Error)]
+pub enum HttpAdminError {
+    #[error("user not found")]
+    UnknownUser,
+    #[error(
+        "user is attached to resources, all resources must be deleted or detached before the user can be deleted"
+    )]
+    UserResourcesAttached,
+}
+
+impl HttpError for HttpAdminError {
+    fn status(&self) -> axum::http::StatusCode {
+        match self {
+            HttpAdminError::UnknownUser => StatusCode::NOT_FOUND,
+            HttpAdminError::UserResourcesAttached => StatusCode::BAD_REQUEST,
+        }
+    }
 }

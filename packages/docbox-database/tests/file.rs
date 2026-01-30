@@ -1,10 +1,13 @@
 use chrono::Utc;
-use docbox_database::models::{
-    document_box::DocumentBox,
-    file::{CreateFile, File},
-    folder::{CreateFolder, Folder},
-    shared::{DocboxInputPair, FolderPathSegment},
-    user::User,
+use docbox_database::{
+    models::{
+        document_box::DocumentBox,
+        file::{CreateFile, File},
+        folder::{CreateFolder, Folder},
+        shared::{DocboxInputPair, FolderPathSegment},
+        user::User,
+    },
+    utils::DatabaseErrorExt,
 };
 use uuid::Uuid;
 
@@ -455,11 +458,7 @@ async fn test_delete_file() {
     // Should not be able to delete the root while another file is still present
     // (Enforce proper deletion)
     let result = root.delete(&db).await.unwrap_err();
-    assert_eq!(
-        result.into_database_error().unwrap().code().unwrap(),
-        // RESTRICT foreign key constraint violation
-        "23001"
-    );
+    assert!(result.is_restrict());
 }
 
 /// Tests that [`File::resolve_with_extra`] can locate a collection of files using

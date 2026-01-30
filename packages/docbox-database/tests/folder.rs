@@ -3,11 +3,14 @@ use crate::common::{
     make_test_user,
 };
 use chrono::Utc;
-use docbox_database::models::{
-    file::{CreateFile, File},
-    folder::{CreateFolder, Folder, ResolvedFolder, ResolvedFolderWithExtra},
-    link::{CreateLink, Link},
-    shared::{DocboxInputPair, FolderPathSegment},
+use docbox_database::{
+    models::{
+        file::{CreateFile, File},
+        folder::{CreateFolder, Folder, ResolvedFolder, ResolvedFolderWithExtra},
+        link::{CreateLink, Link},
+        shared::{DocboxInputPair, FolderPathSegment},
+    },
+    utils::DatabaseErrorExt,
 };
 use uuid::Uuid;
 
@@ -439,11 +442,7 @@ async fn test_folder_delete() {
     // Should not be able to delete the root while another folder is still present
     // (Enforce proper deletion)
     let result = root.delete(&db).await.unwrap_err();
-    assert_eq!(
-        result.into_database_error().unwrap().code().unwrap(),
-        // RESTRICT foreign key constraint violation
-        "23001"
-    );
+    assert!(result.is_restrict());
 }
 
 /// Tests that a collection of folders with various scopes and folder IDs can be

@@ -1,6 +1,7 @@
 use chrono::Utc;
-use docbox_database::models::generated_file::{
-    CreateGeneratedFile, GeneratedFile, GeneratedFileType,
+use docbox_database::{
+    models::generated_file::{CreateGeneratedFile, GeneratedFile, GeneratedFileType},
+    utils::DatabaseErrorExt,
 };
 use uuid::Uuid;
 
@@ -143,11 +144,7 @@ async fn test_delete_generated_file() {
 
     // Shouldn't be able to delete the file itself while a generated file exists
     let error = file.delete(&db).await.unwrap_err();
-    assert_eq!(
-        error.into_database_error().unwrap().code().unwrap(),
-        // foreign key constraint restrict violation
-        "23001"
-    );
+    assert!(error.is_restrict());
 
     other_generated_file.delete(&db).await.unwrap();
 

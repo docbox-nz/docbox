@@ -14,6 +14,8 @@ pub trait DatabaseErrorExt {
     fn is_table_does_not_exist(&self) -> bool;
 
     fn is_duplicate_record(&self) -> bool;
+
+    fn is_restrict(&self) -> bool;
 }
 
 impl DatabaseErrorExt for &dyn DatabaseError {
@@ -36,6 +38,10 @@ impl DatabaseErrorExt for &dyn DatabaseError {
 
     fn is_duplicate_record(&self) -> bool {
         self.is_unique_violation()
+    }
+
+    fn is_restrict(&self) -> bool {
+        self.is_error_code("23001" /* Foreign key RESTRICT violation */)
     }
 }
 
@@ -63,5 +69,10 @@ impl DatabaseErrorExt for DbErr {
     fn is_duplicate_record(&self) -> bool {
         self.as_database_error()
             .is_some_and(|error| error.is_duplicate_record())
+    }
+
+    fn is_restrict(&self) -> bool {
+        self.as_database_error()
+            .is_some_and(|error| error.is_restrict())
     }
 }

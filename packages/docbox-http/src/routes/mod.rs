@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 
 use crate::error::{HttpCommonError, HttpStatusResult};
@@ -66,7 +66,12 @@ pub fn admin_router<const REPROCESS_OCTET_STREAM_FILES: bool, const REBUILD_SEAR
                     "/reprocess_octet_stream_files_tenant",
                     reprocess_octet_stream_files_tenant,
                 )
-                .route("/users", post(admin::list_users))
+                .nest(
+                    "/users",
+                    Router::new()
+                        .route("/", post(admin::list_users))
+                        .route("/{id}", delete(admin::delete_user)),
+                )
                 .layer(axum::middleware::from_fn(tenant_auth_middleware)),
         )
 }

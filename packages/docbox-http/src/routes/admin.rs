@@ -1,11 +1,14 @@
 //! Admin related access and routes for managing tenants and document boxes
 
 use crate::{
-    error::{HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
+    error::{DynHttpError, HttpCommonError, HttpErrorResponse, HttpResult, HttpStatusResult},
     middleware::tenant::{TenantDb, TenantParams, TenantSearch, TenantStorage},
-    models::admin::{TenantDocumentBoxesRequest, TenantDocumentBoxesResponse, TenantStatsResponse},
+    models::admin::{
+        HttpAdminError, TenantDocumentBoxesRequest, TenantDocumentBoxesResponse,
+        TenantStatsResponse,
+    },
 };
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json, extract::Path, http::StatusCode};
 use axum_valid::Garde;
 use docbox_core::{
     database::{
@@ -17,6 +20,7 @@ use docbox_core::{
             link::Link,
             user::User,
         },
+        utils::DatabaseErrorExt,
     },
     document_box::search_document_box::{ResolvedSearchResult, search_document_boxes_admin},
     processing::ProcessingLayer,
@@ -382,7 +386,7 @@ pub async fn http_purge_expired_presigned_tasks(
     tag = ADMIN_TAG,
     path = "/admin/users",
     responses(
-        (status = 201, description = "Listed users successfully", body = AdminSearchResultResponse),
+        (status = 200, description = "Listed users successfully", body = AdminSearchResultResponse),
         (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
         (status = 500, description = "Internal server error", body = HttpErrorResponse)
     ),
@@ -404,4 +408,46 @@ pub async fn list_users(
     })?;
 
     Ok(Json(AdminUsersResults { total, results }))
+}
+
+/// Delete User
+///
+/// Delete a user by ID, the user must not be associated with any resources
+/// (Edit history or creation of resources)
+#[utoipa::path(
+    delete,
+    operation_id = "admin_delete_user",
+    tag = ADMIN_TAG,
+    path = "/admin/users/{id}",
+    responses(
+        (status = 204, description = "Listed users successfully", body = AdminSearchResultResponse),
+        (status = 400, description = "Malformed or invalid request not meeting validation requirements", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(TenantParams)
+)]
+#[tracing::instrument(skip_all, fields(id))]
+pub async fn delete_user(TenantDb(db): TenantDb, Path(id): Path<String>) -> HttpStatusResult {
+    let user = User::find(&db, &id)
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query user");
+            HttpCommonError::ServerError
+        })?
+        .ok_or(HttpAdminError::UnknownUser)?;
+
+    user.delete(&db).await.map_err(|error| {
+        if error.is_restrict() {
+            tracing::error!(
+                ?error,
+                "attempted to delete a user without first deleting attached resources"
+            );
+            DynHttpError::from(HttpAdminError::UserResourcesAttached)
+        } else {
+            tracing::error!(?error, "failed to delete user");
+            DynHttpError::from(HttpCommonError::ServerError)
+        }
+    })?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

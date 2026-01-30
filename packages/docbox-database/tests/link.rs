@@ -2,9 +2,12 @@ use crate::common::{
     database::test_tenant_db, make_test_document_box, make_test_folder, make_test_link,
     make_test_user,
 };
-use docbox_database::models::{
-    link::{CreateLink, Link},
-    shared::{DocboxInputPair, FolderPathSegment},
+use docbox_database::{
+    models::{
+        link::{CreateLink, Link},
+        shared::{DocboxInputPair, FolderPathSegment},
+    },
+    utils::DatabaseErrorExt,
 };
 use uuid::Uuid;
 
@@ -325,11 +328,7 @@ async fn test_link_delete() {
     // Should not be able to delete the root while another link is still present
     // (Enforce proper deletion)
     let result = root.delete(&db).await.unwrap_err();
-    assert_eq!(
-        result.into_database_error().unwrap().code().unwrap(),
-        // RESTRICT foreign key constraint violation
-        "23001"
-    );
+    assert!(result.is_restrict());
 }
 
 /// Tests that links can be resolved by a collection of scope and link ID pairs
