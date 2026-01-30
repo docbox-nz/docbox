@@ -11,7 +11,7 @@
       "name": "MIT",
       "url": "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md"
     },
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "paths": {
     "/admin/boxes": {
@@ -147,7 +147,7 @@
           "Admin"
         ],
         "summary": "Rebuild search index",
-        "description": "Rebuild the tenant search index from the data stored in the database\nand in storage",
+        "description": "Rebuild the tenant search index from the data stored in the database\nand in storage\n\nThis endpoint is not supported on serverless",
         "operationId": "admin_rebuild_search_index",
         "parameters": [
           {
@@ -199,7 +199,7 @@
           "Admin"
         ],
         "summary": "Reprocess octet-stream files",
-        "description": "Useful if a files were previously accepted into the tenant with some unknown\nfile type (or ingested through a source that was unable to get the correct mime).\n\nWill reprocess files that have this unknown file type mime to see if a different\ntype can be obtained",
+        "description": "Useful if a files were previously accepted into the tenant with some unknown\nfile type (or ingested through a source that was unable to get the correct mime).\n\nWill reprocess files that have this unknown file type mime to see if a different\ntype can be obtained.\n\nThis endpoint is not supported on serverless",
         "operationId": "admin_reprocess_octet_stream_files",
         "parameters": [
           {
@@ -616,7 +616,7 @@
           "File"
         ],
         "summary": "Upload file",
-        "description": "Uploads a new document to the provided document box folder.\n\nIf the asynchronous option is specified a task will be returned\notherwise the completed file upload will be returned directly\n\nIn a browser environment its recommend to use the async option to\nprevent running into browser timeouts if the processing takes too long.\n\nIn a reverse proxy + browser situation prefer using the presigned file upload\nendpoint otherwise browsers may timeout while your server transfers the file\n\nSynchronous uploads return [UploadedFile]\nAsynchronous uploads return [UploadTaskResponse]",
+        "description": "Uploads a new document to the provided document box folder.\n\nIf the asynchronous option is specified a task will be returned\notherwise the completed file upload will be returned directly\n\nIn a browser environment its recommend to use the async option to\nprevent running into browser timeouts if the processing takes too long.\n\nIn a reverse proxy + browser situation prefer using the presigned file upload\nendpoint otherwise browsers may timeout while your server transfers the file\n\nSynchronous uploads return [UploadedFile]\nAsynchronous uploads return [UploadTaskResponse]\n\nThis endpoint is not available in the serverless version of docbox, instead use\nthe presigned endpoint /box/{scope}/file/presigned\n\n",
         "operationId": "file_upload",
         "parameters": [
           {
