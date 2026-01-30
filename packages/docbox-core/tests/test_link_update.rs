@@ -68,7 +68,7 @@ async fn test_update_link_name_success() {
 
     // Ensure the link name is updated in the database
     {
-        let updated_link = Link::find(&db, &"test".to_string(), link.id)
+        let updated_link = Link::find(&db, "test", link.id)
             .await
             .unwrap()
             .expect("missing updated link");
@@ -179,7 +179,7 @@ async fn test_update_link_value_success() {
 
     // Ensure the link value is updated in the database
     {
-        let updated_link = Link::find(&db, &"test".to_string(), link.id)
+        let updated_link = Link::find(&db, "test", link.id)
             .await
             .unwrap()
             .expect("missing updated link");
@@ -398,7 +398,7 @@ async fn test_update_link_folder_success() {
 
     // Ensure the link folder id is updated in the database
     {
-        let updated_link = Link::find(&db, &"test".to_string(), link.id)
+        let updated_link = Link::find(&db, "test", link.id)
             .await
             .unwrap()
             .expect("missing updated link");

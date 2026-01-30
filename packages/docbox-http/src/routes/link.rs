@@ -20,16 +20,23 @@ use axum::{
     http::{Response, StatusCode, header},
 };
 use axum_valid::Garde;
-use docbox_core::database::models::{
-    edit_history::EditHistory,
-    folder::Folder,
-    link::{Link, LinkId, LinkWithExtra},
+use docbox_core::{
+    database::models::{
+        edit_history::EditHistory,
+        folder::Folder,
+        link::{Link, LinkId, LinkWithExtra},
+    },
+    links::get_link_metadata::get_link_metadata,
 };
-use docbox_core::links::{
-    create_link::{CreateLinkData, safe_create_link},
-    delete_link::delete_link,
-    resolve_website::ResolveWebsiteService,
-    update_link::{UpdateLink, UpdateLinkError},
+use docbox_core::{
+    database::{DbPool, models::document_box::DocumentBoxScopeRawRef},
+    links::{
+        create_link::{CreateLinkData, safe_create_link},
+        delete_link::delete_link,
+        get_link_metadata::GetLinkMetadataError,
+        resolve_website::ResolveWebsiteService,
+        update_link::{UpdateLink, UpdateLinkError},
+    },
 };
 use std::sync::Arc;
 
@@ -172,27 +179,13 @@ pub async fn get_metadata(
 ) -> HttpResult<LinkMetadataResponse> {
     let DocumentBoxScope(scope) = scope;
 
-    let link = Link::find(&db, &scope, link_id)
-        .await
-        // Failed to query link
-        .map_err(|error| {
-            tracing::error!(?error, "failed to query link");
-            HttpCommonError::ServerError
-        })?
-        // Link not found
-        .ok_or(HttpLinkError::UnknownLink)?;
+    let link = find_link(&db, &scope, link_id).await?;
 
-    let url = docbox_core::web_scraper::Url::parse(&link.value).map_err(|error| {
-        tracing::warn!(?error, "invalid website");
-        HttpLinkError::InvalidLinkUrl
-    })?;
-
-    let resolved = website_service
-        .resolve_website(&db, &url)
+    let (_, resolved) = get_link_metadata(&db, &website_service, &link)
         .await
-        .ok_or_else(|| {
-            tracing::warn!("failed to resolve link site metadata");
-            HttpLinkError::FailedResolve
+        .map_err(|error| match error {
+            GetLinkMetadataError::ParseUrl(_) => HttpLinkError::InvalidLinkUrl,
+            GetLinkMetadataError::FailedResolve => HttpLinkError::FailedResolve,
         })?;
 
     Ok(Json(LinkMetadataResponse {
@@ -232,25 +225,14 @@ pub async fn get_favicon(
 ) -> Result<Response<Body>, DynHttpError> {
     let DocumentBoxScope(scope) = scope;
 
-    let link = Link::find(&db, &scope, link_id)
-        .await
-        // Failed to query link
-        .map_err(|error| {
-            tracing::error!(?error, "failed to query link");
-            HttpCommonError::ServerError
-        })?
-        // Link not found
-        .ok_or(HttpLinkError::UnknownLink)?;
+    let link = find_link(&db, &scope, link_id).await?;
 
-    let url = docbox_core::web_scraper::Url::parse(&link.value).map_err(|error| {
-        tracing::warn!(?error, "invalid website");
-        HttpLinkError::InvalidLinkUrl
-    })?;
-
-    let website_metadata = website_service
-        .resolve_website(&db, &url)
+    let (url, website_metadata) = get_link_metadata(&db, &website_service, &link)
         .await
-        .ok_or(HttpLinkError::NoFavicon)?;
+        .map_err(|error| match error {
+            GetLinkMetadataError::ParseUrl(_) => HttpLinkError::InvalidLinkUrl,
+            GetLinkMetadataError::FailedResolve => HttpLinkError::FailedResolve,
+        })?;
 
     let favicon = website_service
         .service
@@ -303,25 +285,14 @@ pub async fn get_image(
 ) -> Result<Response<Body>, DynHttpError> {
     let DocumentBoxScope(scope) = scope;
 
-    let link = Link::find(&db, &scope, link_id)
-        .await
-        // Failed to query link
-        .map_err(|error| {
-            tracing::error!(?error, "failed to query link");
-            HttpCommonError::ServerError
-        })?
-        // Link not found
-        .ok_or(HttpLinkError::UnknownLink)?;
+    let link = find_link(&db, &scope, link_id).await?;
 
-    let url = docbox_core::web_scraper::Url::parse(&link.value).map_err(|error| {
-        tracing::warn!(?error, "invalid website");
-        HttpLinkError::InvalidLinkUrl
-    })?;
-
-    let website_metadata = website_service
-        .resolve_website(&db, &url)
+    let (url, website_metadata) = get_link_metadata(&db, &website_service, &link)
         .await
-        .ok_or(HttpLinkError::NoImage)?;
+        .map_err(|error| match error {
+            GetLinkMetadataError::ParseUrl(_) => HttpLinkError::InvalidLinkUrl,
+            GetLinkMetadataError::FailedResolve => HttpLinkError::FailedResolve,
+        })?;
 
     let og_image = website_metadata.og_image.ok_or(HttpLinkError::NoImage)?;
     let og_image = website_service
@@ -372,15 +343,7 @@ pub async fn get_edit_history(
     let DocumentBoxScope(scope) = scope;
 
     // Ensure the link itself exists
-    _ = Link::find(&db, &scope, link_id)
-        .await
-        // Failed to query link
-        .map_err(|error| {
-            tracing::error!(?error, "failed to query link");
-            HttpCommonError::ServerError
-        })?
-        // Link not found
-        .ok_or(HttpLinkError::UnknownLink)?;
+    _ = find_link(&db, &scope, link_id).await?;
 
     let history = EditHistory::all_by_link(&db, link_id)
         .await
@@ -423,15 +386,7 @@ pub async fn update(
 ) -> HttpStatusResult {
     let DocumentBoxScope(scope) = scope;
 
-    let link = Link::find(&db, &scope, link_id)
-        .await
-        // Failed to query link
-        .map_err(|error| {
-            tracing::error!(?error, "failed to query link");
-            HttpCommonError::ServerError
-        })?
-        // Link not found
-        .ok_or(HttpLinkError::UnknownLink)?;
+    let link = find_link(&db, &scope, link_id).await?;
 
     // Update stored editing user data
     let user = action_user.store_user(&db).await?;
@@ -484,15 +439,7 @@ pub async fn delete(
 ) -> HttpStatusResult {
     let DocumentBoxScope(scope) = scope;
 
-    let link = Link::find(&db, &scope, link_id)
-        .await
-        // Failed to query link
-        .map_err(|error| {
-            tracing::error!(?error, "failed to query link");
-            HttpCommonError::ServerError
-        })?
-        // Link not found
-        .ok_or(HttpLinkError::UnknownLink)?;
+    let link = find_link(&db, &scope, link_id).await?;
 
     delete_link(&db, &search, &events, link, scope)
         .await
@@ -502,4 +449,24 @@ pub async fn delete(
         })?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Resolves a link handles mapping the various link failure
+/// errors into HTTP errors
+async fn find_link(
+    db: &DbPool,
+    scope: DocumentBoxScopeRawRef<'_>,
+    link_id: LinkId,
+) -> Result<Link, DynHttpError> {
+    let link = Link::find(db, scope, link_id)
+        .await
+        // Failed to query link
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query link");
+            HttpCommonError::ServerError
+        })?
+        // Link not found
+        .ok_or(HttpLinkError::UnknownLink)?;
+
+    Ok(link)
 }

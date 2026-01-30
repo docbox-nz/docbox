@@ -5,8 +5,11 @@ use super::{
 };
 use crate::{
     DbExecutor, DbResult,
-    models::shared::{
-        CountResult, DocboxInputPair, FolderPathSegment, WithFullPath, WithFullPathScope,
+    models::{
+        document_box::DocumentBoxScopeRawRef,
+        shared::{
+            CountResult, DocboxInputPair, FolderPathSegment, WithFullPath, WithFullPathScope,
+        },
     },
 };
 use chrono::{DateTime, Utc};
@@ -214,7 +217,7 @@ impl Link {
 
     pub async fn find(
         db: impl DbExecutor<'_>,
-        scope: &DocumentBoxScopeRaw,
+        scope: DocumentBoxScopeRawRef<'_>,
         link_id: LinkId,
     ) -> DbResult<Option<Link>> {
         sqlx::query_as(
