@@ -86,6 +86,38 @@ impl Tenant {
         })
     }
 
+    /// Update the "db_iam_user_name" property of the tenant
+    pub async fn set_db_iam_user_name(
+        &mut self,
+        db: impl DbExecutor<'_>,
+        iam_user_name: Option<String>,
+    ) -> DbResult<Option<Tenant>> {
+        sqlx::query_as(
+            r#"UPDATE "docbox_tenants" SET "db_iam_user_name" = $3 WHERE "id" = $1 AND "env" = $2"#,
+        )
+        .bind(self.id)
+        .bind(self.env.clone())
+        .bind(iam_user_name)
+        .fetch_optional(db)
+        .await
+    }
+
+    /// Update the "db_secret_name" property of the tenant
+    pub async fn set_db_secret_name(
+        &mut self,
+        db: impl DbExecutor<'_>,
+        db_secret_name: Option<String>,
+    ) -> DbResult<Option<Tenant>> {
+        sqlx::query_as(
+            r#"UPDATE "docbox_tenants" SET "db_secret_name" = $3 WHERE "id" = $1 AND "env" = $2"#,
+        )
+        .bind(self.id)
+        .bind(self.env.clone())
+        .bind(db_secret_name)
+        .fetch_optional(db)
+        .await
+    }
+
     /// Find a tenant by `id` within a specific `env`
     pub async fn find_by_id(
         db: impl DbExecutor<'_>,

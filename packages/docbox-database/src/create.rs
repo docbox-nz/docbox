@@ -153,6 +153,27 @@ GRANT CONNECT ON DATABASE "{db_name}" TO {role_name};
     Ok(())
 }
 
+/// Modifies a role to make it accessible through IAM only
+/// removes the password from the role
+///
+/// `db` - Should be the root database
+/// `role_name` - Name of the user role to update
+pub async fn make_role_iam_only(db: &DbPool, role_name: &str) -> DbResult<()> {
+    let sql = format!(
+        r#"
+-- Grant IAM access to the role
+GRANT rds_iam TO {role_name};
+
+-- Remove the password from the role
+ALTER ROLE {role_name} WITH PASSWORD NULL;
+    "#
+    );
+
+    sqlx::raw_sql(&sql).execute(db).await?;
+
+    Ok(())
+}
+
 /// Delete a database role.
 ///
 /// Running this requires using an account with a higher level of access

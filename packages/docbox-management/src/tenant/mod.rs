@@ -10,6 +10,7 @@ pub mod get_tenant;
 pub mod get_tenants;
 pub mod migrate_tenant;
 pub mod migrate_tenant_search;
+pub mod migrate_tenant_secret_to_iam;
 pub mod migrate_tenants;
 pub mod migrate_tenants_search;
 
