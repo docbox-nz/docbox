@@ -110,7 +110,7 @@ pub struct ResolvedFileWithExtra {
     pub full_path: Vec<FolderPathSegment>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CreateFile {
     /// ID for the file to use
     pub id: FileId,

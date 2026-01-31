@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
@@ -17,6 +18,57 @@ pub struct DbPageResult {
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct DbPageCountResult {
     pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, sqlx::Type)]
+#[sqlx(type_name = "docbox_search_page_match")]
+pub struct DocboxSearchPageMatch {
+    pub page: i64,
+    pub matched: String,
+    pub content_match_rank: f64,
+    pub total_hits: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, sqlx::Type)]
+#[sqlx(type_name = "docbox_search_date_range")]
+pub struct DocboxSearchDateRange {
+    pub start: Option<DateTime<Utc>>,
+    pub end: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, sqlx::Type)]
+#[sqlx(type_name = "docbox_search_filters")]
+pub struct DocboxSearchFilters {
+    pub document_boxes: Vec<String>,
+    pub folder_children: Option<Vec<Uuid>>,
+    pub include_name: bool,
+    pub include_content: bool,
+    pub created_at: Option<DocboxSearchDateRange>,
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, sqlx::Type)]
+#[sqlx(type_name = "docbox_search_match")]
+pub struct DocboxSearchMatch {
+    pub item_type: String,
+    pub item_id: Uuid,
+    pub document_box: String,
+    pub name_match_tsv: bool,
+    pub name_match_tsv_rank: f64,
+    pub name_match: bool,
+    pub content_match: bool,
+    pub content_rank: f64,
+    pub total_hits: i64,
+    pub page_matches: Vec<DocboxSearchPageMatch>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, sqlx::Type)]
+#[sqlx(type_name = "docbox_search_match_ranked")]
+pub struct DocboxSearchMatchRanked {
+    pub search_match: DocboxSearchMatch,
+    pub rank: f64,
+    pub total_count: i64,
 }
 
 pub async fn count_search_file_pages(

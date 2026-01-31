@@ -77,3 +77,4 @@ testcontainers = { workspace = true, features = ["http_wait"] }
 testcontainers-modules = { workspace = true, features = ["postgres", "minio"] }
 tokio = { workspace = true, features = ["full"] }
 docbox-search.workspace = true
+fake.workspace = true

@@ -117,3 +117,6 @@ itertools = "0.14.0"
 # Test containers for integration tests
 testcontainers = "0.26.3"
 testcontainers-modules = "0.14.0"
+
+# Fake data generation
+fake = { version = " 4.4.0" }

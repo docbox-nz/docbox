@@ -25,15 +25,16 @@ use uuid::Uuid;
 pub mod models;
 
 pub use database::{
-    DatabaseSearchConfig, DatabaseSearchError, DatabaseSearchIndexFactory,
+    DatabaseSearchConfig, DatabaseSearchError, DatabaseSearchIndex, DatabaseSearchIndexFactory,
     DatabaseSearchIndexFactoryError,
 };
 pub use opensearch::{
-    OpenSearchConfig, OpenSearchIndexFactory, OpenSearchIndexFactoryError, OpenSearchSearchError,
+    OpenSearchConfig, OpenSearchIndex, OpenSearchIndexFactory, OpenSearchIndexFactoryError,
+    OpenSearchSearchError,
 };
 pub use typesense::{
-    TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseIndexFactory,
-    TypesenseIndexFactoryError, TypesenseSearchConfig, TypesenseSearchError,
+    TypesenseApiKey, TypesenseApiKeyProvider, TypesenseApiKeySecret, TypesenseIndex,
+    TypesenseIndexFactory, TypesenseIndexFactoryError, TypesenseSearchConfig, TypesenseSearchError,
 };
 
 mod database;

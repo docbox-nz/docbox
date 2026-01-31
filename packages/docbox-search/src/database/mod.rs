@@ -24,8 +24,9 @@ use docbox_database::{
         file::FileId,
         folder::FolderId,
         search::{
-            DbSearchResult, count_search_file_pages, delete_file_pages_by_file_id,
-            delete_file_pages_by_scope, search_file_pages,
+            DocboxSearchDateRange, DocboxSearchFilters, DocboxSearchMatchRanked,
+            count_search_file_pages, delete_file_pages_by_file_id, delete_file_pages_by_scope,
+            search_file_pages,
         },
         tenant::Tenant,
     },
@@ -63,16 +64,30 @@ impl DatabaseSearchIndexFactory {
 
     pub fn create_search_index(&self, tenant: &Tenant) -> DatabaseSearchIndex {
         DatabaseSearchIndex {
-            db: self.db.clone(),
-            tenant: Arc::new(tenant.clone()),
+            db: IndexDatabaseSource::Pools {
+                db: self.db.clone(),
+                tenant: Arc::new(tenant.clone()),
+            },
         }
     }
 }
 
 #[derive(Clone)]
 pub struct DatabaseSearchIndex {
-    db: Arc<DatabasePoolCache>,
-    tenant: Arc<Tenant>,
+    db: IndexDatabaseSource,
+}
+
+#[derive(Clone)]
+pub enum IndexDatabaseSource {
+    /// Database source backed by the database pool cache
+    Pools {
+        /// The cache for producing databases
+        db: Arc<DatabasePoolCache>,
+        /// The tenant the search index is for
+        tenant: Arc<Tenant>,
+    },
+    /// Singular database pool backed implementation for testing
+    Pool(DbPool),
 }
 
 const TENANT_MIGRATIONS: &[(&str, &str)] = &[
@@ -88,24 +103,37 @@ const TENANT_MIGRATIONS: &[(&str, &str)] = &[
         "m3_create_tsvector_columns",
         include_str!("./migrations/m3_create_tsvector_columns.sql"),
     ),
+    (
+        "m4_search_functions_and_types",
+        include_str!("./migrations/m4_search_functions_and_types.sql"),
+    ),
 ];
 
 impl DatabaseSearchIndex {
+    pub fn from_pool(db: DbPool) -> Self {
+        Self {
+            db: IndexDatabaseSource::Pool(db),
+        }
+    }
+
     pub async fn acquire_db(&self) -> Result<DbPool, SearchError> {
-        let db = self
-            .db
-            .get_tenant_pool(&self.tenant)
-            .await
-            .map_err(|error| {
-                tracing::error!(?error, "failed to acquire database for searching");
-                DatabaseSearchError::AcquireDatabase
-            })?;
-        Ok(db)
+        match &self.db {
+            IndexDatabaseSource::Pools { db, tenant } => {
+                let db = db.get_tenant_pool(tenant).await.map_err(|error| {
+                    tracing::error!(?error, "failed to acquire database for searching");
+                    DatabaseSearchError::AcquireDatabase
+                })?;
+                Ok(db)
+            }
+            IndexDatabaseSource::Pool(db) => Ok(db.clone()),
+        }
     }
 
     /// Close the associated tenant database pool
     pub async fn close(&self) {
-        self.db.close_tenant_pool(&self.tenant).await;
+        if let IndexDatabaseSource::Pools { db, tenant } = &self.db {
+            db.close_tenant_pool(tenant).await;
+        }
     }
 }
 
@@ -138,160 +166,33 @@ impl SearchIndex for DatabaseSearchIndex {
 
         let query_text = query.query.unwrap_or_default();
 
-        let results: Vec<DbSearchResult> = sqlx::query_as(
+        let results: Vec<DocboxSearchMatchRanked> = sqlx::query_as(
             r#"
-WITH
-    "query_data" AS (
-        SELECT plainto_tsquery('english', $1) AS "ts_query"
-    ),
-
-    -- Search links
-    "link_matches" AS (
-        SELECT
-            'Link' AS "item_type",
-            "link"."id" AS "item_id",
-            "folder"."document_box" AS "document_box",
-            ($3::BOOLEAN AND "link"."name_tsv" @@ "query_data"."ts_query") AS "name_match_tsv",
-            ts_rank("link"."name_tsv", "query_data"."ts_query") AS "name_match_tsv_rank",
-            ($3::BOOLEAN AND "link"."name" ILIKE '%' || $1 || '%') AS "name_match",
-            ($4::BOOLEAN AND "link"."value" ILIKE '%' || $1 || '%') AS "content_match",
-            0::FLOAT8 as "content_rank",
-            0::INT AS "total_hits",
-            '[]'::json AS "page_matches",
-            "link"."created_at" AS "created_at"
-        FROM "docbox_links" "link"
-        CROSS JOIN "query_data"
-        LEFT JOIN "docbox_folders" "folder" ON "link"."folder_id" = "folder"."id"
-        WHERE "folder"."document_box" = ANY($2)
-            AND ($6 IS NULL OR "link"."created_at" >= $6)
-            AND ($7 IS NULL OR "link"."created_at" <= $7)
-            AND ($8 IS NULL OR "link"."created_by" = $8)
-            AND ($9 IS NULL OR "link"."folder_id" = ANY($9))
-    ),
-
-    -- Search folders
-    "folder_matches" AS (
-        SELECT
-            'Folder' AS "item_type",
-            "folder"."id" AS "item_id",
-            "folder"."document_box" AS "document_box",
-            ($3::BOOLEAN AND "folder"."name_tsv" @@ "query_data"."ts_query") AS "name_match_tsv",
-            ts_rank("folder"."name_tsv", "query_data"."ts_query") AS "name_match_tsv_rank",
-            ($3::BOOLEAN AND "folder"."name" ILIKE '%' || $1 || '%') AS "name_match",
-            FALSE as "content_match",
-            0::FLOAT8 as "content_rank",
-            0::INT AS "total_hits",
-            '[]'::json AS "page_matches",
-            "folder"."created_at" AS "created_at"
-        FROM "docbox_folders" "folder"
-        CROSS JOIN "query_data"
-        WHERE "folder"."document_box" = ANY($2)
-            AND ($6 IS NULL OR "folder"."created_at" >= $6)
-            AND ($7 IS NULL OR "folder"."created_at" <= $7)
-            AND ($8 IS NULL OR "folder"."created_by" = $8)
-            AND ($9 IS NULL OR "folder"."folder_id" = ANY($9))
-    ),
-
-    -- Search files
-    "file_matches" AS (
-        SELECT
-            'File' AS "item_type",
-            "file"."id" AS "item_id",
-            "folder"."document_box" AS "document_box",
-            ($3::BOOLEAN AND "file"."name_tsv" @@ "query_data"."ts_query") AS "name_match_tsv",
-            ts_rank("file"."name_tsv", "query_data"."ts_query") AS "name_match_tsv_rank",
-            ($3::BOOLEAN AND "file"."name" ILIKE '%' || $1 || '%') AS "name_match",
-            ($4::BOOLEAN AND COUNT("pages"."page") > 0) AS "content_match",
-            COALESCE(AVG("pages"."content_match_rank"), 0) as "content_rank",
-            COALESCE(MAX("pages"."total_hits"), 0) AS "total_hits",
-            (COALESCE(
-                json_agg(
-                    json_build_object(
-                        'page', "pages"."page",
-                        'matched', ts_headline('english', "pages"."content", "query_data"."ts_query", 'StartSel=<em>, StopSel=</em>')
-                    )
-                    ORDER BY "pages"."content_match_rank" DESC, "pages"."page" ASC
-                )  FILTER (WHERE "pages"."page" IS NOT NULL),
-                '[]'::json
-            )) AS "page_matches",
-            "file"."created_at" AS "created_at"
-        FROM "docbox_files" "file"
-        CROSS JOIN "query_data"
-        LEFT JOIN "docbox_folders" "folder"
-            ON "file"."folder_id" = "folder"."id" AND "folder"."document_box" = ANY($2)
-        LEFT JOIN LATERAL (
-            -- Match the page content
-            WITH "page_data" AS (
-                SELECT
-                    "p".*,
-                    "p"."content_tsv" @@ "query_data"."ts_query" AS "content_match_tsv",
-                    "p"."content" ILIKE '%' || $1 || '%' AS "content_match",
-                    COUNT(*) OVER () AS "total_hits",
-                    (ts_rank("p"."content_tsv", "query_data"."ts_query")
-                     + CASE WHEN "p"."content" ILIKE '%' || $1 || '%' THEN 1.0 ELSE 0 END -- Boost result for ILIKE content matches
-                    ) AS "content_match_rank"
-                FROM "docbox_files_pages" "p"
-                WHERE "p"."file_id" = "file"."id"
-            )
-            SELECT *
-            FROM "page_data"
-            WHERE "content_match" OR "content_match_tsv"
-            ORDER BY "content_match_rank" DESC, "page" ASC
-            LIMIT $10::INT
-            OFFSET $11::INT
-        ) "pages" ON $4::BOOLEAN
-        WHERE "folder"."document_box" = ANY($2)
-            AND ($5 IS NULL OR "file"."mime" = $5)
-            AND ($6 IS NULL OR "file"."created_at" >= $6)
-            AND ($7 IS NULL OR "file"."created_at" <= $7)
-            AND ($8 IS NULL OR "file"."created_by" = $8)
-            AND ($9 IS NULL OR "file"."folder_id" = ANY($9))
-
-        GROUP BY "file"."id", "folder"."document_box", "query_data"."ts_query"
-    ),
-
-    "results" AS (
-        SELECT *
-        FROM "link_matches"
-        WHERE "name_match" OR "name_match_tsv" OR "content_match"
-
-        UNION ALL
-
-        SELECT *
-        FROM "folder_matches"
-        WHERE "name_match" OR "name_match_tsv" OR "content_match"
-
-        UNION ALL
-
-        SELECT *
-        FROM "file_matches"
-        WHERE "name_match" OR "name_match_tsv" OR "content_match"
+    SELECT *
+    FROM resolve_search_results(
+        $1,
+        plainto_tsquery('english', $1),
+        $2,
+        $3,
+        $4,
+        $5
     )
-
-    (
-        SELECT *,
-        ("name_match_tsv_rank"
-         + "content_rank"
-         + CASE WHEN "name_match" THEN 1.0 ELSE 0 END -- Boost result for ILIKE name matches
-         + CASE WHEN "item_type" = 'Link' AND "content_match" THEN 1.0 ELSE 0 END -- Boost link content matches
-        ) AS "rank",
-        COUNT("item_id") OVER() as "total_count"
-        FROM "results"
-        WHERE "name_match" OR "name_match_tsv" OR "content_match"
-    )
-    ORDER BY "rank" DESC, "created_at" DESC
-    LIMIT $12
-    OFFSET $13"#,
+    LIMIT $6
+    OFFSET $7"#,
         )
         .bind(query_text)
-        .bind(scopes)
-        .bind(query.include_name)
-        .bind(query.include_content)
+        .bind(DocboxSearchFilters {
+            document_boxes: scopes.to_vec(),
+            folder_children,
+            include_name: query.include_name,
+            include_content: query.include_content,
+            created_at: query.created_at.map(|value| DocboxSearchDateRange {
+                start: value.start,
+                end: value.end,
+            }),
+            created_by: query.created_by,
+        })
         .bind(query.mime.map(|value| value.0.to_string()))
-        .bind(query.created_at.as_ref().map(|created_at| created_at.start))
-        .bind(query.created_at.as_ref().map(|created_at| created_at.end))
-        .bind(query.created_by)
-        .bind(folder_children)
         .bind(query.max_pages.unwrap_or(3) as i32)
         .bind(query.pages_offset.unwrap_or_default() as i32)
         .bind(query.size.unwrap_or(50) as i32)
@@ -311,6 +212,9 @@ WITH
         let results = results
             .into_iter()
             .filter_map(|result| {
+                let rank = result.rank;
+                let result = result.search_match;
+
                 let item_ty = match result.item_type.as_str() {
                     "File" => SearchIndexType::File,
                     "Folder" => SearchIndexType::Folder,
@@ -332,7 +236,7 @@ WITH
                         })
                         .collect(),
                     total_hits: result.total_hits as u64,
-                    score: SearchScore::Float(result.rank as f32),
+                    score: SearchScore::Float(rank as f32),
                     name_match: result.name_match,
                     content_match: result.content_match,
                 })

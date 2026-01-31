@@ -13,7 +13,22 @@ pub async fn store_file_index(
     document_box: &DocumentBoxScopeRaw,
     index_metadata: Option<ProcessingIndexMetadata>,
 ) -> Result<(), UploadFileError> {
-    let index = SearchIndexData {
+    let index = create_file_index(file, document_box, index_metadata);
+
+    search
+        .add_data(vec![index])
+        .await
+        .map_err(UploadFileError::CreateIndex)?;
+
+    Ok(())
+}
+
+pub fn create_file_index(
+    file: &CreateFile,
+    document_box: &DocumentBoxScopeRaw,
+    index_metadata: Option<ProcessingIndexMetadata>,
+) -> SearchIndexData {
+    SearchIndexData {
         ty: SearchIndexType::File,
         item_id: file.id,
         folder_id: file.folder_id,
@@ -24,12 +39,5 @@ pub async fn store_file_index(
         created_by: file.created_by.clone(),
         document_box: document_box.clone(),
         pages: index_metadata.and_then(|value| value.pages),
-    };
-
-    search
-        .add_data(vec![index])
-        .await
-        .map_err(UploadFileError::CreateIndex)?;
-
-    Ok(())
+    }
 }
