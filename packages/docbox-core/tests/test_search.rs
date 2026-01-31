@@ -220,6 +220,43 @@ async fn test_search() {
     let test_tenant = create_test_tenant().await;
     let search = create_search_index_database(&test_tenant).await;
 
+    let db = &test_tenant.tenant_db;
+
+    let scope = "test".to_string();
+    let _document_box = DocumentBox::create(db, scope.clone()).await.unwrap();
+    let root = Folder::create(
+        db,
+        CreateFolder {
+            name: "Root".to_string(),
+            document_box: scope.clone(),
+            folder_id: None,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    // Seed our special search content
+    let create_file = CreateFile {
+        id: SEED_FILE_ID,
+        name: SEED_FILE_ID.to_string(),
+        folder_id: root.id,
+        ..Default::default()
+    };
+
+    let data = create_file_index(
+        &create_file,
+        &scope,
+        Some(ProcessingIndexMetadata {
+            pages: Some(vec![DocumentPage {
+                page: 0,
+                content: SEARCH_TEXT_CONTENT.to_string(),
+            }]),
+        }),
+    );
+    File::create(db, create_file).await.unwrap();
+    search.add_data(vec![data]).await.unwrap();
+
     let results = search
         .search_index(
             &["test".to_string()],
