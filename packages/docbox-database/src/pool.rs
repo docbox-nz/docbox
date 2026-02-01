@@ -41,7 +41,7 @@ use std::time::Duration;
 use std::{num::ParseIntError, str::ParseBoolError};
 use std::{sync::Arc, time::SystemTime};
 use thiserror::Error;
-use tokio::time::{Interval, interval, sleep};
+use tokio::time::sleep;
 
 ///  Config for the database pool
 #[derive(Debug, Clone, Serialize, Deserialize)]
