@@ -1931,7 +1931,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-core"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "aws-config",
  "aws-sdk-sqs",
@@ -1989,7 +1989,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-http"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "axum",
  "axum-valid",
