@@ -96,6 +96,12 @@ pub struct DatabasePoolCacheConfig {
     /// Default: 10min
     pub idle_timeout: Option<u64>,
 
+    /// Maximum time pool are allowed to stay within the database
+    /// cache before they are automatically removed
+    ///
+    /// Default: 48h
+    pub pool_timeout: Option<u64>,
+
     /// Duration in seconds idle database pools are allowed to be cached before
     /// they are closed
     ///
@@ -138,6 +144,7 @@ impl Default for DatabasePoolCacheConfig {
             max_connections_root: None,
             acquire_timeout: None,
             idle_timeout: None,
+            pool_timeout: None,
             cache_duration: None,
             cache_capacity: None,
             credentials_cache_duration: None,
@@ -156,6 +163,8 @@ pub enum DatabasePoolCacheConfigError {
     InvalidDatabasePort,
     #[error("missing DOCBOX_DB_CREDENTIAL_NAME environment variable")]
     MissingDatabaseSecretName,
+    #[error("invalid DOCBOX_DB_POOL_TIMEOUT environment variable")]
+    InvalidPoolTimeout(ParseIntError),
     #[error("invalid DOCBOX_DB_IDLE_TIMEOUT environment variable")]
     InvalidIdleTimeout(ParseIntError),
     #[error("invalid DOCBOX_DB_ACQUIRE_TIMEOUT environment variable")]
@@ -208,6 +217,15 @@ impl DatabasePoolCacheConfig {
                 value
                     .parse::<u64>()
                     .map_err(DatabasePoolCacheConfigError::InvalidAcquireTimeout)?,
+            ),
+            Err(_) => None,
+        };
+
+        let pool_timeout: Option<u64> = match std::env::var("DOCBOX_DB_POOL_TIMEOUT") {
+            Ok(value) => Some(
+                value
+                    .parse::<u64>()
+                    .map_err(DatabasePoolCacheConfigError::InvalidPoolTimeout)?,
             ),
             Err(_) => None,
         };
@@ -267,6 +285,7 @@ impl DatabasePoolCacheConfig {
             max_connections,
             max_connections_root,
             acquire_timeout,
+            pool_timeout,
             idle_timeout,
             cache_duration,
             cache_capacity,
@@ -365,14 +384,25 @@ impl DatabasePoolCache {
         config: DatabasePoolCacheConfig,
         secrets_manager: SecretManager,
     ) -> Self {
+        let mut pool_timeout = Duration::from_secs(config.cache_duration.unwrap_or(60 * 60 * 48));
         let cache_duration = Duration::from_secs(config.cache_duration.unwrap_or(60 * 60 * 48));
         let credentials_cache_duration =
             Duration::from_secs(config.credentials_cache_duration.unwrap_or(60 * 60 * 12));
+
+        // When using IAM ensure the pool timeout is less than the expiration time
+        // of the temporary access tokens
+        if config.root_iam && config.pool_timeout.is_none() {
+            tracing::debug!(
+                "IAM database auth is enabled with no pool timeout, setting short pool timeout within token duration"
+            );
+            pool_timeout = Duration::from_secs(60 * 15);
+        }
 
         let cache_capacity = config.cache_capacity.unwrap_or(50);
         let credentials_cache_capacity = config.credentials_cache_capacity.unwrap_or(50);
 
         let cache = Cache::builder()
+            .time_to_live(pool_timeout)
             .time_to_idle(cache_duration)
             .max_capacity(cache_capacity)
             .eviction_policy(EvictionPolicy::tiny_lfu())
@@ -570,7 +600,7 @@ impl DatabasePoolCache {
             .ok_or(DbConnectErr::MissingRegion)?;
 
         let mut signing_settings = SigningSettings::default();
-        signing_settings.expires_in = Some(Duration::from_secs(60 * 15));
+        signing_settings.expires_in = Some(Duration::from_secs(60 * 30));
         signing_settings.signature_location =
             aws_sigv4::http_request::SignatureLocation::QueryParams;
 
