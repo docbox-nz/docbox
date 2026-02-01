@@ -278,6 +278,7 @@ pub async fn apply_migration(
             .execute(db.deref_mut())
             .await
             .inspect_err(|error| {
+                eprintln!("{error:?} {query}");
                 tracing::error!(?error, ?migration_name, "failed to perform migration")
             })?;
         let rows_affected = result.rows_affected();

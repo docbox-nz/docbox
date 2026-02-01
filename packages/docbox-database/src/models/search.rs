@@ -45,12 +45,21 @@ pub struct DocboxSearchFilters {
     pub include_content: bool,
     pub created_at: Option<DocboxSearchDateRange>,
     pub created_by: Option<String>,
+    pub mime: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "docbox_search_item_type")]
+pub enum DocboxSearchItemType {
+    File,
+    Link,
+    Folder,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, sqlx::Type)]
 #[sqlx(type_name = "docbox_search_match")]
 pub struct DocboxSearchMatch {
-    pub item_type: String,
+    pub item_type: DocboxSearchItemType,
     pub item_id: Uuid,
     pub document_box: String,
     pub name_match_tsv: bool,
@@ -71,28 +80,30 @@ pub struct DocboxSearchMatchRanked {
     pub total_count: i64,
 }
 
-pub async fn count_search_file_pages(
-    db: &DbPool,
-    scope: &DocumentBoxScopeRaw,
-    file_id: Uuid,
-    query: &str,
-) -> DbResult<DbPageCountResult> {
+pub struct SearchOptions {
+    pub query: String,
+    pub filters: DocboxSearchFilters,
+    pub max_pages: i64,
+    pub pages_offset: i64,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+pub async fn search(db: &DbPool, options: SearchOptions) -> DbResult<Vec<DocboxSearchMatchRanked>> {
     sqlx::query_as(
         r#"
-        SELECT COUNT(*) AS "count"
-        FROM "docbox_folders" "folder"
-        JOIN "docbox_files" "file" ON "file"."folder_id" = "folder"."id"
-        JOIN "docbox_files_pages" "page" ON "page"."file_id" = "file"."id"
-        WHERE "folder"."document_box" = $1
-            AND "file"."id" = $2
-            AND "page"."file_id" = $2
-            AND "page"."content_tsv" @@ plainto_tsquery('english', $3)
+        SELECT * FROM docbox_search($1, plainto_tsquery('english', $1), $2, $3, $4)
+        LIMIT $5
+        OFFSET $6
     "#,
     )
-    .bind(scope)
-    .bind(file_id)
-    .bind(query)
-    .fetch_one(db)
+    .bind(options.query)
+    .bind(options.filters)
+    .bind(options.max_pages)
+    .bind(options.pages_offset)
+    .bind(options.limit)
+    .bind(options.offset)
+    .fetch_all(db)
     .await
 }
 
@@ -103,20 +114,9 @@ pub async fn search_file_pages(
     query: &str,
     limit: i64,
     offset: i64,
-) -> DbResult<Vec<DbPageResult>> {
+) -> DbResult<Vec<DocboxSearchPageMatch>> {
     sqlx::query_as(r#"
-        SELECT
-            "page"."page",
-            ts_headline('english', "page"."content", plainto_tsquery('english', $3)) AS "highlighted_content",
-            ts_rank("page"."content_tsv", plainto_tsquery('english', $3)) AS "rank"
-        FROM "docbox_folders" "folder"
-        JOIN "docbox_files" "file" ON "file"."folder_id" = "folder"."id"
-        JOIN "docbox_files_pages" "page" ON "page"."file_id" = "file"."id"
-        WHERE "folder"."document_box" = $1
-            AND "file"."id" = $2
-            AND "page"."file_id" = $2
-            AND "page"."content_tsv" @@ plainto_tsquery('english', $3)
-        ORDER BY "rank" DESC
+        SELECT * FROM docbox_search_file_pages_with_scope($1, $2, $3, plainto_tsquery('english', $3))
         LIMIT $4
         OFFSET $5
     "#)
@@ -158,25 +158,4 @@ pub async fn delete_file_pages_by_file_id(db: &DbPool, file_id: Uuid) -> DbResul
     .execute(db)
     .await?;
     Ok(())
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DbSearchPageResult {
-    pub page: i64,
-    pub matched: String,
-}
-
-#[derive(Debug, FromRow)]
-pub struct DbSearchResult {
-    pub item_type: String,
-    pub item_id: Uuid,
-    pub document_box: DocumentBoxScopeRaw,
-    pub name_match_tsv: bool,
-    pub name_match: bool,
-    pub content_match: bool,
-    pub total_hits: i64,
-    #[sqlx(json)]
-    pub page_matches: Vec<DbSearchPageResult>,
-    pub total_count: i64,
-    pub rank: f64,
 }

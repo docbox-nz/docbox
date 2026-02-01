@@ -34,7 +34,11 @@ pub async fn test_database(container: &ContainerAsync<Postgres>) -> DbPool {
         .database(TEST_DB_NAME)
         .ssl_mode(docbox_database::sqlx::postgres::PgSslMode::Disable);
 
-    PgPoolOptions::new().connect_with(options).await.unwrap()
+    PgPoolOptions::new()
+        .max_connections(100)
+        .connect_with(options)
+        .await
+        .unwrap()
 }
 
 /// Testing utility to create and setup a database for a tenant to use in tests that

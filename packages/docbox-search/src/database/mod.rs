@@ -24,9 +24,9 @@ use docbox_database::{
         file::FileId,
         folder::FolderId,
         search::{
-            DocboxSearchDateRange, DocboxSearchFilters, DocboxSearchMatchRanked,
-            count_search_file_pages, delete_file_pages_by_file_id, delete_file_pages_by_scope,
-            search_file_pages,
+            DocboxSearchDateRange, DocboxSearchFilters, DocboxSearchItemType,
+            DocboxSearchMatchRanked, DocboxSearchPageMatch, SearchOptions,
+            delete_file_pages_by_file_id, delete_file_pages_by_scope, search, search_file_pages,
         },
         tenant::Tenant,
     },
@@ -39,29 +39,38 @@ use std::{sync::Arc, vec};
 pub use error::{DatabaseSearchError, DatabaseSearchIndexFactoryError};
 
 pub mod error;
+mod migrations;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+/// Configuration for a database backend search index
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct DatabaseSearchConfig {}
 
 impl DatabaseSearchConfig {
+    /// Load the configuration from environment variables
     pub fn from_env() -> Result<Self, DatabaseSearchIndexFactoryError> {
         Ok(Self {})
     }
 }
 
+/// Factory for producing [DatabaseSearchIndex]'s for tenants
 #[derive(Clone)]
 pub struct DatabaseSearchIndexFactory {
     db: Arc<DatabasePoolCache>,
 }
 
 impl DatabaseSearchIndexFactory {
+    // Create a [DatabaseSearchIndexFactory] from a `db` pool cache and
+    // the provided configuration `config`
     pub fn from_config(
         db: Arc<DatabasePoolCache>,
-        _config: DatabaseSearchConfig,
+        config: DatabaseSearchConfig,
     ) -> Result<Self, DatabaseSearchIndexFactoryError> {
+        _ = config;
+
         Ok(Self { db })
     }
 
+    /// Create a search index for the provided `tenant`
     pub fn create_search_index(&self, tenant: &Tenant) -> DatabaseSearchIndex {
         DatabaseSearchIndex {
             db: IndexDatabaseSource::Pools {
@@ -72,8 +81,10 @@ impl DatabaseSearchIndexFactory {
     }
 }
 
+/// Database backend search index
 #[derive(Clone)]
 pub struct DatabaseSearchIndex {
+    /// Underlying database source
     db: IndexDatabaseSource,
 }
 
@@ -90,39 +101,25 @@ pub enum IndexDatabaseSource {
     Pool(DbPool),
 }
 
-const TENANT_MIGRATIONS: &[(&str, &str)] = &[
-    (
-        "m1_create_additional_indexes",
-        include_str!("./migrations/m1_create_additional_indexes.sql"),
-    ),
-    (
-        "m2_search_create_files_pages_table",
-        include_str!("./migrations/m2_search_create_files_pages_table.sql"),
-    ),
-    (
-        "m3_create_tsvector_columns",
-        include_str!("./migrations/m3_create_tsvector_columns.sql"),
-    ),
-    (
-        "m4_search_functions_and_types",
-        include_str!("./migrations/m4_search_functions_and_types.sql"),
-    ),
-];
-
 impl DatabaseSearchIndex {
+    /// Create a search index from a db pool
     pub fn from_pool(db: DbPool) -> Self {
         Self {
             db: IndexDatabaseSource::Pool(db),
         }
     }
 
-    pub async fn acquire_db(&self) -> Result<DbPool, SearchError> {
+    /// Acquire a database connection
+    async fn acquire_db(&self) -> Result<DbPool, SearchError> {
         match &self.db {
             IndexDatabaseSource::Pools { db, tenant } => {
-                let db = db.get_tenant_pool(tenant).await.map_err(|error| {
-                    tracing::error!(?error, "failed to acquire database for searching");
-                    DatabaseSearchError::AcquireDatabase
-                })?;
+                let db = db
+                    .get_tenant_pool(tenant)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(?error, "failed to acquire database for searching")
+                    })
+                    .map_err(DatabaseSearchError::AcquireDatabase)?;
                 Ok(db)
             }
             IndexDatabaseSource::Pool(db) => Ok(db.clone()),
@@ -131,8 +128,13 @@ impl DatabaseSearchIndex {
 
     /// Close the associated tenant database pool
     pub async fn close(&self) {
-        if let IndexDatabaseSource::Pools { db, tenant } = &self.db {
-            db.close_tenant_pool(tenant).await;
+        match &self.db {
+            IndexDatabaseSource::Pools { db, tenant } => {
+                db.close_tenant_pool(tenant).await;
+            }
+            IndexDatabaseSource::Pool(pool) => {
+                pool.close().await;
+            }
         }
     }
 }
@@ -156,6 +158,7 @@ impl SearchIndex for DatabaseSearchIndex {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn search_index(
         &self,
         scopes: &[DocumentBoxScopeRaw],
@@ -166,22 +169,15 @@ impl SearchIndex for DatabaseSearchIndex {
 
         let query_text = query.query.unwrap_or_default();
 
-        let results: Vec<DocboxSearchMatchRanked> = sqlx::query_as(
-            r#"
-    SELECT *
-    FROM resolve_search_results(
-        $1,
-        plainto_tsquery('english', $1),
-        $2,
-        $3,
-        $4,
-        $5
-    )
-    LIMIT $6
-    OFFSET $7"#,
-        )
-        .bind(query_text)
-        .bind(DocboxSearchFilters {
+        let mime = query.mime.map(|value| value.0.to_string());
+
+        let max_pages = query.max_pages.unwrap_or(3) as i64;
+        let pages_offset = query.pages_offset.unwrap_or_default() as i64;
+
+        let limit = query.size.unwrap_or(50) as i64;
+        let offset = query.offset.unwrap_or_default() as i64;
+
+        let filters = DocboxSearchFilters {
             document_boxes: scopes.to_vec(),
             folder_children,
             include_name: query.include_name,
@@ -191,64 +187,38 @@ impl SearchIndex for DatabaseSearchIndex {
                 end: value.end,
             }),
             created_by: query.created_by,
-        })
-        .bind(query.mime.map(|value| value.0.to_string()))
-        .bind(query.max_pages.unwrap_or(3) as i32)
-        .bind(query.pages_offset.unwrap_or_default() as i32)
-        .bind(query.size.unwrap_or(50) as i32)
-        .bind(query.offset.unwrap_or(0) as i32)
-        .fetch_all(&db)
+            mime,
+        };
+
+        let results = search(
+            &db,
+            SearchOptions {
+                query: query_text,
+                filters,
+                max_pages,
+                pages_offset,
+                limit,
+                offset,
+            },
+        )
         .await
-        .map_err(|error| {
-            tracing::error!(?error, "failed to search index");
-            DatabaseSearchError::SearchIndex
-        })?;
+        .inspect_err(|error| tracing::error!(?error, "failed to search index"))
+        .map_err(DatabaseSearchError::SearchIndex)?;
 
         let total_hits = results
             .first()
             .map(|result| result.total_count)
-            .unwrap_or_default();
+            .unwrap_or_default() as u64;
 
-        let results = results
-            .into_iter()
-            .filter_map(|result| {
-                let rank = result.rank;
-                let result = result.search_match;
-
-                let item_ty = match result.item_type.as_str() {
-                    "File" => SearchIndexType::File,
-                    "Folder" => SearchIndexType::Folder,
-                    "Link" => SearchIndexType::Link,
-                    // Unknown type error, should never occur but must be handled
-                    _ => return None,
-                };
-
-                Some(FlattenedItemResult {
-                    item_ty,
-                    item_id: result.item_id,
-                    document_box: result.document_box,
-                    page_matches: result
-                        .page_matches
-                        .into_iter()
-                        .map(|result| PageResult {
-                            matches: vec![result.matched],
-                            page: result.page as u64,
-                        })
-                        .collect(),
-                    total_hits: result.total_hits as u64,
-                    score: SearchScore::Float(rank as f32),
-                    name_match: result.name_match,
-                    content_match: result.content_match,
-                })
-            })
-            .collect();
+        let results = results.into_iter().map(FlattenedItemResult::from).collect();
 
         Ok(SearchResults {
-            total_hits: total_hits as u64,
+            total_hits,
             results,
         })
     }
 
+    #[tracing::instrument(skip(self))]
     async fn search_index_file(
         &self,
         scope: &DocumentBoxScopeRaw,
@@ -257,38 +227,29 @@ impl SearchIndex for DatabaseSearchIndex {
     ) -> Result<crate::models::FileSearchResults, SearchError> {
         let db = self.acquire_db().await?;
         let query_text = query.query.unwrap_or_default();
-        let total_pages = count_search_file_pages(&db, scope, file_id, &query_text)
+
+        let limit = query.limit.unwrap_or(50) as i64;
+        let offset = query.offset.unwrap_or_default() as i64;
+
+        let pages = search_file_pages(&db, scope, file_id, &query_text, limit, offset)
             .await
             .map_err(|error| {
-                tracing::error!(?error, "failed to count search file pages");
-                DatabaseSearchError::CountFilePages
+                tracing::error!(?error, "failed to search file pages");
+                DatabaseSearchError::SearchFilePages
             })?;
-        let pages = search_file_pages(
-            &db,
-            scope,
-            file_id,
-            &query_text,
-            query.limit.unwrap_or(50) as i64,
-            query.offset.unwrap_or(0) as i64,
-        )
-        .await
-        .map_err(|error| {
-            tracing::error!(?error, "failed to search file pages");
-            DatabaseSearchError::SearchFilePages
-        })?;
+
+        let total_hits = pages
+            .first()
+            .map(|value| value.total_hits)
+            .unwrap_or_default() as u64;
 
         Ok(FileSearchResults {
-            total_hits: total_pages.count as u64,
-            results: pages
-                .into_iter()
-                .map(|page| PageResult {
-                    page: page.page as u64,
-                    matches: vec![page.highlighted_content],
-                })
-                .collect(),
+            total_hits,
+            results: pages.into_iter().map(PageResult::from).collect(),
         })
     }
 
+    #[tracing::instrument(skip_all)]
     async fn add_data(&self, data: Vec<SearchIndexData>) -> Result<(), SearchError> {
         let db = self.acquire_db().await?;
 
@@ -321,10 +282,11 @@ impl SearchIndex for DatabaseSearchIndex {
                 query = query.bind(page.page as i32).bind(page.content);
             }
 
-            if let Err(error) = query.execute(&db).await {
-                tracing::error!(?error, "failed to add search data");
-                return Err(DatabaseSearchError::AddData.into());
-            }
+            query
+                .execute(&db)
+                .await
+                .inspect_err(|error| tracing::error!(?error, "failed to add search data"))
+                .map_err(DatabaseSearchError::AddData)?;
         }
 
         Ok(())
@@ -340,46 +302,36 @@ impl SearchIndex for DatabaseSearchIndex {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn delete_data(&self, id: uuid::Uuid) -> Result<(), SearchError> {
         let db = self.acquire_db().await?;
         delete_file_pages_by_file_id(&db, id)
             .await
-            .map_err(|error| {
-                tracing::error!(?error, "failed to delete search data by id");
-                DatabaseSearchError::DeleteData
-            })?;
+            .inspect_err(|error| tracing::error!(?error, "failed to delete search data by id"))
+            .map_err(DatabaseSearchError::DeleteData)?;
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn delete_by_scope(&self, scope: DocumentBoxScopeRawRef<'_>) -> Result<(), SearchError> {
         let db = self.acquire_db().await?;
         delete_file_pages_by_scope(&db, scope)
             .await
-            .map_err(|error| {
-                tracing::error!(?error, "failed to delete search data by scope");
-                DatabaseSearchError::DeleteData
-            })?;
+            .inspect_err(|error| tracing::error!(?error, "failed to delete search data by scope"))
+            .map_err(DatabaseSearchError::DeleteData)?;
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_pending_migrations(
         &self,
         applied_names: Vec<String>,
     ) -> Result<Vec<String>, SearchError> {
-        let pending = TENANT_MIGRATIONS
-            .iter()
-            .filter(|(migration_name, _migration)| {
-                // Skip already applied migrations
-                !applied_names
-                    .iter()
-                    .any(|applied_migration| applied_migration.eq(migration_name))
-            })
-            .map(|(migration_name, _migration)| migration_name.to_string())
-            .collect();
-
+        let pending = migrations::get_pending_migrations(applied_names);
         Ok(pending)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn apply_migration(
         &self,
         _tenant: &docbox_database::models::tenant::Tenant,
@@ -387,19 +339,47 @@ impl SearchIndex for DatabaseSearchIndex {
         t: &mut docbox_database::DbTransaction<'_>,
         name: &str,
     ) -> Result<(), SearchError> {
-        let (_, migration) = TENANT_MIGRATIONS
-            .iter()
-            .find(|(migration_name, _)| name.eq(*migration_name))
-            .ok_or(DatabaseSearchError::MigrationNotFound)?;
+        migrations::apply_migration(t, name).await
+    }
+}
 
-        // Apply the migration
-        docbox_database::migrations::apply_migration(t, name, migration)
-            .await
-            .map_err(|error| {
-                tracing::error!(?error, "failed to apply migration");
-                DatabaseSearchError::ApplyMigration
-            })?;
+impl From<DocboxSearchMatchRanked> for FlattenedItemResult {
+    fn from(value: DocboxSearchMatchRanked) -> Self {
+        let DocboxSearchMatchRanked {
+            search_match, rank, ..
+        } = value;
+        FlattenedItemResult {
+            item_ty: search_match.item_type.into(),
+            item_id: search_match.item_id,
+            document_box: search_match.document_box,
+            page_matches: search_match
+                .page_matches
+                .into_iter()
+                .map(PageResult::from)
+                .collect(),
+            total_hits: search_match.total_hits as u64,
+            score: SearchScore::Float(rank as f32),
+            name_match: search_match.name_match,
+            content_match: search_match.content_match,
+        }
+    }
+}
 
-        Ok(())
+impl From<DocboxSearchPageMatch> for PageResult {
+    fn from(value: DocboxSearchPageMatch) -> Self {
+        PageResult {
+            matches: vec![value.matched],
+            page: value.page as u64,
+        }
+    }
+}
+
+impl From<DocboxSearchItemType> for SearchIndexType {
+    fn from(value: DocboxSearchItemType) -> Self {
+        match value {
+            DocboxSearchItemType::File => SearchIndexType::File,
+            DocboxSearchItemType::Folder => SearchIndexType::Folder,
+            DocboxSearchItemType::Link => SearchIndexType::Link,
+        }
     }
 }

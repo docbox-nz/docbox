@@ -14,8 +14,9 @@ use docbox_database::{
 use docbox_processing::ProcessingIndexMetadata;
 use docbox_search::{
     DatabaseSearchIndex, TenantSearchIndex,
-    models::{DocumentPage, SearchRequest},
+    models::{DocumentPage, FileSearchRequest, SearchRequest},
 };
+use itertools::Itertools;
 use testcontainers::{ContainerAsync, GenericImage};
 use testcontainers_modules::postgres::Postgres;
 use tokio::time::Instant;
@@ -34,12 +35,21 @@ const SEARCH_TEXT_CONTENT: &str = include_str!("./samples/search_text_content_ta
 const SEARCH_TEXT_PHRASE: &str = "Within this content there is a very specific sentence we are searching for, this is that sentence.";
 const SEED_FILE_ID: Uuid = uuid!("278397ec-7f78-4a90-a4be-f4d7df6841a7");
 
-async fn seed_index_data(db: &DbPool, search: &TenantSearchIndex, samples: usize) {
+const SEARCH_TEXT_CONTENT_2: &str = include_str!("./samples/search_text_content_target_2.txt");
+const SEARCH_TEXT_PHRASE_2: &str = "Here is another piece of content I would like to match";
+const SEED_FILE_ID_2: Uuid = uuid!("ceaaa68f-df24-4038-b424-db7c0fc6d98a");
+
+async fn seed_index_data(
+    db: &DbPool,
+    search: &TenantSearchIndex,
+    scope: &str,
+    samples: usize,
+) -> (DocumentBox, Folder) {
     let mut files = Vec::new();
     let mut search_data = Vec::new();
 
-    let scope = "test".to_string();
-    let _document_box = DocumentBox::create(db, scope.clone()).await.unwrap();
+    let scope = scope.to_string();
+    let document_box = DocumentBox::create(db, scope.clone()).await.unwrap();
     let root = Folder::create(
         db,
         CreateFolder {
@@ -52,7 +62,7 @@ async fn seed_index_data(db: &DbPool, search: &TenantSearchIndex, samples: usize
     .await
     .unwrap();
 
-    for _i in 0..samples {
+    for _ in 0..samples {
         let id = Uuid::new_v4();
         let create_file = CreateFile {
             id,
@@ -77,15 +87,26 @@ async fn seed_index_data(db: &DbPool, search: &TenantSearchIndex, samples: usize
         search_data.push(data);
     }
 
+    println!("generated data for seeding");
+
     // Insert search data in batches of 5k
-    let mut iter = search_data.into_iter();
-    loop {
-        let chunk: Vec<_> = iter.by_ref().take(5000).collect();
-        if chunk.is_empty() {
-            break;
-        }
-        search.add_data(chunk).await.unwrap();
-    }
+    let chunks = search_data.into_iter().chunks(1000);
+
+    let chunks = chunks.into_iter();
+    let mut stream = chunks
+        .map(|chunk| {
+            let chunk = chunk.collect::<Vec<_>>();
+
+            async move {
+                search.add_data(chunk).await.unwrap();
+                println!("stored chunk of search data");
+            }
+        })
+        .collect::<FuturesUnordered<_>>();
+
+    while let Some(_item) = stream.next().await {}
+
+    println!("stored search data");
 
     // Create files in batches of 100
     for create in files.chunks(100) {
@@ -99,26 +120,7 @@ async fn seed_index_data(db: &DbPool, search: &TenantSearchIndex, samples: usize
         }
     }
 
-    // Seed our special search content
-    let create_file = CreateFile {
-        id: SEED_FILE_ID,
-        name: SEED_FILE_ID.to_string(),
-        folder_id: root.id,
-        ..Default::default()
-    };
-
-    let data = create_file_index(
-        &create_file,
-        &scope,
-        Some(ProcessingIndexMetadata {
-            pages: Some(vec![DocumentPage {
-                page: 0,
-                content: SEARCH_TEXT_CONTENT.to_string(),
-            }]),
-        }),
-    );
-    File::create(db, create_file).await.unwrap();
-    search.add_data(vec![data]).await.unwrap();
+    (document_box, root)
 }
 
 #[allow(unused)]
@@ -271,6 +273,20 @@ async fn test_search() {
         .unwrap();
 
     assert_eq!(results.total_hits, 1);
+    let results = search
+        .search_index_file(
+            &"test".to_string(),
+            SEED_FILE_ID,
+            FileSearchRequest {
+                query: Some(SEARCH_TEXT_PHRASE.to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(results.total_hits, 1);
+    // dbg!(&results);
 }
 
 #[tokio::test]
@@ -281,7 +297,57 @@ async fn test_search_database() {
 
     println!("finished initialize");
 
-    seed_index_data(&test_tenant.tenant_db, &search, 10_000).await;
+    let (document_box, root) = seed_index_data(&test_tenant.tenant_db, &search, "test", 100).await;
+
+    // Seed our special search content
+    let create_file = CreateFile {
+        id: SEED_FILE_ID,
+        name: SEED_FILE_ID.to_string(),
+        folder_id: root.id,
+        ..Default::default()
+    };
+
+    let data = create_file_index(
+        &create_file,
+        &document_box.scope,
+        Some(ProcessingIndexMetadata {
+            pages: Some(vec![DocumentPage {
+                page: 0,
+                content: SEARCH_TEXT_CONTENT.to_string(),
+            }]),
+        }),
+    );
+    File::create(&test_tenant.tenant_db, create_file)
+        .await
+        .unwrap();
+    search.add_data(vec![data]).await.unwrap();
+
+    // Seed our special search content
+    let create_file = CreateFile {
+        id: SEED_FILE_ID_2,
+        name: SEED_FILE_ID_2.to_string(),
+        folder_id: root.id,
+        ..Default::default()
+    };
+
+    let data = create_file_index(
+        &create_file,
+        &document_box.scope,
+        Some(ProcessingIndexMetadata {
+            pages: Some(vec![DocumentPage {
+                page: 0,
+                content: SEARCH_TEXT_CONTENT_2.to_string(),
+            }]),
+        }),
+    );
+    File::create(&test_tenant.tenant_db, create_file)
+        .await
+        .unwrap();
+    search.add_data(vec![data]).await.unwrap();
+
+    println!("finished seeding first data batch");
+
+    seed_index_data(&test_tenant.tenant_db, &search, "test_other_scope", 50_000).await;
 
     println!("finished seeding data");
 
@@ -315,7 +381,41 @@ async fn test_search_database() {
     let avg_duration = sum_duration / iterations.len() as u32;
 
     println!(
-        "min = {}ms, max = {}ms, avg = {}ms",
+        "FIRST: min = {}ms, max = {}ms, avg = {}ms",
+        min_duration.as_millis(),
+        max_duration.as_millis(),
+        avg_duration.as_millis()
+    );
+
+    let mut iterations = Vec::new();
+
+    for i in 0..ITERATIONS {
+        let start = Instant::now();
+        let results = search
+            .search_index(
+                &["test".to_string()],
+                SearchRequest {
+                    query: Some(SEARCH_TEXT_PHRASE_2.to_string()),
+                    include_content: true,
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .unwrap();
+        let elapsed = start.elapsed();
+        iterations.push(elapsed);
+        println!("finished iteration {} {}ms", i, elapsed.as_millis());
+        dbg!(results);
+    }
+
+    let min_duration = iterations.iter().min().unwrap();
+    let max_duration = iterations.iter().max().unwrap();
+    let sum_duration: Duration = iterations.iter().sum();
+    let avg_duration = sum_duration / iterations.len() as u32;
+
+    println!(
+        "SECOND: min = {}ms, max = {}ms, avg = {}ms",
         min_duration.as_millis(),
         max_duration.as_millis(),
         avg_duration.as_millis()
@@ -328,7 +428,61 @@ async fn test_search_typesense() {
     let test_tenant = create_test_tenant().await;
     let (search, _search_container) = create_search_index_typesense(&test_tenant).await;
 
-    seed_index_data(&test_tenant.tenant_db, &search, 10_000).await;
+    println!("finished initialize");
+
+    let (document_box, root) = seed_index_data(&test_tenant.tenant_db, &search, "test", 100).await;
+
+    // Seed our special search content
+    let create_file = CreateFile {
+        id: SEED_FILE_ID,
+        name: SEED_FILE_ID.to_string(),
+        folder_id: root.id,
+        ..Default::default()
+    };
+
+    let data = create_file_index(
+        &create_file,
+        &document_box.scope,
+        Some(ProcessingIndexMetadata {
+            pages: Some(vec![DocumentPage {
+                page: 0,
+                content: SEARCH_TEXT_CONTENT.to_string(),
+            }]),
+        }),
+    );
+    File::create(&test_tenant.tenant_db, create_file)
+        .await
+        .unwrap();
+    search.add_data(vec![data]).await.unwrap();
+
+    // Seed our special search content
+    let create_file = CreateFile {
+        id: SEED_FILE_ID_2,
+        name: SEED_FILE_ID_2.to_string(),
+        folder_id: root.id,
+        ..Default::default()
+    };
+
+    let data = create_file_index(
+        &create_file,
+        &document_box.scope,
+        Some(ProcessingIndexMetadata {
+            pages: Some(vec![DocumentPage {
+                page: 0,
+                content: SEARCH_TEXT_CONTENT_2.to_string(),
+            }]),
+        }),
+    );
+    File::create(&test_tenant.tenant_db, create_file)
+        .await
+        .unwrap();
+    search.add_data(vec![data]).await.unwrap();
+
+    println!("finished seeding first data batch");
+
+    seed_index_data(&test_tenant.tenant_db, &search, "test_other_scope", 50_000).await;
+
+    println!("finished seeding data");
 
     const ITERATIONS: usize = 5;
 
@@ -360,7 +514,41 @@ async fn test_search_typesense() {
     let avg_duration = sum_duration / iterations.len() as u32;
 
     println!(
-        "min = {}ms, max = {}ms, avg = {}ms",
+        "FIRST: min = {}ms, max = {}ms, avg = {}ms",
+        min_duration.as_millis(),
+        max_duration.as_millis(),
+        avg_duration.as_millis()
+    );
+
+    let mut iterations = Vec::new();
+
+    for i in 0..ITERATIONS {
+        let start = Instant::now();
+        let results = search
+            .search_index(
+                &["test".to_string()],
+                SearchRequest {
+                    query: Some(SEARCH_TEXT_PHRASE_2.to_string()),
+                    include_content: true,
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .unwrap();
+        let elapsed = start.elapsed();
+        iterations.push(elapsed);
+        println!("finished iteration {} {}ms", i, elapsed.as_millis());
+        dbg!(results);
+    }
+
+    let min_duration = iterations.iter().min().unwrap();
+    let max_duration = iterations.iter().max().unwrap();
+    let sum_duration: Duration = iterations.iter().sum();
+    let avg_duration = sum_duration / iterations.len() as u32;
+
+    println!(
+        "SECOND: min = {}ms, max = {}ms, avg = {}ms",
         min_duration.as_millis(),
         max_duration.as_millis(),
         avg_duration.as_millis()

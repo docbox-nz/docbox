@@ -77,6 +77,7 @@ pub struct UpdateSearchIndexData {
 }
 
 /// Search results scoped to a specific file
+#[derive(Debug)]
 pub struct FileSearchResults {
     // Total number of hits against the item
     pub total_hits: u64,
