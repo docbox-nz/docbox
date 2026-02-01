@@ -24,6 +24,7 @@
 //! * `DOCBOX_DB_CREDENTIALS_CACHE_CAPACITY` - Maximum database credentials to cache
 
 use crate::{DbErr, DbPool, ROOT_DATABASE_NAME, ROOT_DATABASE_ROLE_NAME, models::tenant::Tenant};
+use aws_config::SdkConfig;
 use aws_credential_types::provider::{ProvideCredentials, error::CredentialsError};
 use aws_sigv4::{
     http_request::{SignableBody, SignableRequest, SigningError, SigningSettings, sign},
@@ -40,6 +41,7 @@ use std::time::Duration;
 use std::{num::ParseIntError, str::ParseBoolError};
 use std::{sync::Arc, time::SystemTime};
 use thiserror::Error;
+use tokio::time::{Interval, interval, sleep};
 
 ///  Config for the database pool
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -395,7 +397,7 @@ impl DatabasePoolCache {
             tracing::debug!(
                 "IAM database auth is enabled with no pool timeout, setting short pool timeout within token duration"
             );
-            pool_timeout = Duration::from_secs(60 * 15);
+            pool_timeout = Duration::from_secs(60 * 10);
         }
 
         let cache_capacity = config.cache_capacity.unwrap_or(50);
@@ -582,53 +584,6 @@ impl DatabasePoolCache {
         Ok(credentials)
     }
 
-    async fn create_rds_signed_token(
-        &self,
-        host: &str,
-        port: u16,
-        user: &str,
-    ) -> Result<String, DbConnectErr> {
-        let credentials_provider = self
-            .aws_config
-            .credentials_provider()
-            .ok_or(DbConnectErr::MissingCredentialsProvider)?;
-        let credentials = credentials_provider.provide_credentials().await?;
-        let identity = credentials.into();
-        let region = self
-            .aws_config
-            .region()
-            .ok_or(DbConnectErr::MissingRegion)?;
-
-        let mut signing_settings = SigningSettings::default();
-        signing_settings.expires_in = Some(Duration::from_secs(60 * 30));
-        signing_settings.signature_location =
-            aws_sigv4::http_request::SignatureLocation::QueryParams;
-
-        let signing_params = aws_sigv4::sign::v4::SigningParams::builder()
-            .identity(&identity)
-            .region(region.as_ref())
-            .name("rds-db")
-            .time(SystemTime::now())
-            .settings(signing_settings)
-            .build()?;
-
-        let url = format!("https://{host}:{port}/?Action=connect&DBUser={user}");
-
-        let signable_request =
-            SignableRequest::new("GET", &url, std::iter::empty(), SignableBody::Bytes(&[]))?;
-
-        let (signing_instructions, _signature) =
-            sign(signable_request, &signing_params.into())?.into_parts();
-
-        let mut url = url::Url::parse(&url).map_err(DbConnectErr::AwsSignerInvalidUrl)?;
-        for (name, value) in signing_instructions.params() {
-            url.query_pairs_mut().append_pair(name, value);
-        }
-
-        let response = url.to_string().split_off("https://".len());
-        Ok(response)
-    }
-
     /// Creates a database pool connection using IAM based authentication
     async fn create_pool_iam(
         &self,
@@ -637,23 +592,21 @@ impl DatabasePoolCache {
     ) -> Result<DbPool, DbConnectErr> {
         tracing::debug!(?db_name, ?db_role_name, "creating db pool connection");
 
-        let token = self
-            .create_rds_signed_token(&self.host, self.port, db_role_name)
-            .await?;
-
-        let options = PgConnectOptions::new()
-            .host(&self.host)
-            .port(self.port)
-            .username(db_role_name)
-            .password(&token)
-            .database(db_name);
+        let options = iam_pool_connect_options(
+            &self.aws_config,
+            &self.host,
+            self.port,
+            db_name,
+            db_role_name,
+        )
+        .await?;
 
         let max_connections = match db_name {
             ROOT_DATABASE_NAME => self.max_connections_root,
             _ => self.max_connections,
         };
 
-        PgPoolOptions::new()
+        let pool = PgPoolOptions::new()
             .max_connections(max_connections)
             // Slightly larger acquire timeout for times when lots of files are being processed
             .acquire_timeout(self.acquire_timeout)
@@ -661,7 +614,18 @@ impl DatabasePoolCache {
             .idle_timeout(self.idle_timeout)
             .connect_with(options)
             .await
-            .map_err(DbConnectErr::Db)
+            .map_err(DbConnectErr::Db)?;
+
+        tokio::spawn(iam_pool_maintenance_task(
+            pool.clone(),
+            self.aws_config.clone(),
+            self.host.clone(),
+            self.port,
+            db_name.to_string(),
+            db_role_name.to_string(),
+        ));
+
+        Ok(pool)
     }
 
     /// Creates a database pool connection
@@ -698,5 +662,96 @@ impl DatabasePoolCache {
                 Err(DbConnectErr::Db(err))
             }
         }
+    }
+}
+
+async fn iam_pool_connect_options(
+    aws_config: &SdkConfig,
+    host: &str,
+    port: u16,
+    db_name: &str,
+    db_role_name: &str,
+) -> Result<PgConnectOptions, DbConnectErr> {
+    let token = create_rds_signed_token(aws_config, host, port, db_role_name).await?;
+
+    let options = PgConnectOptions::new()
+        .host(host)
+        .port(port)
+        .username(db_role_name)
+        .password(&token)
+        .database(db_name);
+
+    Ok(options)
+}
+
+async fn create_rds_signed_token(
+    aws_config: &SdkConfig,
+    host: &str,
+    port: u16,
+    user: &str,
+) -> Result<String, DbConnectErr> {
+    let credentials_provider = aws_config
+        .credentials_provider()
+        .ok_or(DbConnectErr::MissingCredentialsProvider)?;
+    let credentials = credentials_provider.provide_credentials().await?;
+    let identity = credentials.into();
+    let region = aws_config.region().ok_or(DbConnectErr::MissingRegion)?;
+
+    let mut signing_settings = SigningSettings::default();
+    signing_settings.expires_in = Some(Duration::from_secs(60 * 15));
+    signing_settings.signature_location = aws_sigv4::http_request::SignatureLocation::QueryParams;
+
+    let signing_params = aws_sigv4::sign::v4::SigningParams::builder()
+        .identity(&identity)
+        .region(region.as_ref())
+        .name("rds-db")
+        .time(SystemTime::now())
+        .settings(signing_settings)
+        .build()?;
+
+    let url = format!("https://{host}:{port}/?Action=connect&DBUser={user}");
+
+    let signable_request =
+        SignableRequest::new("GET", &url, std::iter::empty(), SignableBody::Bytes(&[]))?;
+
+    let (signing_instructions, _signature) =
+        sign(signable_request, &signing_params.into())?.into_parts();
+
+    let mut url = url::Url::parse(&url).map_err(DbConnectErr::AwsSignerInvalidUrl)?;
+    for (name, value) in signing_instructions.params() {
+        url.query_pairs_mut().append_pair(name, value);
+    }
+
+    let response = url.to_string().split_off("https://".len());
+    Ok(response)
+}
+
+/// Background task spawned for IAM pools running every 10minutes to ensure that the pool
+/// has an up-to-date temporary authentication token
+async fn iam_pool_maintenance_task(
+    db: DbPool,
+    aws_config: SdkConfig,
+    host: String,
+    port: u16,
+    db_name: String,
+    db_role_name: String,
+) {
+    let interval = Duration::from_secs(60 * 10);
+
+    loop {
+        if db.is_closed() {
+            return;
+        }
+
+        match iam_pool_connect_options(&aws_config, &host, port, &db_name, &db_role_name).await {
+            Ok(options) => {
+                db.set_connect_options(options);
+            }
+            Err(error) => {
+                tracing::error!(?error, "failed to refresh IAM pool connect options");
+            }
+        }
+
+        sleep(interval).await;
     }
 }
