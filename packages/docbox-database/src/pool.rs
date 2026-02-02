@@ -17,8 +17,9 @@
 //! * `DOCBOX_DB_MAX_CONNECTIONS` - Max connections each tenant pool can contain
 //! * `DOCBOX_DB_MAX_ROOT_CONNECTIONS` - Max connections the root "docbox" pool can contain
 //! * `DOCBOX_DB_ACQUIRE_TIMEOUT` - Timeout before acquiring a connection fails
+//! * `DOCBOX_DB_POOL_TIMEOUT` - Maximum time a connection can live in the cache for
 //! * `DOCBOX_DB_IDLE_TIMEOUT` - Timeout before a idle connection is closed to save resources
-//! * `DOCBOX_DB_CACHE_DURATION` - Duration idle pools should be maintained for before closing
+//! * `DOCBOX_DB_CACHE_DURATION` - Duration pools can remain in the cache for untouched before they are closed and removed
 //! * `DOCBOX_DB_CACHE_CAPACITY` - Maximum database pools to hold at once
 //! * `DOCBOX_DB_CREDENTIALS_CACHE_DURATION` - Duration database credentials should be cached for
 //! * `DOCBOX_DB_CREDENTIALS_CACHE_CAPACITY` - Maximum database credentials to cache
