@@ -76,3 +76,15 @@ impl DatabaseErrorExt for DbErr {
             .is_some_and(|error| error.is_restrict())
     }
 }
+
+macro_rules! update_if_some {
+    ($self:expr, $($field:ident),+ $(,)?) => {
+        $(
+            if let Some(value) = $field {
+                $self.$field = value;
+            }
+        )+
+    };
+}
+
+pub(crate) use update_if_some;

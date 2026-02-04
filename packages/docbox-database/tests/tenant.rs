@@ -1,5 +1,5 @@
 use docbox_database::{
-    models::tenant::{CreateTenant, Tenant},
+    models::tenant::{CreateTenant, Tenant, UpdateTenant},
     utils::DatabaseErrorExt,
 };
 use uuid::Uuid;
@@ -417,4 +417,123 @@ async fn test_delete_tenant() {
         .await
         .unwrap();
     assert!(result.is_some());
+}
+
+/// Tests that a tenant can be created
+#[tokio::test]
+async fn test_update_tenant() {
+    let (db, _db_container) = test_root_db().await;
+
+    // Create a secondary tenant to ensure updates aren't applied to it
+    let secondary_tenant_id = Uuid::new_v4();
+    let secondary_tenant = Tenant::create(
+        &db,
+        CreateTenant {
+            id: secondary_tenant_id,
+            name: "dont-match-test".to_string(),
+            db_name: "dont-match-test".to_string(),
+            db_secret_name: Some("dont-match-test".to_string()),
+            db_iam_user_name: None,
+            s3_name: "dont-match-test".to_string(),
+            os_index_name: "dont-match-test".to_string(),
+            event_queue_url: None,
+            env: "Development".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let tenant_id = Uuid::new_v4();
+
+    let mut tenant = Tenant::create(
+        &db,
+        CreateTenant {
+            id: tenant_id,
+            name: "test".to_string(),
+            db_name: "test".to_string(),
+            db_secret_name: Some("test".to_string()),
+            db_iam_user_name: None,
+            s3_name: "test".to_string(),
+            os_index_name: "test".to_string(),
+            event_queue_url: None,
+            env: "Development".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let original_tenant = tenant.clone();
+    let new_tenant_id = Uuid::new_v4();
+
+    // Update the tenant ID
+    tenant
+        .update(
+            &db,
+            UpdateTenant {
+                id: Some(new_tenant_id),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(tenant.id, new_tenant_id);
+    assert_ne!(tenant, original_tenant);
+
+    // Should be able to query the updated tenant and get back the same one we have after the update
+    let found_tenant = Tenant::find_by_id(&db, tenant.id, &tenant.env)
+        .await
+        .unwrap()
+        .expect("expected to find tenant");
+    assert_eq!(found_tenant, tenant);
+
+    // Update other tenant fields
+    tenant
+        .update(
+            &db,
+            UpdateTenant {
+                id: Some(new_tenant_id),
+                name: Some("test-name-2".to_string()),
+                db_name: Some("test-db-name-2".to_string()),
+                db_secret_name: Some(Some("test-secret-name".to_string())),
+                db_iam_user_name: Some(Some("test-iam-user-name-2".to_string())),
+                s3_name: Some("test-s3-name-2".to_string()),
+                os_index_name: Some("test-search-2".to_string()),
+                event_queue_url: Some(Some("test-event-queue-2".to_string())),
+                env: Some("Production".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(tenant.id, new_tenant_id);
+    assert_eq!(tenant.name, "test-name-2");
+    assert_eq!(tenant.db_name, "test-db-name-2");
+    assert_eq!(tenant.db_secret_name, Some("test-secret-name".to_string()));
+    assert_eq!(
+        tenant.db_iam_user_name,
+        Some("test-iam-user-name-2".to_string())
+    );
+    assert_eq!(tenant.s3_name, "test-s3-name-2");
+    assert_eq!(tenant.os_index_name, "test-search-2");
+    assert_eq!(
+        tenant.event_queue_url,
+        Some("test-event-queue-2".to_string())
+    );
+    assert_eq!(tenant.env, "Production");
+
+    // Should be able to query the updated tenant and get back the same one we have after the update
+    let found_tenant = Tenant::find_by_id(&db, tenant.id, &tenant.env)
+        .await
+        .unwrap()
+        .expect("expected to find tenant");
+    assert_eq!(found_tenant, tenant);
+
+    // Secondary tenant should not have been changed
+    let found_secondary_tenant =
+        Tenant::find_by_id(&db, secondary_tenant.id, &secondary_tenant.env)
+            .await
+            .unwrap()
+            .expect("expected to find tenant");
+    assert_eq!(found_secondary_tenant, secondary_tenant);
 }

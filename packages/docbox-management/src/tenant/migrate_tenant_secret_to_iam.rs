@@ -1,7 +1,9 @@
 use crate::database::{DatabaseProvider, close_pool_on_drop};
 use docbox_core::{
     database::{
-        DbErr, DbSecrets, ROOT_DATABASE_NAME, create::make_role_iam_only, models::tenant::Tenant,
+        DbErr, DbSecrets, ROOT_DATABASE_NAME,
+        create::make_role_iam_only,
+        models::tenant::{Tenant, UpdateTenant},
     },
     secrets::{SecretManager, SecretManagerError},
 };
@@ -54,12 +56,14 @@ pub async fn migrate_tenant_secret_to_iam(
         .map_err(MigrateIAMError::MakeRoleIAM)?;
 
     tenant
-        .set_db_iam_user_name(&root_db, Some(secret.username.clone()))
-        .await
-        .map_err(MigrateIAMError::UpdateTenant)?;
-
-    tenant
-        .set_db_secret_name(&root_db, None)
+        .update(
+            &root_db,
+            UpdateTenant {
+                db_iam_user_name: Some(Some(secret.username.clone())),
+                db_secret_name: Some(None),
+                ..Default::default()
+            },
+        )
         .await
         .map_err(MigrateIAMError::UpdateTenant)?;
 

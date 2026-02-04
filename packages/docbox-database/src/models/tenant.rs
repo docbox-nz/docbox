@@ -1,9 +1,11 @@
 use crate::{DbExecutor, DbResult};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
 pub type TenantId = Uuid;
+
+use crate::utils::update_if_some;
 
 #[derive(Debug, Clone, FromRow, Serialize, PartialEq, Eq)]
 pub struct Tenant {
@@ -30,6 +32,8 @@ pub struct Tenant {
     pub event_queue_url: Option<String>,
 }
 
+/// Structure for fields required when creating a
+/// tenant within the database
 pub struct CreateTenant {
     pub id: TenantId,
     pub name: String,
@@ -40,6 +44,21 @@ pub struct CreateTenant {
     pub os_index_name: String,
     pub event_queue_url: Option<String>,
     pub env: String,
+}
+
+/// Bulk update for tenant fields
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UpdateTenant {
+    pub id: Option<TenantId>,
+    pub name: Option<String>,
+    pub db_name: Option<String>,
+    pub db_secret_name: Option<Option<String>>,
+    pub db_iam_user_name: Option<Option<String>>,
+    pub s3_name: Option<String>,
+    pub os_index_name: Option<String>,
+    pub env: Option<String>,
+    pub event_queue_url: Option<Option<String>>,
 }
 
 impl Tenant {
@@ -87,35 +106,67 @@ impl Tenant {
     }
 
     /// Update the "db_iam_user_name" property of the tenant
-    pub async fn set_db_iam_user_name(
+    pub async fn update(
         &mut self,
         db: impl DbExecutor<'_>,
-        iam_user_name: Option<String>,
-    ) -> DbResult<Option<Tenant>> {
-        sqlx::query_as(
-            r#"UPDATE "docbox_tenants" SET "db_iam_user_name" = $3 WHERE "id" = $1 AND "env" = $2"#,
+        UpdateTenant {
+            id,
+            name,
+            db_name,
+            db_secret_name,
+            db_iam_user_name,
+            s3_name,
+            os_index_name,
+            env,
+            event_queue_url,
+        }: UpdateTenant,
+    ) -> DbResult<()> {
+        sqlx::query(
+            r#"
+            UPDATE "docbox_tenants"
+            SET
+                "id" = COALESCE($3, "id"),
+                "name" = COALESCE($4, "name"),
+                "db_name" = COALESCE($5, "db_name"),
+                "db_secret_name" = COALESCE($6, "db_secret_name"),
+                "db_iam_user_name" = COALESCE($7, "db_iam_user_name"),
+                "s3_name" = COALESCE($8, "s3_name"),
+                "os_index_name" = COALESCE($9, "os_index_name"),
+                "env" = COALESCE($10, "env"),
+                "event_queue_url" = COALESCE($11, "event_queue_url")
+            WHERE "id" = $1 AND "env" = $2
+            "#,
         )
+        //
         .bind(self.id)
         .bind(self.env.clone())
-        .bind(iam_user_name)
+        //
+        .bind(id)
+        .bind(name.clone())
+        .bind(db_name.clone())
+        .bind(db_secret_name.clone())
+        .bind(db_iam_user_name.clone())
+        .bind(s3_name.clone())
+        .bind(os_index_name.clone())
+        .bind(env.clone())
+        .bind(event_queue_url.clone())
         .fetch_optional(db)
-        .await
-    }
+        .await?;
 
-    /// Update the "db_secret_name" property of the tenant
-    pub async fn set_db_secret_name(
-        &mut self,
-        db: impl DbExecutor<'_>,
-        db_secret_name: Option<String>,
-    ) -> DbResult<Option<Tenant>> {
-        sqlx::query_as(
-            r#"UPDATE "docbox_tenants" SET "db_secret_name" = $3 WHERE "id" = $1 AND "env" = $2"#,
-        )
-        .bind(self.id)
-        .bind(self.env.clone())
-        .bind(db_secret_name)
-        .fetch_optional(db)
-        .await
+        update_if_some!(
+            self,
+            id,
+            name,
+            db_name,
+            db_secret_name,
+            db_iam_user_name,
+            s3_name,
+            os_index_name,
+            env,
+            event_queue_url,
+        );
+
+        Ok(())
     }
 
     /// Find a tenant by `id` within a specific `env`
