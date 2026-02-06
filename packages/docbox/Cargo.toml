@@ -39,7 +39,7 @@ thiserror.workspace = true
 
 # Logging
 tracing.workspace = true
-tracing-subscriber.workspace = true
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 
 # Sentry
 sentry = { version = "=0.46.1", default-features = false, features = [

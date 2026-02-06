@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
-use crate::background::{BackgroundTaskData, perform_background_tasks};
+use crate::{
+    background::{BackgroundTaskData, perform_background_tasks},
+    logging::config::LoggingConfig,
+};
 use axum::{Extension, extract::DefaultBodyLimit};
 use axum_server::tls_rustls::RustlsConfig;
 use docbox_http::{
@@ -27,7 +30,7 @@ use docbox_http::{
     middleware::api_key::ApiKeyLayer,
     routes::router,
 };
-use logging::{init_logging, init_logging_with_sentry};
+use logging::init_logging;
 use std::{
     error::Error,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -53,18 +56,8 @@ const DEFAULT_SERVER_ADDRESS_HTTPS: SocketAddr =
 fn main() -> Result<(), Box<dyn Error>> {
     _ = dotenvy::dotenv();
 
-    let _sentry_guard = match std::env::var("SENTRY_DSN") {
-        // Initialize logging with sentry support
-        Ok(dsn) => {
-            let sentry = init_logging_with_sentry(dsn);
-            Some(sentry)
-        }
-        // Initialize logging without sentry support
-        Err(_) => {
-            init_logging();
-            None
-        }
-    };
+    let logging_config = LoggingConfig::from_env()?;
+    let _logging_guards = init_logging(logging_config)?;
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()

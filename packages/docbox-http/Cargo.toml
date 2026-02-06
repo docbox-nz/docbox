@@ -45,7 +45,6 @@ serde_with.workspace = true
 
 # Logging
 tracing.workspace = true
-tracing-subscriber.workspace = true
 
 bytes.workspace = true
 

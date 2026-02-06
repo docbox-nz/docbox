@@ -64,7 +64,6 @@ bytes-utils = "0.1.4"
 
 # Logging
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 # Serialization and JSON
 serde = { version = "1.0.228", features = ["derive"] }
