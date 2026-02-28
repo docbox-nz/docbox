@@ -4,6 +4,7 @@ use crate::{
     background::{BackgroundTaskData, perform_background_tasks},
     logging::config::LoggingConfig,
 };
+use aws_config::SdkConfig;
 use axum::{Extension, extract::DefaultBodyLimit};
 use axum_server::tls_rustls::RustlsConfig;
 use docbox_http::{
@@ -56,15 +57,18 @@ const DEFAULT_SERVER_ADDRESS_HTTPS: SocketAddr =
 fn main() -> Result<(), Box<dyn Error>> {
     _ = dotenvy::dotenv();
 
-    let logging_config = LoggingConfig::from_env()?;
-    let _logging_guards = init_logging(logging_config)?;
-
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("Failed building the Runtime")
         .block_on(async move {
-            if let Err(error) = server().await {
+            // Load AWS configuration
+            let aws_config = aws_config().await;
+
+            let logging_config = LoggingConfig::from_env()?;
+            let _logging_guards = init_logging(&aws_config, logging_config)?;
+
+            if let Err(error) = server(aws_config).await {
                 tracing::error!(?error, message = %error, "error running server");
                 return Err(error);
             }
@@ -73,15 +77,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         })
 }
 
-async fn server() -> Result<(), Box<dyn Error>> {
+async fn server(aws_config: SdkConfig) -> Result<(), Box<dyn Error>> {
     let max_file_size_bytes = match std::env::var("DOCBOX_MAX_FILE_SIZE_BYTES") {
         Ok(value) => value.parse::<i32>()?,
         // Default max file size in bytes (100MB)
         Err(_) => 100 * 1000 * 1024,
     };
-
-    // Load AWS configuration
-    let aws_config = aws_config().await;
 
     // Create website scraping service
     let website_meta_service_config = WebsiteMetaServiceConfig::from_env()?;
