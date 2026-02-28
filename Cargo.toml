@@ -59,7 +59,7 @@ chrono = { version = "0.4.43", features = ["serde"] }
 moka = { version = "0.12.12", features = ["future"] }
 
 # Bytes type used for cheap shared bytes (and utilities)
-bytes = "1.11.0"
+bytes = "1.11.1"
 bytes-utils = "0.1.4"
 
 # Logging
@@ -99,10 +99,10 @@ utoipa = { version = "5.4.0", features = [
 ] }
 
 # AWS configuration
-aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
+aws-config = { version = "1.8.14", features = ["behavior-version-latest"] }
 
 # AWS Lambda SDK
-aws-sdk-lambda = "1.113.0"
+aws-sdk-lambda = "1.117.0"
 
 # HTML parser for OGP metadata and html to text conversion
 tl = "0.7.8"
@@ -114,8 +114,8 @@ base64 = "0.22.1"
 itertools = "0.14.0"
 
 # Test containers for integration tests
-testcontainers = "0.26.3"
-testcontainers-modules = "0.14.0"
+testcontainers = "0.27.1"
+testcontainers-modules = "0.15.0"
 
 # Fake data generation
-fake = { version = " 4.4.0" }
+fake = { version = "4.4.0" }

@@ -59,7 +59,7 @@ chrono.workspace = true
 moka.workspace = true
 
 # Enum -> String helpers and macros
-strum = { version = "0.27.2", features = ["derive"] }
+strum = { version = "0.28.0", features = ["derive"] }
 
 utoipa.workspace = true
 
