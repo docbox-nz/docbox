@@ -516,6 +516,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-cloudwatchlogs"
+version = "1.118.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad67cb13de787e2312e2cdadb17cbd6d02d375e3f7761fd17cd1fe0dfb73ba2b"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-observability",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand",
+ "http 0.2.12",
+ "http 1.4.0",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-lambda"
 version = "1.117.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1921,6 +1946,8 @@ dependencies = [
 name = "docbox"
 version = "0.7.1"
 dependencies = [
+ "aws-config",
+ "aws-sdk-cloudwatchlogs",
  "axum",
  "axum-server",
  "docbox-http",
@@ -1934,6 +1961,7 @@ dependencies = [
  "tokio-simple-fixed-scheduler",
  "tower-http",
  "tracing",
+ "tracing-cloudwatch",
  "tracing-subscriber",
 ]
 
@@ -6714,6 +6742,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "tracing-cloudwatch"
+version = "0.3.1"
+source = "git+https://github.com/jacobtread/tracing-cloudwatch.git?rev=934eb1d19c0a758cd870f20dbba95259f8a347d3#934eb1d19c0a758cd870f20dbba95259f8a347d3"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-sdk-cloudwatchlogs",
+ "chrono",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber",
 ]
 
 [[package]]
