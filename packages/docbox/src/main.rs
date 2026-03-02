@@ -66,12 +66,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             let aws_config = aws_config().await;
 
             let logging_config = LoggingConfig::from_env()?;
-            let _logging_guards = init_logging(&aws_config, logging_config)?;
+            let logging_guards = init_logging(&aws_config, logging_config)?;
 
             if let Err(error) = server(aws_config).await {
                 tracing::error!(?error, message = %error, "error running server");
                 return Err(error);
             }
+
+            logging_guards.shutdown().await;
 
             Ok(())
         })

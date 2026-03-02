@@ -58,6 +58,4 @@ sentry-tracing = "=0.46.2"
 
 # Cloudwatch logging
 aws-sdk-cloudwatchlogs = "1.118.0"
-
-# Git dependency until: https://github.com/ymgyt/tracing-cloudwatch/pull/52
-tracing-cloudwatch = { version = "0.3.1", features = ["awssdk"], git = "https://github.com/jacobtread/tracing-cloudwatch.git", rev = "934eb1d19c0a758cd870f20dbba95259f8a347d3" }
+tracing-cloudwatch = { version = "0.4.1", features = ["awssdk", "ordered_logs"] }

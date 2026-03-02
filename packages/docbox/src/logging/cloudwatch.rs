@@ -85,19 +85,18 @@ where
         .with_file(true)
         // Display source code line numbers
         .with_line_number(true)
-        // Don't display the event's target (module path)
-        .with_target(false);
+        .with_target(true);
 
-    Some(
-        tracing_cloudwatch::layer()
-            .with_fmt_layer(fmt_layer)
-            .with_client(
-                cw_client,
-                tracing_cloudwatch::ExportConfig::default()
-                    .with_batch_size(batch_size)
-                    .with_interval(interval)
-                    .with_log_group_name(log_group_name)
-                    .with_log_stream_name(log_stream_name),
-            ),
-    )
+    let (layer, guard) = tracing_cloudwatch::layer()
+        .with_fmt_layer(fmt_layer)
+        .with_client(
+            cw_client,
+            tracing_cloudwatch::ExportConfig::default()
+                .with_batch_size(batch_size)
+                .with_interval(interval)
+                .with_log_group_name(log_group_name)
+                .with_log_stream_name(log_stream_name),
+        );
+
+    Some((layer, guard))
 }
