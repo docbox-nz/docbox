@@ -57,7 +57,7 @@ jobs:
               uses: actions/cache@v4
               with:
                   path: /tmp/.docker-cache
-                  key: docker-images-v1
+                  key: docker-images-v2
 
             # Load Docker images from cache (if present)
             - name: Load cached Docker images
@@ -86,8 +86,8 @@ jobs:
                   docker pull jacobtread/office-convert-server:0.2.2
                   docker save jacobtread/office-convert-server:0.2.2 -o /tmp/.docker-cache/office-convert-server.tar
 
-                  docker pull jacobtread/loker:0.2.2
-                  docker save jacobtread/loker:0.2.2 -o /tmp/.docker-cache/loker.tar
+                  docker pull jacobtread/loker:0.2.3
+                  docker save jacobtread/loker:0.2.3 -o /tmp/.docker-cache/loker.tar
 
             # Setup rust for building the service
             - name: Set up Rust
