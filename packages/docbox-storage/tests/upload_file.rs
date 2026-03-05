@@ -1,3 +1,5 @@
+use docbox_storage::UploadFileOptions;
+
 use crate::common::minio::{test_minio_container, test_storage_factory};
 
 mod common;
@@ -11,7 +13,14 @@ async fn test_upload_file_minio() {
 
     storage.create_bucket().await.unwrap();
     storage
-        .upload_file("test.txt", "text/plain".to_string(), "test".into())
+        .upload_file(
+            "test.txt",
+            "test".into(),
+            UploadFileOptions {
+                content_type: "text/plain".to_string(),
+                ..Default::default()
+            },
+        )
         .await
         .unwrap();
 
@@ -26,7 +35,7 @@ async fn test_upload_file_minio() {
     assert_eq!(contents.as_ref(), b"test");
 }
 
-/// Tests uploading a file with a duplicate key will override the existing ocvntent
+/// Tests uploading a file with a duplicate key will override the existing content
 #[tokio::test]
 async fn test_upload_file_duplicate_key_override_minio() {
     let container = test_minio_container().await;
@@ -35,7 +44,14 @@ async fn test_upload_file_duplicate_key_override_minio() {
 
     storage.create_bucket().await.unwrap();
     storage
-        .upload_file("test.txt", "text/plain".to_string(), "test".into())
+        .upload_file(
+            "test.txt",
+            "test".into(),
+            UploadFileOptions {
+                content_type: "text/plain".to_string(),
+                ..Default::default()
+            },
+        )
         .await
         .unwrap();
 
@@ -50,7 +66,14 @@ async fn test_upload_file_duplicate_key_override_minio() {
     assert_eq!(contents.as_ref(), b"test");
 
     storage
-        .upload_file("test.txt", "text/plain".to_string(), "test2".into())
+        .upload_file(
+            "test.txt",
+            "test2".into(),
+            UploadFileOptions {
+                content_type: "text/plain".to_string(),
+                ..Default::default()
+            },
+        )
         .await
         .unwrap();
 

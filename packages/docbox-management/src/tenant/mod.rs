@@ -6,13 +6,16 @@ pub mod delete_tenant;
 pub mod flush_tenant_cache;
 pub mod get_pending_tenant_migrations;
 pub mod get_pending_tenant_search_migrations;
+pub mod get_pending_tenant_storage_migrations;
 pub mod get_tenant;
 pub mod get_tenants;
 pub mod migrate_tenant;
 pub mod migrate_tenant_search;
 pub mod migrate_tenant_secret_to_iam;
+pub mod migrate_tenant_storage;
 pub mod migrate_tenants;
 pub mod migrate_tenants_search;
+pub mod migrate_tenants_storage;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TenantTarget {

@@ -57,5 +57,10 @@ pub async fn test_tenant_storage(tenant: &Tenant) -> (StorageLayer, ContainerAsy
     let storage = storage.create_layer(tenant.storage_layer_options());
     storage.create_bucket().await.unwrap();
 
+    let migrations = storage.get_pending_migrations(vec![]).await.unwrap();
+    for migration in migrations {
+        storage.apply_migration(&migration).await.unwrap();
+    }
+
     (storage, storage_container)
 }

@@ -1,6 +1,7 @@
 use crate::{
     database::{DatabaseProvider, close_pool_on_drop},
     password::random_password,
+    tenant::migrate_tenant_storage::{MigrateTenantStorageError, migrate_tenant_storage_inner},
 };
 use docbox_core::{
     database::{
@@ -85,6 +86,10 @@ pub enum CreateTenantError {
     /// Failed to migrate the search index
     #[error("failed to migrate tenant search index: {0}")]
     MigrateSearchIndex(SearchError),
+
+    /// Failed to migrate the storage
+    #[error("failed to migrate tenant storage: {0}")]
+    MigrateStorage(MigrateTenantStorageError),
 
     /// Missing db_secret_name when not using IAM authentication
     #[error("when not using db_iam_user the db_secret_name must be specified")]
@@ -371,7 +376,7 @@ async fn create_tenant_inner(
 
     // Setup the tenant storage bucket
     tracing::debug!("creating tenant storage");
-    create_tenant_storage(
+    let storage = create_tenant_storage(
         &tenant,
         storage_factory,
         config.storage_s3_queue_arn,
@@ -379,6 +384,11 @@ async fn create_tenant_inner(
         rollback,
     )
     .await?;
+
+    // Apply storage migrations
+    migrate_tenant_storage_inner(&storage, &mut root_transaction, &tenant, None)
+        .await
+        .map_err(CreateTenantError::MigrateStorage)?;
 
     // Setup the tenant search index
     tracing::debug!("creating tenant search index");
@@ -556,7 +566,7 @@ async fn create_tenant_storage(
     s3_queue_arn: Option<String>,
     origins: Vec<String>,
     rollback: &mut CreateTenantRollbackData,
-) -> Result<(), CreateTenantError> {
+) -> Result<StorageLayer, CreateTenantError> {
     let storage = storage.create_layer(tenant.storage_layer_options());
     let outcome = storage
         .create_bucket()
@@ -589,7 +599,7 @@ async fn create_tenant_storage(
             .map_err(CreateTenantError::SetupStorageOrigins)?;
     }
 
-    Ok(())
+    Ok(storage)
 }
 
 /// Create and setup the tenant search index

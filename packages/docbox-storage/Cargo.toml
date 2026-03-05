@@ -1,6 +1,6 @@
 [package]
 name = "docbox-storage"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 description = "Docbox storage layer abstraction"
 
@@ -41,6 +41,8 @@ bytes-utils.workspace = true
 
 # Date time
 chrono.workspace = true
+
+itertools.workspace = true
 
 [dev-dependencies]
 testcontainers = { workspace = true, features = ["http_wait"] }

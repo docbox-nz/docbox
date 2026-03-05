@@ -1,7 +1,10 @@
 use crate::error::HttpError;
 use axum::http::StatusCode;
 use docbox_core::{
-    database::models::folder::{FolderId, FolderWithExtra, ResolvedFolderWithExtra},
+    database::models::{
+        file::FileId,
+        folder::{FolderId, FolderWithExtra, ResolvedFolderWithExtra},
+    },
     folders::create_folder::CreateFolderError,
 };
 use garde::Validate;
@@ -52,6 +55,20 @@ pub struct UpdateFolderRequest {
     pub pinned: Option<bool>,
 }
 
+/// Request to create a zip file of folder contents
+#[derive(Debug, Validate, Deserialize, ToSchema)]
+pub struct ZipFolderRequest {
+    /// Optionally only include the specified files
+    #[garde(skip)]
+    #[schema(value_type = Option<Vec<Uuid>>)]
+    pub include_files: Option<Vec<FileId>>,
+    /// Optionally exclude the specified files including
+    /// all other files
+    #[garde(skip)]
+    #[schema(value_type = Option<Vec<Uuid>>)]
+    pub exclude_files: Option<Vec<FileId>>,
+}
+
 #[derive(Debug, Error)]
 pub enum HttpFolderError {
     #[error("unknown folder")]
@@ -72,6 +89,9 @@ pub enum HttpFolderError {
 
     #[error("cannot move a folder into itself")]
     CannotMoveIntoSelf,
+
+    #[error("failed to create zip file")]
+    CreateZipFile,
 }
 
 impl HttpError for HttpFolderError {
@@ -83,7 +103,9 @@ impl HttpError for HttpFolderError {
             HttpFolderError::CannotModifyRoot
             | HttpFolderError::CannotDeleteRoot
             | HttpFolderError::CannotMoveIntoSelf => StatusCode::BAD_REQUEST,
-            HttpFolderError::CreateError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            HttpFolderError::CreateError(_) | HttpFolderError::CreateZipFile => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         }
     }
 }

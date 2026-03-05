@@ -76,6 +76,7 @@ use crate::{
         folder::get_edit_history,
         folder::update,
         folder::delete,
+        folder::create_zip,
         // Link routes
         link::create,
         link::get,

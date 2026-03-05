@@ -8,7 +8,11 @@ use crate::{
     },
     models::{
         document_box::DocumentBoxScope,
-        folder::{CreateFolderRequest, FolderResponse, HttpFolderError, UpdateFolderRequest},
+        file::UploadTaskResponse,
+        folder::{
+            CreateFolderRequest, FolderResponse, HttpFolderError, UpdateFolderRequest,
+            ZipFolderRequest,
+        },
     },
 };
 use axum::{Json, extract::Path, http::StatusCode};
@@ -18,13 +22,17 @@ use docbox_core::{
         edit_history::EditHistory,
         folder::{Folder, FolderId, FolderWithExtra, ResolvedFolderWithExtra},
         shared::WithFullPath,
+        tasks::TaskStatus,
     },
     folders::{
         create_folder::{CreateFolderData, safe_create_folder},
+        create_folder_zip::{CreateFolderZipOptions, create_folder_zip},
         delete_folder::delete_folder,
         update_folder::{UpdateFolder, UpdateFolderError},
     },
+    tasks::background_task::background_task,
 };
+use tracing::Instrument;
 
 pub const FOLDER_TAG: &str = "Folder";
 
@@ -319,4 +327,92 @@ pub async fn delete(
         })?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Create a folder ZIP
+///
+/// Create a ZIP file from the contents of a folder
+#[utoipa::path(
+    post,
+    operation_id = "folder_create_zip",
+    tag = FOLDER_TAG,
+    path = "/box/{scope}/folder/{folder_id}/zip",
+    responses(
+        (status = 204, description = "Deleted folder successfully"),
+        (status = 404, description = "Folder not found", body = HttpErrorResponse),
+        (status = 500, description = "Internal server error", body = HttpErrorResponse)
+    ),
+    params(
+        ("scope" = DocumentBoxScope, Path, description = "Scope the folder resides within"),
+        ("folder_id" = Uuid, Path, description = "ID of the folder to delete"),
+        TenantParams
+    )
+)]
+#[tracing::instrument(skip_all, fields(%scope, %folder_id, ?req))]
+pub async fn create_zip(
+    TenantDb(db): TenantDb,
+    TenantStorage(storage): TenantStorage,
+    Path((scope, folder_id)): Path<(DocumentBoxScope, FolderId)>,
+    Garde(Json(req)): Garde<Json<ZipFolderRequest>>,
+) -> HttpResult<UploadTaskResponse> {
+    let DocumentBoxScope(scope) = scope;
+
+    let folder = Folder::find_by_id(&db, &scope, folder_id)
+        .await
+        // Failed to query folder
+        .map_err(|error| {
+            tracing::error!(?error, "failed to query folder");
+            HttpCommonError::ServerError
+        })?
+        // Folder not found
+        .ok_or(HttpFolderError::UnknownFolder)?;
+
+    let options = CreateFolderZipOptions {
+        include_files: req.include_files,
+        exclude_files: req.exclude_files,
+    };
+
+    let span = tracing::Span::current();
+
+    // Spawn background task
+    let (task_id, created_at) = background_task(
+        db.clone(),
+        scope.clone(),
+        async move {
+            let result = create_folder_zip(&db, &storage, &folder, options)
+                .await
+                .map_err(|error| {
+                    tracing::error!(?error, "failed to upload file");
+                    DynHttpError::from(HttpFolderError::CreateZipFile)
+                })
+                // Serialize the response for storage
+                .and_then(|value| {
+                    serde_json::to_value(&value).map_err(|error| {
+                        tracing::error!(?error, "failed to serialize upload task outcome");
+                        DynHttpError::from(HttpCommonError::ServerError)
+                    })
+                });
+
+            match result {
+                Ok(value) => (TaskStatus::Completed, value),
+                Err(error) => (
+                    TaskStatus::Failed,
+                    serde_json::json!({ "error": error.to_string() }),
+                ),
+            }
+        }
+        // Ensure the logging span is passed onto the background task so that
+        // logging context continues
+        .instrument(span),
+    )
+    .await
+    .map_err(|error| {
+        tracing::error!(?error, "failed to create background task");
+        HttpCommonError::ServerError
+    })?;
+
+    Ok(Json(UploadTaskResponse {
+        task_id,
+        created_at,
+    }))
 }

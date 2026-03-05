@@ -20,7 +20,9 @@ use super::{ConvertToPdf, PdfConvertError};
 use aws_config::SdkConfig;
 use bytes::Bytes;
 use docbox_database::sqlx::types::Uuid;
-use docbox_storage::{StorageLayer, StorageLayerError, StorageLayerFactory, StorageLayerOptions};
+use docbox_storage::{
+    StorageLayer, StorageLayerError, StorageLayerFactory, StorageLayerOptions, UploadFileOptions,
+};
 use office_convert_lambda_client::{ConvertError, OfficeConvertLambda, OfficeConvertLambdaOptions};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -152,8 +154,11 @@ impl ConvertToPdf for OfficeConverterLambda {
         self.storage
             .upload_file(
                 &input_key,
-                "application/octet-stream".to_string(),
                 file_bytes,
+                UploadFileOptions {
+                    content_type: "application/octet-stream".to_string(),
+                    ..Default::default()
+                },
             )
             .await
             .map_err(OfficeConvertLambdaError::Storage)?;

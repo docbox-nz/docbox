@@ -26,7 +26,7 @@ use docbox_processing::{
     process_file,
 };
 use docbox_search::{SearchError, TenantSearchIndex};
-use docbox_storage::{StorageLayer, StorageLayerError};
+use docbox_storage::{StorageLayer, StorageLayerError, UploadFileOptions};
 use mime::Mime;
 use std::ops::DerefMut;
 use thiserror::Error;
@@ -335,7 +335,14 @@ async fn upload_file_inner(
         // Upload the file itself to S3
         tracing::debug!("uploading main file");
         storage
-            .upload_file(&file_key, file_record.mime.clone(), upload.file_bytes)
+            .upload_file(
+                &file_key,
+                upload.file_bytes,
+                UploadFileOptions {
+                    content_type: file_record.mime.clone(),
+                    ..Default::default()
+                },
+            )
             .await
             .map_err(UploadFileError::UploadFile)?;
         upload_state.storage_upload_keys.push(file_key.clone());
