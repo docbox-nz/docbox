@@ -1,5 +1,5 @@
 #  Builder part
-FROM rust:1.93.0-slim-bullseye AS builder
+FROM rust:1.93.1-slim-trixie AS builder
 
 # Add rust target and install deps
 RUN update-ca-certificates
@@ -56,7 +56,7 @@ RUN cargo build -p docbox --release
 # Runner part
 # ----------------------------------------
 # Runner part
-FROM debian:bullseye-slim AS runner
+FROM debian:trixie-slim AS runner
 
 # Set environment variables to avoid interaction during installation
 ENV DEBIAN_FRONTEND=noninteractive
