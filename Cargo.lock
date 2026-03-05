@@ -1986,7 +1986,7 @@ dependencies = [
 
 [[package]]
 name = "docbox"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aws-config",
  "aws-sdk-cloudwatchlogs",
@@ -2009,7 +2009,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-core"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "aws-config",
  "aws-sdk-sqs",
@@ -2068,7 +2068,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-http"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "axum",
  "axum-valid",
@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-processing"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "aws-config",
  "aws-sdk-lambda",
@@ -2141,7 +2141,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-search"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "aws-config",
  "chrono",
