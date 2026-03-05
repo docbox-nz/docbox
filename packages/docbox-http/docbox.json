@@ -11,7 +11,7 @@
       "name": "MIT",
       "url": "https://raw.githubusercontent.com/docbox-nz/docbox/refs/heads/main/LICENSE.md"
     },
-    "version": "0.7.0"
+    "version": "0.8.0"
   },
   "paths": {
     "/admin/boxes": {
@@ -2735,6 +2735,90 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/box/{scope}/folder/{folder_id}/zip": {
+      "post": {
+        "tags": [
+          "Folder"
+        ],
+        "summary": "Create a folder ZIP",
+        "description": "Create a ZIP file from the contents of a folder",
+        "operationId": "folder_create_zip",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope the folder resides within",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentBoxScope"
+            }
+          },
+          {
+            "name": "folder_id",
+            "in": "path",
+            "description": "ID of the folder to delete",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "description": "ID of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-tenant-env",
+            "in": "header",
+            "description": "Environment of the tenant you are targeting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZipFolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Deleted folder successfully"
           },
           "404": {
             "description": "Folder not found",
@@ -5675,6 +5759,34 @@
             }
           }
         ]
+      },
+      "ZipFolderRequest": {
+        "type": "object",
+        "description": "Request to create a zip file of folder contents",
+        "properties": {
+          "exclude_files": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optionally exclude the specified files including\nall other files"
+          },
+          "include_files": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optionally only include the specified files"
+          }
+        }
       }
     }
   },
