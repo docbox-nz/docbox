@@ -132,6 +132,24 @@ pub enum CreateBucketOutcome {
     Existing,
 }
 
+/// Options for properties of an uploaded file
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct UploadFileOptions {
+    /// Content type of the uploaded file
+    pub content_type: String,
+    /// Tags to append to the file
+    pub tags: Option<Vec<UploadFileTag>>,
+}
+
+/// Additional behavioral tags to use when uploading the file
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UploadFileTag {
+    /// Tag that the file should expire after 1 day
+    ExpireDays1,
+    /// Tag that the file should expire after 30 days
+    ExpireDays30,
+}
+
 impl StorageLayer {
     /// Get the name of the bucket
     pub fn bucket_name(&self) -> String {
@@ -202,11 +220,11 @@ impl StorageLayer {
     pub async fn upload_file(
         &self,
         key: &str,
-        content_type: String,
         body: Bytes,
+        options: UploadFileOptions,
     ) -> Result<(), StorageLayerError> {
         match self {
-            StorageLayer::S3(layer) => layer.upload_file(key, content_type, body).await,
+            StorageLayer::S3(layer) => layer.upload_file(key, body, options).await,
         }
     }
 
@@ -247,6 +265,26 @@ impl StorageLayer {
             StorageLayer::S3(layer) => layer.get_file(key).await,
         }
     }
+
+    /// Get pending migrations for the storage layer based on the list of already applied
+    /// migration names
+    #[tracing::instrument(skip(self))]
+    pub async fn get_pending_migrations(
+        &self,
+        applied_names: Vec<String>,
+    ) -> Result<Vec<String>, StorageLayerError> {
+        match self {
+            StorageLayer::S3(layer) => layer.get_pending_migrations(applied_names).await,
+        }
+    }
+
+    /// Apply a migration by name
+    #[tracing::instrument(skip(self))]
+    pub async fn apply_migration(&self, name: &str) -> Result<(), StorageLayerError> {
+        match self {
+            StorageLayer::S3(layer) => layer.apply_migration(name).await,
+        }
+    }
 }
 
 /// Internal trait defining required async implementations for a storage backend
@@ -274,8 +312,8 @@ pub(crate) trait StorageLayerImpl {
     async fn upload_file(
         &self,
         key: &str,
-        content_type: String,
         body: Bytes,
+        options: UploadFileOptions,
     ) -> Result<(), StorageLayerError>;
 
     async fn add_bucket_notifications(&self, sns_arn: &str) -> Result<(), StorageLayerError>;
@@ -285,6 +323,13 @@ pub(crate) trait StorageLayerImpl {
     async fn delete_file(&self, key: &str) -> Result<(), StorageLayerError>;
 
     async fn get_file(&self, key: &str) -> Result<FileStream, StorageLayerError>;
+
+    async fn get_pending_migrations(
+        &self,
+        applied_names: Vec<String>,
+    ) -> Result<Vec<String>, StorageLayerError>;
+
+    async fn apply_migration(&self, name: &str) -> Result<(), StorageLayerError>;
 }
 
 /// Stream of bytes from a file

@@ -9,23 +9,30 @@
 //! * `DOCBOX_S3_ACCESS_KEY_ID` - Access key ID when using a custom S3 endpoint
 //! * `DOCBOX_S3_ACCESS_KEY_SECRET` - Access key secret when using a custom S3 endpoint
 
-use crate::{CreateBucketOutcome, FileStream, StorageLayerError, StorageLayerImpl};
+use crate::{
+    CreateBucketOutcome, FileStream, StorageLayerError, StorageLayerImpl, UploadFileOptions,
+    UploadFileTag,
+};
 use aws_config::SdkConfig;
 use aws_sdk_s3::{
     config::Credentials,
     error::SdkError,
     operation::{
         create_bucket::CreateBucketError, delete_bucket::DeleteBucketError,
-        delete_object::DeleteObjectError, get_object::GetObjectError, head_bucket::HeadBucketError,
+        delete_object::DeleteObjectError,
+        get_bucket_lifecycle_configuration::GetBucketLifecycleConfigurationError,
+        get_object::GetObjectError, head_bucket::HeadBucketError,
         put_bucket_cors::PutBucketCorsError,
+        put_bucket_lifecycle_configuration::PutBucketLifecycleConfigurationError,
         put_bucket_notification_configuration::PutBucketNotificationConfigurationError,
         put_object::PutObjectError,
     },
     presigning::{PresignedRequest, PresigningConfig},
     primitives::ByteStream,
     types::{
-        BucketLocationConstraint, CorsConfiguration, CorsRule, CreateBucketConfiguration,
-        NotificationConfiguration, QueueConfiguration,
+        BucketLifecycleConfiguration, BucketLocationConstraint, CorsConfiguration, CorsRule,
+        CreateBucketConfiguration, LifecycleExpiration, LifecycleRule, LifecycleRuleFilter,
+        NotificationConfiguration, QueueConfiguration, Tag,
     },
 };
 use bytes::Bytes;
@@ -219,6 +226,97 @@ impl S3StorageLayer {
             external_client,
         }
     }
+
+    /// Migration to add storage lifecycle rules tags to the storage bucket
+    /// to allow expiring objects
+    async fn m1_storage_lifecycle_rules(&self) -> Result<(), StorageLayerError> {
+        let existing_lifecycle_configuration_rules = match self
+            .client
+            .get_bucket_lifecycle_configuration()
+            .bucket(&self.bucket_name)
+            .send()
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    ?error,
+                    "failed to get existing bucket lifecycle configuration"
+                )
+            }) {
+            Ok(value) => value.rules,
+            Err(error) => match error.as_service_error() {
+                // Tolerate NoSuchLifecycleConfiguration error for buckets that have no rules yet
+                Some(error)
+                    if error
+                        .meta()
+                        .code()
+                        .is_some_and(|code| code == "NoSuchLifecycleConfiguration") =>
+                {
+                    None
+                }
+
+                _ => return Err(S3StorageError::GetBucketLifecycleConfiguration(error).into()),
+            },
+        };
+
+        self.client
+            .put_bucket_lifecycle_configuration()
+            .bucket(&self.bucket_name)
+            .lifecycle_configuration(
+                BucketLifecycleConfiguration::builder()
+                    // Copy existing lifecycle rules
+                    .set_rules(existing_lifecycle_configuration_rules)
+                    // expire: 1d (1 day file expiry rule)
+                    .rules(
+                        LifecycleRule::builder()
+                            .id("expire-1d")
+                            .status(aws_sdk_s3::types::ExpirationStatus::Enabled)
+                            .filter(
+                                LifecycleRuleFilter::builder()
+                                    .tag(
+                                        Tag::builder()
+                                            .key("expire")
+                                            .value("1d")
+                                            .build()
+                                            .expect("invalid tag"),
+                                    )
+                                    .build(),
+                            )
+                            .expiration(LifecycleExpiration::builder().days(1).build())
+                            .build()
+                            .expect("invalid lifecycle rule configuration"),
+                    )
+                    // expire: 30d (30 day file expiry rule)
+                    .rules(
+                        LifecycleRule::builder()
+                            .id("expire-30d")
+                            .status(aws_sdk_s3::types::ExpirationStatus::Enabled)
+                            .filter(
+                                LifecycleRuleFilter::builder()
+                                    .tag(
+                                        Tag::builder()
+                                            .key("expire")
+                                            .value("30d")
+                                            .build()
+                                            .expect("invalid tag"),
+                                    )
+                                    .build(),
+                            )
+                            .expiration(LifecycleExpiration::builder().days(30).build())
+                            .build()
+                            .expect("invalid lifecycle rule configuration"),
+                    )
+                    .build()
+                    .expect("invalid lifecycle configuration"),
+            )
+            .send()
+            .await
+            .inspect_err(|error| {
+                tracing::error!(?error, "failed to put bucket lifecycle configuration")
+            })
+            .map_err(S3StorageError::PutBucketLifecycleConfiguration)?;
+
+        Ok(())
+    }
 }
 
 /// User facing storage errors
@@ -294,7 +392,25 @@ pub enum S3StorageError {
     /// Failed to get the file storage object
     #[error("failed to get file storage object")]
     GetObject(SdkError<GetObjectError>),
+
+    /// Failed to get the existing bucket lifecycle configuration
+    ///
+    /// This error is allowed to expose the inner error details as
+    /// it is only used by the management layer and these errors are
+    /// helpful for management
+    #[error("failed to get bucket lifecycle configuration: {0}")]
+    GetBucketLifecycleConfiguration(SdkError<GetBucketLifecycleConfigurationError>),
+
+    /// Failed to put the bucket lifecycle configuration
+    ///
+    /// This error is allowed to expose the inner error details as
+    /// it is only used by the management layer and these errors are
+    /// helpful for management
+    #[error("failed to put bucket lifecycle configuration: {0}")]
+    PutBucketLifecycleConfiguration(SdkError<PutBucketLifecycleConfigurationError>),
 }
+
+const MIGRATION_NAMES: &[&str] = &["m1_storage_lifecycle_rules"];
 
 impl StorageLayerImpl for S3StorageLayer {
     fn bucket_name(&self) -> String {
@@ -392,14 +508,26 @@ impl StorageLayerImpl for S3StorageLayer {
     async fn upload_file(
         &self,
         key: &str,
-        content_type: String,
         body: Bytes,
+        options: UploadFileOptions,
     ) -> Result<(), StorageLayerError> {
+        let tagging = options.tags.map(|tags| {
+            use itertools::Itertools;
+
+            tags.into_iter()
+                .map(|tag| match tag {
+                    UploadFileTag::ExpireDays1 => "expire=1d",
+                    UploadFileTag::ExpireDays30 => "expire=30d",
+                })
+                .join("&")
+        });
+
         self.client
             .put_object()
             .bucket(&self.bucket_name)
-            .content_type(content_type)
+            .content_type(options.content_type)
             .key(key)
+            .set_tagging(tagging)
             .body(body.into())
             .send()
             .await
@@ -602,6 +730,25 @@ impl StorageLayerImpl for S3StorageLayer {
         };
 
         Ok(stream)
+    }
+
+    async fn get_pending_migrations(
+        &self,
+        applied_names: Vec<String>,
+    ) -> Result<Vec<String>, StorageLayerError> {
+        Ok(MIGRATION_NAMES
+            .iter()
+            .map(|name| name.to_string())
+            .filter(|name| !applied_names.contains(name))
+            .collect())
+    }
+
+    async fn apply_migration(&self, name: &str) -> Result<(), StorageLayerError> {
+        #[allow(clippy::single_match)]
+        match name {
+            "m1_storage_lifecycle_rules" => self.m1_storage_lifecycle_rules().await,
+            _ => Ok(()),
+        }
     }
 }
 

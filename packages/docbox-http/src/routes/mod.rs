@@ -104,7 +104,8 @@ pub fn folder_router() -> Router {
                 "/",
                 get(folder::get).put(folder::update).delete(folder::delete),
             )
-            .route("/edit-history", get(folder::get_edit_history)),
+            .route("/edit-history", get(folder::get_edit_history))
+            .route("/zip", post(folder::create_zip)),
     )
 }
 

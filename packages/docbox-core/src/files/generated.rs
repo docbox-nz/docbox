@@ -7,7 +7,7 @@ use docbox_database::models::{
     generated_file::{CreateGeneratedFile, GeneratedFile, GeneratedFileId},
 };
 use docbox_processing::QueuedUpload;
-use docbox_storage::{StorageLayer, StorageLayerError};
+use docbox_storage::{StorageLayer, StorageLayerError, UploadFileOptions};
 use futures::{
     StreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -109,7 +109,14 @@ pub async fn upload_generated_files(
             async move {
                 // Upload the file to storage
                 storage
-                    .upload_file(&create.file_key, create.mime.clone(), upload.bytes)
+                    .upload_file(
+                        &create.file_key,
+                        upload.bytes,
+                        UploadFileOptions {
+                            content_type: create.mime.clone(),
+                            ..Default::default()
+                        },
+                    )
                     .await
                     .inspect_err(|error| {
                         tracing::error!(?error, "failed to store generated file");

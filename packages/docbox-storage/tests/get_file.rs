@@ -1,3 +1,5 @@
+use docbox_storage::UploadFileOptions;
+
 use crate::common::minio::{test_minio_container, test_storage_factory};
 
 mod common;
@@ -11,7 +13,14 @@ async fn test_get_file_minio() {
 
     storage.create_bucket().await.unwrap();
     storage
-        .upload_file("test.txt", "text/plain".to_string(), "test".into())
+        .upload_file(
+            "test.txt",
+            "test".into(),
+            UploadFileOptions {
+                content_type: "text/plain".to_string(),
+                ..Default::default()
+            },
+        )
         .await
         .unwrap();
 
