@@ -19,6 +19,8 @@ docbox-http.workspace = true
 tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
 
+aws-config.workspace = true
+
 # Background task scheduler
 tokio-simple-fixed-scheduler = "=0.1.0"
 
@@ -53,3 +55,7 @@ sentry = { version = "=0.46.2", default-features = false, features = [
     "rustls",
 ] }
 sentry-tracing = "=0.46.2"
+
+# Cloudwatch logging
+aws-sdk-cloudwatchlogs = "1.118.0"
+tracing-cloudwatch = { version = "0.4.1", features = ["awssdk", "ordered_logs"] }
