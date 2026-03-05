@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 # Github release version
 ARG GITHUB_RELEASE_VERSION

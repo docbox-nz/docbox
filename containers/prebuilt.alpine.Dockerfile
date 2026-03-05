@@ -1,4 +1,4 @@
-FROM alpine
+FROM alpine:3.23
 
 # Github release version
 ARG GITHUB_RELEASE_VERSION

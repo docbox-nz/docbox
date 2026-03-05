@@ -19,8 +19,8 @@ args = [
     "GITHUB_RELEASE_VERSION=${RELEASE_VERSION}",
 ]
 
-# RELEASE_VERSION=0.3.2 cargo make -t docker-publish-bookworm
-[tasks.docker-publish-bookworm]
+# RELEASE_VERSION=0.3.2 cargo make -t docker-publish-debian
+[tasks.docker-publish-debian]
 workspace = false
 command = "docker"
 args = [
@@ -29,15 +29,15 @@ args = [
     "--platform",
     "linux/amd64,linux/arm64",
     "-t",
-    "jacobtread/docbox:${RELEASE_VERSION}-bookworm-prebuilt",
+    "jacobtread/docbox:${RELEASE_VERSION}-debian-prebuilt",
     "-t",
-    "jacobtread/docbox:latest-bookworm-prebuilt",
+    "jacobtread/docbox:latest-debian-prebuilt",
     "-t",
     "jacobtread/docbox:${RELEASE_VERSION}",
     "-t",
     "jacobtread/docbox:latest",
     "-f",
-    "./containers/prebuilt.bookworm.Dockerfile",
+    "./containers/prebuilt.debian.Dockerfile",
     "--push",
     ".",
     "--build-arg",

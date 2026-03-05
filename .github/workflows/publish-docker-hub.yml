@@ -14,7 +14,7 @@ permissions:
     packages: write
 
 jobs:
-    build-and-push-bookworm:
+    build-and-push-debian:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout repo
@@ -36,17 +36,17 @@ jobs:
               uses: docker/build-push-action@v5
               with:
                   context: .
-                  file: ./containers/prebuilt.bookworm.Dockerfile
+                  file: ./containers/prebuilt.debian.Dockerfile
                   platforms: linux/amd64,linux/arm64
                   push: true
                   build-args: |
                       GITHUB_RELEASE_VERSION=${{ github.event.inputs.release_tag }}
                   tags: |
                       ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}
-                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-bookworm-prebuilt
-                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-bookworm
-                      ${{ vars.DOCKER_REPOSITORY }}:latest-bookworm-prebuilt
-                      ${{ vars.DOCKER_REPOSITORY }}:latest-bookworm
+                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-debian-prebuilt
+                      ${{ vars.DOCKER_REPOSITORY }}:${{ github.event.inputs.release_tag }}-debian
+                      ${{ vars.DOCKER_REPOSITORY }}:latest-debian-prebuilt
+                      ${{ vars.DOCKER_REPOSITORY }}:latest-debian
                       ${{ vars.DOCKER_REPOSITORY }}:latest
 
     build-and-push-alpine:
