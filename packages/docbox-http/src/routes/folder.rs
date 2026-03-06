@@ -368,8 +368,8 @@ pub async fn create_zip(
         .ok_or(HttpFolderError::UnknownFolder)?;
 
     let options = CreateFolderZipOptions {
-        include_files: req.include_files,
-        exclude_files: req.exclude_files,
+        include: req.include,
+        exclude: req.exclude,
     };
 
     let span = tracing::Span::current();
