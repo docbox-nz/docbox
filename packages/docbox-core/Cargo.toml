@@ -1,6 +1,6 @@
 [package]
 name = "docbox-core"
-version = "0.12.1"
+version = "0.13.0"
 edition = "2024"
 description = "Docbox core business logic and functionality"
 

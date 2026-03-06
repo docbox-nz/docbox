@@ -1,6 +1,6 @@
 [package]
 name = "docbox-http"
-version = "0.8.1"
+version = "0.9.0"
 edition = "2024"
 description = "Docbox HTTP layer, routes, types, and middleware"
 
