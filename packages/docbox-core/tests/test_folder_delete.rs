@@ -161,12 +161,58 @@ async fn test_delete_folder_children_success() {
     // Consume creation event
     _ = events_rx.recv().await.unwrap();
 
+    let sub_folder_2 = safe_create_folder(
+        &db,
+        search.clone(),
+        &events,
+        CreateFolderData {
+            folder: folder.clone(),
+            name: "Sub Folder 2".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Consume creation event
+    _ = events_rx.recv().await.unwrap();
+
+    let sub_folder_3 = safe_create_folder(
+        &db,
+        search.clone(),
+        &events,
+        CreateFolderData {
+            folder: sub_folder_2.clone(),
+            name: "Sub Folder 3".to_string(),
+            created_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Consume creation event
+    _ = events_rx.recv().await.unwrap();
+
     let folder_id = folder.id;
 
     // Delete the folder
     delete_folder(&db, &storage, &search, &events, folder)
         .await
         .unwrap();
+
+    // Expect sub folder 3 deletion event
+    let event = events_rx.recv().await.unwrap();
+    assert!(matches!(
+        event,
+        TenantEventMessage::FolderDeleted(deleted) if deleted.data.id == sub_folder_3.id
+    ));
+
+    // Expect sub folder 2 deletion event
+    let event = events_rx.recv().await.unwrap();
+    assert!(matches!(
+        event,
+        TenantEventMessage::FolderDeleted(deleted) if deleted.data.id == sub_folder_2.id
+    ));
 
     // Expect sub folder deletion event
     let event = events_rx.recv().await.unwrap();

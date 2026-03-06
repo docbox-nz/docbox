@@ -1,19 +1,17 @@
 use crate::events::{TenantEventMessage, TenantEventPublisher};
 use crate::files::delete_file::{DeleteFileError, delete_file};
+use crate::folders::folder_stream::FolderWalkStream;
 use crate::links::delete_link::{DeleteLinkError, delete_link};
 use docbox_database::{
     DbPool,
-    models::{
-        document_box::WithScope,
-        file::File,
-        folder::{Folder, ResolvedFolder},
-        link::Link,
-    },
+    models::{document_box::WithScope, file::File, folder::Folder, link::Link},
 };
 use docbox_search::{SearchError, TenantSearchIndex};
 use docbox_storage::StorageLayer;
-use std::collections::VecDeque;
+use futures::StreamExt;
 use thiserror::Error;
+
+use super::folder_stream::FolderWalkItem;
 
 /// Item to be removed
 pub enum RemoveStackItem {
@@ -56,48 +54,24 @@ pub async fn delete_folder(
     events: &TenantEventPublisher,
     folder: Folder,
 ) -> Result<(), DeleteFolderError> {
-    // Stack to store the next item to delete
-    let mut stack = VecDeque::new();
-
     let document_box = folder.document_box.clone();
 
-    // Push the first folder item
-    stack.push_back(RemoveStackItem::Folder(folder));
+    let mut stream = FolderWalkStream::new(db, folder);
 
-    while let Some(item) = stack.pop_front() {
+    while let Some(result) = stream.next().await {
+        let item = result.map_err(|error| {
+            tracing::error!(?error, "failed to resolve folder for deletion");
+            DeleteFolderError::ResolveFolder
+        })?;
+
         match item {
-            RemoveStackItem::Folder(folder) => {
-                // Resolve the folder children
-                let resolved = ResolvedFolder::resolve(db, folder.id)
-                    .await
-                    .map_err(|error| {
-                        tracing::error!(?error, "failed to resolve folder for deletion");
-                        DeleteFolderError::ResolveFolder
-                    })?;
-
-                // Push the empty folder first (Will be taken out last)
-                stack.push_front(RemoveStackItem::EmptyFolder(folder));
-
-                // Populate the stack with the resolved files, links, and folders
-                for item in resolved.folders {
-                    stack.push_front(RemoveStackItem::Folder(item));
-                }
-
-                for item in resolved.files {
-                    stack.push_front(RemoveStackItem::File(item));
-                }
-
-                for item in resolved.links {
-                    stack.push_front(RemoveStackItem::Link(item));
-                }
-            }
-            RemoveStackItem::EmptyFolder(folder) => {
+            FolderWalkItem::Folder(folder) => {
                 internal_delete_folder(db, search, events, folder).await?;
             }
-            RemoveStackItem::File(file) => {
+            FolderWalkItem::File(file) => {
                 delete_file(db, storage, search, events, file, document_box.clone()).await?;
             }
-            RemoveStackItem::Link(link) => {
+            FolderWalkItem::Link(link) => {
                 delete_link(db, search, events, link, document_box.clone()).await?;
             }
         }
