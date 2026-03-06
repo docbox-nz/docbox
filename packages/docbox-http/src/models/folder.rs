@@ -1,16 +1,14 @@
 use crate::error::HttpError;
 use axum::http::StatusCode;
 use docbox_core::{
-    database::models::{
-        file::FileId,
-        folder::{FolderId, FolderWithExtra, ResolvedFolderWithExtra},
-    },
+    database::models::folder::{FolderId, FolderWithExtra, ResolvedFolderWithExtra},
     folders::create_folder::CreateFolderError,
 };
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// Request to create a folder
 #[derive(Debug, Validate, Deserialize, ToSchema)]
@@ -58,15 +56,22 @@ pub struct UpdateFolderRequest {
 /// Request to create a zip file of folder contents
 #[derive(Debug, Validate, Deserialize, ToSchema)]
 pub struct ZipFolderRequest {
-    /// Optionally only include the specified files
+    /// Optionally only include the specified items (files and folders)
+    ///
+    /// Inclusion is only applied to the direct descendants
+    /// of the folder use exclude to exclude specific content
+    /// from nested folders
     #[garde(skip)]
-    #[schema(value_type = Option<Vec<Uuid>>)]
-    pub include_files: Option<Vec<FileId>>,
-    /// Optionally exclude the specified files including
-    /// all other files
+    #[serde(alias = "include_files")]
+    pub include: Option<Vec<Uuid>>,
+
+    /// Optionally exclude the specified items (files and folders)
+    /// including any items that don't match the provided list of IDs
+    ///
+    /// Exclusion is applied deeply to nested files and folders
     #[garde(skip)]
-    #[schema(value_type = Option<Vec<Uuid>>)]
-    pub exclude_files: Option<Vec<FileId>>,
+    #[serde(alias = "exclude_files")]
+    pub exclude: Option<Vec<Uuid>>,
 }
 
 #[derive(Debug, Error)]
