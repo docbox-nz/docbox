@@ -25,13 +25,13 @@ aws-config.workspace = true
 tokio-simple-fixed-scheduler = "=0.1.0"
 
 # HTTP server framework
-axum = { version = "=0.8.8", features = ["multipart"] }
+axum = { version = "=0.8.9", features = ["multipart"] }
 
 # HTTP server implementation
-axum-server = { version = "=0.8.0", features = ["tls-rustls"]}
+axum-server = { version = "=0.8.0", features = ["tls-rustls"] }
 
 # Crypto provider
-rustls = { version = "=0.23.37", features = ["aws-lc-rs"] }
+rustls = { version = "=0.23.38", features = ["aws-lc-rs"] }
 
 # HTTP layers for ratelimiting, CORS, and tracing
 tower-http = { version = "=0.6.8", features = ["limit", "cors", "trace"] }
@@ -44,17 +44,17 @@ tracing.workspace = true
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 
 # Sentry
-sentry = { version = "=0.46.2", default-features = false, features = [
-    "backtrace",
-    "contexts",
-    "debug-images",
-    "panic",
-    "release-health",
-    "tracing",
-    "reqwest",
-    "rustls",
+sentry = { version = "=0.47.0", default-features = false, features = [
+  "backtrace",
+  "contexts",
+  "debug-images",
+  "panic",
+  "release-health",
+  "tracing",
+  "reqwest",
+  "rustls",
 ] }
-sentry-tracing = "=0.46.2"
+sentry-tracing = "=0.47.0"
 
 # Cloudwatch logging
 aws-sdk-cloudwatchlogs = "1.118.0"

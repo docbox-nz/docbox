@@ -1,15 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
-    "packages/docbox",
-    "packages/docbox-core",
-    "packages/docbox-search",
-    "packages/docbox-database",
-    "packages/docbox-secrets",
-    "packages/docbox-web-scraper",
-    "packages/docbox-management",
-    "packages/docbox-processing",
-    "packages/docbox-http",
+  "packages/docbox",
+  "packages/docbox-core",
+  "packages/docbox-search",
+  "packages/docbox-database",
+  "packages/docbox-secrets",
+  "packages/docbox-web-scraper",
+  "packages/docbox-management",
+  "packages/docbox-processing",
+  "packages/docbox-http",
 ]
 
 [workspace.package]
@@ -91,12 +91,7 @@ http = "1.4.0"
 garde = { version = "0.22.1", features = ["derive", "full"] }
 
 # OpenAPI spec generation
-utoipa = { version = "5.4.0", features = [
-    "url",
-    "uuid",
-    "chrono",
-    "axum_extras",
-] }
+utoipa = { version = "5.4.0", features = ["url", "uuid", "chrono", "axum_extras"] }
 
 # AWS configuration
 aws-config = { version = "1.8.14", features = ["behavior-version-latest"] }
@@ -118,4 +113,4 @@ testcontainers = "0.27.1"
 testcontainers-modules = "0.15.0"
 
 # Fake data generation
-fake = { version = "4.4.0" }
+fake = { version = "5.1.0" }
