@@ -1,5 +1,5 @@
 #  Builder part
-FROM rust:1.93.1-slim-trixie AS builder
+FROM rust:1.95.0-slim-trixie AS builder
 
 # Add rust target and install deps
 RUN update-ca-certificates
