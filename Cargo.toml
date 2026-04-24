@@ -94,7 +94,13 @@ garde = { version = "0.22.1", features = ["derive", "full"] }
 utoipa = { version = "5.4.0", features = ["url", "uuid", "chrono", "axum_extras"] }
 
 # AWS configuration
-aws-config = { version = "1.8.14", features = ["behavior-version-latest"] }
+aws-config = { version = "1.8.14", default-features = false, features = [
+  "behavior-version-latest",
+  "credentials-process",
+  "default-https-client",
+  "rt-tokio",
+  "sso",
+] }
 
 # AWS Lambda SDK
 aws-sdk-lambda = { version = "1.117.0", default-features = false, features = [
