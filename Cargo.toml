@@ -117,3 +117,20 @@ testcontainers-modules = "0.15.0"
 
 # Fake data generation
 fake = { version = "5.1.0" }
+
+# aws-sdk-sso, aws-sdk-ssooidc, aws-sdks-sts are specified here to disable their default features
+# to disable the legacy https client
+aws-sdk-sso = { version = "1.98.0", default-features = false, features = [
+  "default-https-client",
+  "rt-tokio",
+] }
+aws-sdk-ssooidc = { version = "1.100.0", default-features = false, features = [
+  "default-https-client",
+  "rt-tokio",
+] }
+
+aws-sdk-sts = { version = "1.103.0", default-features = false, features = [
+  "default-https-client",
+  "rt-tokio",
+  "sigv4a",
+] }
