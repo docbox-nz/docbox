@@ -1,6 +1,6 @@
 [package]
 name = "docbox"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2024"
 
 license.workspace = true
@@ -31,7 +31,7 @@ axum = { version = "=0.8.9", features = ["multipart"] }
 axum-server = { version = "=0.8.0", features = ["tls-rustls"] }
 
 # Crypto provider
-rustls = { version = "=0.23.38", features = ["aws-lc-rs"] }
+rustls = { version = "=0.23.39", features = ["aws-lc-rs"] }
 
 # HTTP layers for ratelimiting, CORS, and tracing
 tower-http = { version = "=0.6.8", features = ["limit", "cors", "trace"] }
@@ -57,5 +57,8 @@ sentry = { version = "=0.47.0", default-features = false, features = [
 sentry-tracing = "=0.47.0"
 
 # Cloudwatch logging
-aws-sdk-cloudwatchlogs = "1.118.0"
+aws-sdk-cloudwatchlogs = { version = "1.118.0", default-features = false, features = [
+  "default-https-client",
+  "rt-tokio",
+] }
 tracing-cloudwatch = { version = "0.4.1", features = ["awssdk", "ordered_logs"] }

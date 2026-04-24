@@ -97,7 +97,10 @@ utoipa = { version = "5.4.0", features = ["url", "uuid", "chrono", "axum_extras"
 aws-config = { version = "1.8.14", features = ["behavior-version-latest"] }
 
 # AWS Lambda SDK
-aws-sdk-lambda = "1.117.0"
+aws-sdk-lambda = { version = "1.117.0", default-features = false, features = [
+  "default-https-client",
+  "rt-tokio",
+] }
 
 # HTML parser for OGP metadata and html to text conversion
 tl = "0.7.8"

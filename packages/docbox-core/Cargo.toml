@@ -1,6 +1,6 @@
 [package]
 name = "docbox-core"
-version = "0.13.0"
+version = "0.13.1"
 edition = "2024"
 description = "Docbox core business logic and functionality"
 
@@ -45,7 +45,10 @@ tracing.workspace = true
 # AWS Config
 aws-config.workspace = true
 # AWS SQS sdk
-aws-sdk-sqs = "1.92.0"
+aws-sdk-sqs = { version = "1.92.0", default-features = false, features = [
+  "default-https-client",
+  "rt-tokio",
+] }
 
 bytes.workspace = true
 
