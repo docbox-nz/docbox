@@ -87,8 +87,8 @@ pub async fn recreate_search_index_data(
 
     let index_data = links
         .into_iter()
-        .chain(folders.into_iter())
-        .chain(files.into_iter())
+        .chain(folders)
+        .chain(files)
         .collect::<Vec<SearchIndexData>>();
 
     Ok(index_data)
