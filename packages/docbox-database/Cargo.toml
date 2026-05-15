@@ -1,6 +1,6 @@
 [package]
 name = "docbox-database"
-version = "0.11.0"
+version = "0.11.1"
 edition = "2024"
 description = "Docbox database structures, logic, and migrations"
 
@@ -33,20 +33,20 @@ url.workspace = true
 
 # Database client
 sqlx = { version = "0.8.6", default-features = false, features = [
-    # Using tokio async runtime
-    "runtime-tokio",
-    # TLS support backed by rustls
-    "tls-rustls",
-    # Macros
-    "macros",
-    # PostgreSQL database driver
-    "postgres",
-    # UUID support
-    "uuid",
-    # Date time support
-    "chrono",
-    # JSON support
-    "json",
+  # Using tokio async runtime
+  "runtime-tokio",
+  # TLS support backed by rustls
+  "tls-rustls",
+  # Macros
+  "macros",
+  # PostgreSQL database driver
+  "postgres",
+  # UUID support
+  "uuid",
+  # Date time support
+  "chrono",
+  # JSON support
+  "json",
 ] }
 
 # UUID v4 support
