@@ -4,7 +4,11 @@
 
 use std::{fmt::Debug, pin::Pin, task::Poll};
 
-use crate::data_uri::{DataUriError, parse_data_uri};
+use crate::{
+    data_uri::{DataUriError, parse_data_uri},
+    request::{RequestError, get_request},
+    url_validation::UrlValidation,
+};
 use bytes::Bytes;
 use futures::{Stream, TryStreamExt};
 use mime::Mime;
@@ -15,13 +19,9 @@ use tracing::debug;
 /// Error's that can occur when downloading an image
 #[derive(Debug, Error)]
 pub enum DownloadImageError {
-    /// Error making the request
+    /// Error performing the request
     #[error(transparent)]
-    Request(reqwest::Error),
-
-    /// Error as the response status
-    #[error(transparent)]
-    Response(reqwest::Error),
+    Request(#[from] RequestError),
 
     /// Error when downloading the response
     #[error(transparent)]
@@ -102,7 +102,7 @@ impl Stream for ImageStream {
 }
 
 /// Downloads an image file from a href relative to the `base_url`
-pub async fn download_image_href(
+pub async fn download_image_href<D: UrlValidation>(
     client: &reqwest::Client,
     url: ResolvedUri<'_>,
 ) -> Result<(ImageStream, Mime), DownloadImageError> {
@@ -121,7 +121,7 @@ pub async fn download_image_href(
 
         ResolvedUri::Absolute(url) => {
             debug!(%url, "requesting remote image");
-            download_image(client, url).await
+            download_image::<D>(client, url).await
         }
     }
 }
@@ -129,18 +129,12 @@ pub async fn download_image_href(
 /// Downloads an image from a `url` ensures the returned content-type
 /// is an image before attempting to stream the download bytes. Will
 /// error if the content-type is missing or not an image/* type
-async fn download_image(
+async fn download_image<D: UrlValidation>(
     client: &reqwest::Client,
     url: Url,
 ) -> Result<(ImageStream, Mime), DownloadImageError> {
     // Request page at URL
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(DownloadImageError::Request)?
-        .error_for_status()
-        .map_err(DownloadImageError::Response)?;
+    let (response, _redirects) = get_request::<D>(client, url).await?;
 
     let headers = response.headers();
     let content_type = headers

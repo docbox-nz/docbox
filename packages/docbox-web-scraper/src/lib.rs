@@ -16,17 +16,18 @@
 //! * `DOCBOX_WEB_SCRAPE_METADATA_READ_TIMEOUT` - Timeout when reading responses from scraping
 
 use document::{determine_best_favicon, get_website_metadata};
-use download_image::{ResolvedUri, download_image_href, resolve_full_url};
+use download_image::{download_image_href, resolve_full_url};
 use mime::Mime;
-use reqwest::Proxy;
+use reqwest::{Proxy, redirect::Policy};
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, time::Duration};
 use thiserror::Error;
-use url_validation::{TokioDomainResolver, is_allowed_url};
+use url_validation::TokioDomainResolver;
 
 mod data_uri;
 mod document;
 mod download_image;
+mod request;
 mod url_validation;
 
 pub use document::Favicon;
@@ -154,6 +155,12 @@ impl WebsiteMetaService {
     }
 
     /// Create a web scraper from the provided client
+    ///
+    /// Using a custom client can cause security measures to not
+    /// be fully applied leading to gaps in security its recommended
+    /// you use [WebsiteMetaService::from_config] unless you have a
+    /// specific use case which is prevented by it
+    #[deprecated]
     pub fn from_client(client: reqwest::Client) -> Self {
         Self { client }
     }
@@ -174,6 +181,11 @@ impl WebsiteMetaService {
             .user_agent("DocboxLinkBot")
             .connect_timeout(config.metadata_connect_timeout)
             .read_timeout(config.metadata_read_timeout)
+            // Redirect logic is handled internally by the scraper for security
+            .redirect(Policy::none())
+            // Enforce our custom tokio lookup_host based resolver to ensure
+            // consistency when blocking requests
+            .dns_resolver(TokioDomainResolver)
             .build()?;
 
         Ok(Self { client })
@@ -181,14 +193,8 @@ impl WebsiteMetaService {
 
     /// Resolves the metadata for the website at the provided URL
     pub async fn resolve_website(&self, url: &Url) -> Option<ResolvedWebsiteMetadata> {
-        // Check if we are allowed to access the URL
-        if !is_allowed_url::<TokioDomainResolver>(url).await {
-            tracing::warn!("skipping resolve website metadata for disallowed url");
-            return None;
-        }
-
         // Check that the site allows scraping based on its robots.txt
-        let is_allowed_scraping = is_allowed_robots_txt(&self.client, url)
+        let is_allowed_scraping = is_allowed_robots_txt::<TokioDomainResolver>(&self.client, url)
             .await
             .unwrap_or(false);
 
@@ -197,7 +203,7 @@ impl WebsiteMetaService {
         }
 
         // Get the website metadata
-        let res = match get_website_metadata(&self.client, url).await {
+        let res = match get_website_metadata::<TokioDomainResolver>(&self.client, url).await {
             Ok(value) => value,
             Err(error) => {
                 tracing::error!(?error, "failed to get website metadata");
@@ -257,15 +263,10 @@ impl WebsiteMetaService {
     pub async fn resolve_image(&self, url: &Url, image: &str) -> Option<ResolvedImage> {
         let image_url = resolve_full_url(url, image).ok()?;
 
-        // Check we are allowed to access the URL if its absolute
-        if let ResolvedUri::Absolute(image_url) = &image_url
-            && !is_allowed_url::<TokioDomainResolver>(image_url).await
-        {
-            tracing::warn!("skipping resolve image for disallowed url");
-            return None;
-        }
-
-        let (stream, content_type) = download_image_href(&self.client, image_url).await.ok()?;
+        let (stream, content_type) =
+            download_image_href::<TokioDomainResolver>(&self.client, image_url)
+                .await
+                .ok()?;
 
         Some(ResolvedImage {
             content_type,
