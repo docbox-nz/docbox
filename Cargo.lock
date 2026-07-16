@@ -2027,7 +2027,7 @@ dependencies = [
 
 [[package]]
 name = "docbox"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "aws-config",
  "aws-sdk-cloudwatchlogs",
@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-http"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "axum",
  "axum-valid",
@@ -2134,7 +2134,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-management"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "aws-config",
  "docbox-core",
