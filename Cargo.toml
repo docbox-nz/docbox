@@ -20,7 +20,7 @@ license = "MIT"
 
 [workspace.dependencies]
 # Core business logic
-docbox-core = { version = "0.13.2", path = "packages/docbox-core" }
+docbox-core = { version = "0.13.3", path = "packages/docbox-core" }
 
 # Database access
 docbox-database = { version = "0.11.1", path = "packages/docbox-database" }
@@ -38,10 +38,10 @@ docbox-secrets = { version = "0.5.0", path = "packages/docbox-secrets" }
 docbox-storage = { version = "0.8.0", path = "packages/docbox-storage" }
 
 # Web scraping
-docbox-web-scraper = { version = "0.6.0", path = "packages/docbox-web-scraper" }
+docbox-web-scraper = { version = "0.6.1", path = "packages/docbox-web-scraper" }
 
 # Web scraping
-docbox-http = { version = "0.9.1", path = "packages/docbox-http" }
+docbox-http = { version = "0.9.2", path = "packages/docbox-http" }
 
 # Async runtime
 tokio = "1.49.0"

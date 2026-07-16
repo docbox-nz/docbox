@@ -2050,7 +2050,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-core"
-version = "0.13.2"
+version = "0.13.3"
 dependencies = [
  "aws-config",
  "aws-sdk-sqs",
@@ -2242,7 +2242,7 @@ dependencies = [
 
 [[package]]
 name = "docbox-web-scraper"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "base64",
  "bytes",
