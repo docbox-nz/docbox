@@ -18,6 +18,20 @@ pub(crate) trait DomainResolver {
 /// Domain resolver backed by tokio's resolution
 pub struct TokioDomainResolver;
 
+impl reqwest::dns::Resolve for TokioDomainResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let name_str = name.as_str();
+        let host_with_port = format!("{}:0", name_str);
+
+        Box::pin(async move {
+            let resolved = tokio::net::lookup_host(host_with_port).await?;
+            let resolved: Vec<SocketAddr> = resolved.collect();
+
+            Ok(Box::new(resolved.into_iter()) as reqwest::dns::Addrs)
+        })
+    }
+}
+
 impl DomainResolver for TokioDomainResolver {
     async fn resolve_domain(
         host: &str,
@@ -28,6 +42,17 @@ impl DomainResolver for TokioDomainResolver {
 }
 
 const ALLOWED_SCHEMES: &[&str] = &["http", "https"];
+
+/// Validator ensuring the URL is an allowed url for fetching
+pub(crate) trait UrlValidation {
+    async fn is_allowed_url(url: &Url) -> bool;
+}
+
+impl UrlValidation for TokioDomainResolver {
+    async fn is_allowed_url(url: &Url) -> bool {
+        is_allowed_url::<TokioDomainResolver>(url).await
+    }
+}
 
 /// Validates that the provided `url` is valid for the web-scraper
 /// to visit.

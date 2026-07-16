@@ -9,6 +9,11 @@ use thiserror::Error;
 use tl::{HTMLTag, Parser};
 use url::Url;
 
+use crate::{
+    request::{RequestError, get_request},
+    url_validation::UrlValidation,
+};
+
 /// Metadata extracted from a website
 #[derive(Debug)]
 pub struct WebsiteMetadata {
@@ -44,11 +49,8 @@ struct WebsiteDocumentState {
 /// Errors that could occur when website metadata is loaded
 #[derive(Debug, Error)]
 pub enum WebsiteMetadataError {
-    #[error("failed to request resource")]
-    FailedRequest(reqwest::Error),
-
-    #[error("error response from server")]
-    ErrorResponse(reqwest::Error),
+    #[error(transparent)]
+    Request(#[from] RequestError),
 
     #[error("failed to read response")]
     ReadResponse(reqwest::Error),
@@ -74,7 +76,7 @@ pub enum WebsiteMetadataParseError {
 
 /// Connects to a website reading the HTML contents, extracts the metadata
 /// required from the <head/> element
-pub async fn get_website_metadata(
+pub async fn get_website_metadata<D: UrlValidation>(
     client: &reqwest::Client,
     url: &Url,
 ) -> Result<WebsiteMetadata, WebsiteMetadataError> {
@@ -90,13 +92,7 @@ pub async fn get_website_metadata(
     }
 
     // Request page at URL
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(WebsiteMetadataError::FailedRequest)?
-        .error_for_status()
-        .map_err(WebsiteMetadataError::ErrorResponse)?;
+    let (response, _redirects) = get_request::<D>(client, url).await?;
 
     // Read response text
     let text = response
@@ -110,11 +106,8 @@ pub async fn get_website_metadata(
 /// Error's that can occur when attempting to load robots.txt
 #[derive(Debug, Error)]
 pub enum RobotsTxtError {
-    #[error("failed to request resource")]
-    FailedRequest(reqwest::Error),
-
-    #[error("error response from server")]
-    ErrorResponse(reqwest::Error),
+    #[error(transparent)]
+    Request(#[from] RequestError),
 
     #[error("failed to read response")]
     ReadResponse(reqwest::Error),
@@ -122,7 +115,7 @@ pub enum RobotsTxtError {
 
 /// Attempts to read the robots.txt file for the website to determine if
 /// scraping is allowed
-pub async fn is_allowed_robots_txt(
+pub async fn is_allowed_robots_txt<D: UrlValidation>(
     client: &reqwest::Client,
     url: &Url,
 ) -> Result<bool, RobotsTxtError> {
@@ -134,13 +127,7 @@ pub async fn is_allowed_robots_txt(
     url.set_path("/robots.txt");
 
     // Request page at URL
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(RobotsTxtError::FailedRequest)?
-        .error_for_status()
-        .map_err(RobotsTxtError::ErrorResponse)?;
+    let (response, _redirects) = get_request::<D>(client, url).await?;
 
     // Read response text
     let robots_txt = response
