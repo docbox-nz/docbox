@@ -14,6 +14,7 @@
 //! * `DOCBOX_DB_HOST` - Database host
 //! * `DOCBOX_DB_PORT` - Database port
 //! * `DOCBOX_DB_CREDENTIAL_NAME` - Secrets manager name for the root database secret
+//! * `DOCBOX_DB_ROOT_IAM` - Whether to use IAM to authenticate the root database
 //! * `DOCBOX_DB_MAX_CONNECTIONS` - Max connections each tenant pool can contain
 //! * `DOCBOX_DB_MAX_ROOT_CONNECTIONS` - Max connections the root "docbox" pool can contain
 //! * `DOCBOX_DB_ACQUIRE_TIMEOUT` - Timeout before acquiring a connection fails

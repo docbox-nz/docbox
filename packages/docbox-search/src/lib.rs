@@ -1,5 +1,10 @@
 #![forbid(unsafe_code)]
 #![recursion_limit = "256"]
+//! Search index abstraction with multiple supported backends
+//!
+//! ## Environment Variables
+//!
+//! * `DOCBOX_SEARCH_INDEX_FACTORY` - Which search index to use ("opensearch", "typesense", or "database")
 
 use aws_config::SdkConfig;
 use chrono::Utc;
@@ -48,6 +53,12 @@ pub enum SearchIndexFactoryConfig {
     Typesense(typesense::TypesenseSearchConfig),
     OpenSearch(opensearch::OpenSearchConfig),
     Database(database::DatabaseSearchConfig),
+}
+
+impl Default for SearchIndexFactoryConfig {
+    fn default() -> Self {
+        Self::Database(Default::default())
+    }
 }
 
 #[derive(Debug, Error)]
