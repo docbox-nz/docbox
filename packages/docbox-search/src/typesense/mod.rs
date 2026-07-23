@@ -50,13 +50,17 @@ pub struct TypesenseSearchConfig {
 
 impl TypesenseSearchConfig {
     pub fn from_env() -> Result<Self, TypesenseIndexFactoryError> {
-        let url =
-            std::env::var("TYPESENSE_URL").map_err(|_| TypesenseIndexFactoryError::MissingUrl)?;
+        let url = std::env::var("DOCBOX_TYPESENSE_URL")
+            .or(std::env::var("TYPESENSE_URL"))
+            .map_err(|_| TypesenseIndexFactoryError::MissingUrl)?;
 
-        let api_key = std::env::var("TYPESENSE_API_KEY")
+        let api_key = std::env::var("DOCBOX_TYPESENSE_API_KEY")
+            .or(std::env::var("TYPESENSE_API_KEY"))
             .map(TypesenseApiKey::new)
             .ok();
-        let api_key_secret_name = std::env::var("TYPESENSE_API_KEY_SECRET_NAME").ok();
+        let api_key_secret_name = std::env::var("DOCBOX_TYPESENSE_API_KEY_SECRET_NAME")
+            .or(std::env::var("TYPESENSE_API_KEY_SECRET_NAME"))
+            .ok();
 
         Ok(Self {
             url,

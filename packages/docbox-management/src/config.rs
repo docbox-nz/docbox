@@ -59,10 +59,13 @@ pub struct ServerConfigData {
     /// Database configuration
     pub database: AdminDatabaseConfiguration,
     /// Secret manager configuration
+    #[serde(default)]
     pub secrets: SecretsManagerConfig,
     /// Search index configuration
+    #[serde(default)]
     pub search: SearchIndexFactoryConfig,
     /// Storage backend configuration
+    #[serde(default)]
     pub storage: StorageLayerFactoryConfig,
 }
 

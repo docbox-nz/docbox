@@ -244,7 +244,8 @@ async fn server(aws_config: SdkConfig) -> Result<(), Box<dyn Error>> {
     };
 
     // Determine the socket address to bind against
-    let server_address = std::env::var("SERVER_ADDRESS")
+    let server_address = std::env::var("DOCBOX_SERVER_ADDRESS")
+        .or(std::env::var("SERVER_ADDRESS"))
         .ok()
         .and_then(|value| value.parse::<SocketAddr>().ok())
         .unwrap_or(if use_https {

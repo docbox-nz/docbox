@@ -32,6 +32,12 @@ pub enum SecretsManagerConfig {
     Memory(memory::MemorySecretManagerConfig),
 }
 
+impl Default for SecretsManagerConfig {
+    fn default() -> Self {
+        Self::Aws(Default::default())
+    }
+}
+
 /// Errors that could occur with a secrets manager config
 #[derive(Debug, Error)]
 pub enum SecretsManagerConfigError {

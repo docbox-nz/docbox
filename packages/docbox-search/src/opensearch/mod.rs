@@ -45,8 +45,9 @@ pub struct OpenSearchConfig {
 
 impl OpenSearchConfig {
     pub fn from_env() -> Result<Self, OpenSearchIndexFactoryError> {
-        let url =
-            std::env::var("OPENSEARCH_URL").map_err(|_| OpenSearchIndexFactoryError::MissingUrl)?;
+        let url = std::env::var("OPENSEARCH_URL")
+            .or(std::env::var("DOCBOX_OPENSEARCH_URL"))
+            .map_err(|_| OpenSearchIndexFactoryError::MissingUrl)?;
         Ok(Self { url })
     }
 }
