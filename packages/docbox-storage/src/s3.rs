@@ -425,20 +425,21 @@ impl StorageLayerImpl for S3StorageLayer {
             .ok_or(S3StorageError::MissingRegion)?
             .to_string();
 
-        let constraint = BucketLocationConstraint::from(bucket_region.as_str());
+        let mut builder = self.client.create_bucket().bucket(&self.bucket_name);
 
-        let cfg = CreateBucketConfiguration::builder()
-            .location_constraint(constraint)
-            .build();
+        // For some silly reason AWS will chuck you back a InvalidLocationConstraint error if you try
+        // using the default region (us-east-1) as the bucket constraint location when creating a bucket
+        //
+        // The only way around this is to just simply exclude that region when creating buckets :facepalm:
+        if bucket_region != "us-east-1" {
+            let constraint = BucketLocationConstraint::from(bucket_region.as_str());
+            let cfg = CreateBucketConfiguration::builder()
+                .location_constraint(constraint)
+                .build();
+            builder = builder.create_bucket_configuration(cfg)
+        }
 
-        if let Err(error) = self
-            .client
-            .create_bucket()
-            .create_bucket_configuration(cfg)
-            .bucket(&self.bucket_name)
-            .send()
-            .await
-        {
+        if let Err(error) = builder.send().await {
             let already_exists = error
                 .as_service_error()
                 .is_some_and(|value| value.is_bucket_already_owned_by_you());
