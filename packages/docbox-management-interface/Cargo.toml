@@ -1,0 +1,24 @@
+[package]
+name = "docbox-management-interface"
+version = "0.1.0"
+edition = "2024"
+description = "Interface layer for the docbox-management crate to provide a way to handle various management points (cli, lambda, ...etc)"
+
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+# Serialization and JSON
+serde.workspace = true
+serde_json.workspace = true
+
+# Error handling
+thiserror.workspace = true
+
+# UUIDs since the type aliases are not available
+uuid.workspace = true
+
+# Async traits
+async-trait = "0.1.0"

@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod database;
+pub mod interface;
 pub mod password;
 pub mod root;
 pub mod server;

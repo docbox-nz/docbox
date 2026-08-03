@@ -2134,10 +2134,11 @@ dependencies = [
 
 [[package]]
 name = "docbox-management"
-version = "0.12.2"
+version = "0.13.0"
 dependencies = [
  "aws-config",
  "docbox-core",
+ "docbox-management-interface",
  "futures",
  "rand 0.10.1",
  "reqwest",
@@ -2146,6 +2147,17 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "docbox-management-interface"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
