@@ -1,0 +1,23 @@
+pub mod check_root;
+pub mod create_tenant;
+pub mod delete_tenant;
+pub mod get_tenant;
+pub mod get_tenant_pending_migrations;
+pub mod get_tenants;
+pub mod migrate_iam;
+pub mod migrate_tenant;
+pub mod migration;
+pub mod set_tenant_allowed_cors_origins;
+pub mod tenant;
+
+pub use check_root::*;
+pub use create_tenant::*;
+pub use delete_tenant::*;
+pub use get_tenant::*;
+pub use get_tenant_pending_migrations::*;
+pub use get_tenants::*;
+pub use migrate_iam::*;
+pub use migrate_tenant::*;
+pub use migration::*;
+pub use set_tenant_allowed_cors_origins::*;
+pub use tenant::*;
