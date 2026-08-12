@@ -45,7 +45,7 @@ async fn test_process_email() {
 
     let metadata: EmailMetadataDocument =
         serde_json::from_slice(first.bytes.as_ref()).expect("metadata should be valid json");
-    assert_eq!(metadata.date, Some("2025-06-08T14:10:47Z".to_string()));
+    assert_eq!(metadata.date, Some("2025-06-08T14:10:47+12:00".to_string()));
     assert_eq!(metadata.subject, Some("Test email".to_string()));
     assert_eq!(metadata.message_id, Some("test-message-id".to_string()));
     assert_eq!(
@@ -137,7 +137,7 @@ async fn test_process_email_with_html() {
 
     let metadata: EmailMetadataDocument =
         serde_json::from_slice(first.bytes.as_ref()).expect("metadata should be valid json");
-    assert_eq!(metadata.date, Some("2025-06-08T14:10:47Z".to_string()));
+    assert_eq!(metadata.date, Some("2025-06-08T14:10:47+12:00".to_string()));
     assert_eq!(metadata.subject, Some("Test email".to_string()));
     assert_eq!(metadata.message_id, Some("test-message-id".to_string()));
     assert_eq!(
@@ -229,7 +229,7 @@ async fn test_process_email_html_only() {
 
     let metadata: EmailMetadataDocument =
         serde_json::from_slice(first.bytes.as_ref()).expect("metadata should be valid json");
-    assert_eq!(metadata.date, Some("2025-06-08T14:10:47Z".to_string()));
+    assert_eq!(metadata.date, Some("2025-06-08T14:10:47+12:00".to_string()));
     assert_eq!(metadata.subject, Some("Test email".to_string()));
     assert_eq!(metadata.message_id, Some("test-message-id".to_string()));
     assert_eq!(
@@ -317,7 +317,7 @@ async fn test_process_email_text_only() {
 
     let metadata: EmailMetadataDocument =
         serde_json::from_slice(first.bytes.as_ref()).expect("metadata should be valid json");
-    assert_eq!(metadata.date, Some("2025-06-08T14:10:47Z".to_string()));
+    assert_eq!(metadata.date, Some("2025-06-08T14:10:47+12:00".to_string()));
     assert_eq!(metadata.subject, Some("Test email".to_string()));
     assert_eq!(metadata.message_id, Some("test-message-id".to_string()));
     assert_eq!(
@@ -403,7 +403,7 @@ async fn test_process_email_inline_attachment() {
 
     let metadata: EmailMetadataDocument =
         serde_json::from_slice(first.bytes.as_ref()).expect("metadata should be valid json");
-    assert_eq!(metadata.date, Some("2025-06-08T14:11:19Z".to_string()));
+    assert_eq!(metadata.date, Some("2025-06-08T14:11:19+12:00".to_string()));
     assert_eq!(metadata.subject, Some("Test email".to_string()));
     assert_eq!(metadata.message_id, Some("test-message-id".to_string()));
     assert_eq!(
@@ -489,7 +489,7 @@ async fn test_process_email_with_attachment() {
 
     let metadata: EmailMetadataDocument =
         serde_json::from_slice(first.bytes.as_ref()).expect("metadata should be valid json");
-    assert_eq!(metadata.date, Some("2025-06-08T14:11:19Z".to_string()));
+    assert_eq!(metadata.date, Some("2025-06-08T14:11:19+12:00".to_string()));
     assert_eq!(metadata.subject, Some("Test email".to_string()));
     assert_eq!(metadata.message_id, Some("test-message-id".to_string()));
     assert_eq!(
