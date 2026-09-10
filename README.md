@@ -34,6 +34,10 @@ Files, folders, and links are organized into logical groups called **Document Bo
         - Extracting and processing attachments
         - Text and HTML extraction
         - Full text searchable email contents
+    - Text, JSON, and XML file processing
+        - Any `text/*` type (`.txt`, `.md`, `.csv`, …)
+        - JSON (`application/json`, `+json`) and XML (`application/xml`, `+xml`)
+        - Extracted text content for full-text search
 - 🌐 Web-scraping
     - Built in support for scraping OGP metadata, favicons, and other details from links stored within
 - 🏢 Multi-Tenancy

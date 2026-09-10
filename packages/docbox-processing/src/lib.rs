@@ -7,6 +7,7 @@ use crate::{
     image::process_image_async,
     office::{PdfConvertError, process_office},
     pdf::{GeneratePdfImagesError, process_pdf},
+    text::{is_text_mime, process_text},
 };
 use ::image::{ImageError, ImageFormat};
 use bytes::Bytes;
@@ -26,6 +27,7 @@ pub mod html_to_text;
 pub mod image;
 pub mod office;
 pub mod pdf;
+pub mod text;
 
 #[derive(Debug, Error)]
 pub enum ProcessingError {
@@ -242,6 +244,13 @@ pub async fn process_file(
         tracing::debug!("processing image file");
 
         let output = process_image_async(bytes, image_format).await?;
+        Ok(Some(output))
+    }
+    // File is plain text, JSON, or XML
+    else if is_text_mime(mime) {
+        tracing::debug!("processing text file");
+
+        let output = process_text(&bytes);
         Ok(Some(output))
     }
     // No processing for this file type
