@@ -51,6 +51,9 @@ pub enum PdfConvertError {
 
     #[error("office document is password protected")]
     EncryptedDocument,
+
+    #[error("no convert server specified")]
+    NotAvailable,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +91,7 @@ impl OfficeConverterConfig {
 pub enum OfficeConverter {
     ConverterServer(OfficeConverterServer),
     ConverterLambda(OfficeConverterLambda),
+    Noop,
 }
 
 #[derive(Debug, Error)]
@@ -131,6 +135,7 @@ impl OfficeConverter {
         match self {
             OfficeConverter::ConverterServer(inner) => inner.convert_to_pdf(bytes).await,
             OfficeConverter::ConverterLambda(inner) => inner.convert_to_pdf(bytes).await,
+            OfficeConverter::Noop => Err(PdfConvertError::NotAvailable),
         }
     }
 
@@ -138,6 +143,7 @@ impl OfficeConverter {
         match self {
             OfficeConverter::ConverterServer(inner) => inner.is_convertable(mime),
             OfficeConverter::ConverterLambda(inner) => inner.is_convertable(mime),
+            OfficeConverter::Noop => false,
         }
     }
 }

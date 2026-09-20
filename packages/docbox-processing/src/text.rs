@@ -7,35 +7,35 @@ use super::{ProcessingIndexMetadata, ProcessingOutput, QueuedUpload};
 
 const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 
-/// Checks if the provided mime should be processed as source text
+/// Checks if the provided mime should be processed as text
 ///
-/// Matches any `text/*` type, JSON (`application/json` and `+json` subtypes),
-/// and XML (`application/xml` and `+xml` subtypes).
-pub fn is_text_mime(mime: &Mime) -> bool {
+/// Matches any `text/*` type
+pub fn is_text_file(mime: &Mime) -> bool {
     if mime.type_() == mime::TEXT {
         return true;
-    }
-
-    if mime.type_() == mime::APPLICATION {
-        let subtype = mime.subtype().as_str();
-        return subtype == "json"
-            || subtype == "xml"
-            || subtype.ends_with("+json")
-            || subtype.ends_with("+xml");
     }
 
     false
 }
 
+/// Checks if the provided mime should be processed as text
+/// but from a application file (json/xml)
+///
+/// Matches any JSON (`application/json` and `+json` subtypes),
+/// and XML (`application/xml` and `+xml` subtypes).
+pub fn is_application_file(mime: &Mime) -> bool {
+    if mime.type_() != mime::APPLICATION {
+        return false;
+    }
+
+    let subtype = mime.subtype().as_str();
+    subtype == "json" || subtype == "xml" || subtype.ends_with("+json") || subtype.ends_with("+xml")
+}
+
 /// Processes a text, JSON, or XML file by decoding the source bytes
 /// and emitting searchable [GeneratedFileType::TextContent]
 pub fn process_text(file_bytes: &[u8]) -> ProcessingOutput {
-    let raw = if file_bytes.starts_with(UTF8_BOM) {
-        &file_bytes[UTF8_BOM.len()..]
-    } else {
-        file_bytes
-    };
-
+    let raw = file_bytes.strip_prefix(UTF8_BOM).unwrap_or(file_bytes);
     let content = String::from_utf8_lossy(raw).into_owned();
 
     let pages = vec![DocumentPage {
@@ -50,7 +50,7 @@ pub fn process_text(file_bytes: &[u8]) -> ProcessingOutput {
         upload_queue: vec![QueuedUpload::new(
             mime::TEXT_PLAIN,
             GeneratedFileType::TextContent,
-            Bytes::from(content.into_bytes()),
+            Bytes::from(content),
         )],
     }
 }

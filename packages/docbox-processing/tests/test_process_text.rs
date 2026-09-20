@@ -3,26 +3,14 @@ use std::str::FromStr;
 use bytes::Bytes;
 use docbox_database::models::generated_file::GeneratedFileType;
 use docbox_processing::{
-    ProcessingLayer, ProcessingLayerConfig,
-    office::{OfficeConverter, OfficeProcessingLayer, convert_server::OfficeConverterServer},
-    process_file,
-    text::{is_text_mime, process_text},
+    ProcessingLayerConfig, process_file,
+    text::{is_application_file, is_text_file, process_text},
 };
 use mime::Mime;
 
-/// Processing layer that never talks to a convert server.
-/// Text processing does not use office conversion.
-fn dummy_processing_layer() -> ProcessingLayer {
-    let converter_server =
-        OfficeConverterServer::from_addresses(["http://127.0.0.1:1"], false).unwrap();
+use crate::common::processing::noop_processing_layer;
 
-    ProcessingLayer {
-        office: OfficeProcessingLayer {
-            converter: OfficeConverter::ConverterServer(converter_server),
-        },
-        config: ProcessingLayerConfig::default(),
-    }
-}
+mod common;
 
 fn mime(value: &str) -> Mime {
     Mime::from_str(value).unwrap()
@@ -34,7 +22,10 @@ async fn process_with_mime(
 ) -> Option<docbox_processing::ProcessingOutput> {
     process_file(
         &None,
-        &dummy_processing_layer(),
+        &noop_processing_layer(ProcessingLayerConfig {
+            process_application_files: Some(true),
+            ..Default::default()
+        }),
         Bytes::copy_from_slice(contents),
         &mime(mime_type),
     )
@@ -75,19 +66,26 @@ fn assert_text_content(output: &docbox_processing::ProcessingOutput, expected: &
 
 #[test]
 fn test_is_text_mime() {
-    assert!(is_text_mime(&mime("text/plain")));
-    assert!(is_text_mime(&mime("text/markdown")));
-    assert!(is_text_mime(&mime("text/x-markdown")));
-    assert!(is_text_mime(&mime("text/csv")));
-    assert!(is_text_mime(&mime("text/xml")));
-    assert!(is_text_mime(&mime("application/json")));
-    assert!(is_text_mime(&mime("application/ld+json")));
-    assert!(is_text_mime(&mime("application/xml")));
-    assert!(is_text_mime(&mime("application/atom+xml")));
+    assert!(is_text_file(&mime("text/plain")));
+    assert!(is_text_file(&mime("text/markdown")));
+    assert!(is_text_file(&mime("text/x-markdown")));
+    assert!(is_text_file(&mime("text/csv")));
+    assert!(is_text_file(&mime("text/xml")));
 
-    assert!(!is_text_mime(&mime("application/pdf")));
-    assert!(!is_text_mime(&mime("application/octet-stream")));
-    assert!(!is_text_mime(&mime("image/png")));
+    assert!(!is_text_file(&mime("application/pdf")));
+    assert!(!is_text_file(&mime("application/octet-stream")));
+    assert!(!is_text_file(&mime("image/png")));
+}
+
+#[test]
+fn test_is_application_mime() {
+    assert!(is_application_file(&mime("application/json"),));
+    assert!(is_application_file(&mime("application/ld+json")));
+    assert!(is_application_file(&mime("application/xml")));
+    assert!(is_application_file(&mime("application/atom+xml")));
+    assert!(!is_application_file(&mime("application/pdf")));
+    assert!(!is_application_file(&mime("application/octet-stream")));
+    assert!(!is_application_file(&mime("image/png")));
 }
 
 #[test]

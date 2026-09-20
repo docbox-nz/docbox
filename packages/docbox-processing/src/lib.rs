@@ -7,7 +7,7 @@ use crate::{
     image::process_image_async,
     office::{PdfConvertError, process_office},
     pdf::{GeneratePdfImagesError, process_pdf},
-    text::{is_text_mime, process_text},
+    text::{is_application_file, is_text_file, process_text},
 };
 use ::image::{ImageError, ImageFormat};
 use bytes::Bytes;
@@ -163,6 +163,11 @@ pub struct ProcessingLayerConfig {
     ///
     /// Default: 300s
     pub process_timeout: Option<Duration>,
+
+    /// Whether to process .json and .xml files, if you don't need
+    /// these to be searchable its recommended to keep this disabled
+    /// as they can fill your search results with unwanted data if added
+    pub process_application_files: Option<bool>,
 }
 
 pub const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(300);
@@ -175,6 +180,9 @@ pub enum ProcessingLayerConfigError {
     /// Invalid process timeout seconds
     #[error("DOCBOX_FILE_PROCESSING_TIMEOUT must be a number in seconds")]
     InvalidProcessTimeout(<u64 as FromStr>::Err),
+    /// Invalid process timeout seconds
+    #[error("DOCBOX_PROCESS_APPLICATION_FILES must be a number in seconds")]
+    InvalidProcessApplicationFiles(<bool as FromStr>::Err),
 }
 
 impl ProcessingLayerConfig {
@@ -198,9 +206,19 @@ impl ProcessingLayerConfig {
             })
             .transpose()?;
 
+        let process_application_files = std::env::var("DOCBOX_PROCESS_APPLICATION_FILES")
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<bool>()
+                    .map_err(ProcessingLayerConfigError::InvalidProcessApplicationFiles)
+            })
+            .transpose()?;
+
         Ok(ProcessingLayerConfig {
             max_unpack_iterations,
             process_timeout,
+            process_application_files,
         })
     }
 }
@@ -246,9 +264,18 @@ pub async fn process_file(
         let output = process_image_async(bytes, image_format).await?;
         Ok(Some(output))
     }
-    // File is plain text, JSON, or XML
-    else if is_text_mime(mime) {
+    // File is plain text
+    else if is_text_file(mime) {
         tracing::debug!("processing text file");
+
+        let output = process_text(&bytes);
+        Ok(Some(output))
+    }
+    // File is JSON or XML
+    else if is_application_file(mime)
+        && layer.config.process_application_files.unwrap_or_default()
+    {
+        tracing::debug!("processing application file");
 
         let output = process_text(&bytes);
         Ok(Some(output))

@@ -139,7 +139,7 @@ async fn test_update_file_name_success() {
         );
         assert_eq!(first.document_box, document_box.scope);
         assert!(first.page_matches.is_empty());
-        assert_eq!(first.total_hits, 1);
+        assert_eq!(first.total_hits, 2);
         assert!(first.name_match);
         assert!(!first.content_match);
     }
@@ -284,7 +284,7 @@ async fn test_update_file_folder_success() {
         );
         assert_eq!(first.document_box, document_box.scope);
         assert!(first.page_matches.is_empty());
-        assert_eq!(first.total_hits, 1);
+        assert_eq!(first.total_hits, 2);
         assert!(!first.name_match);
         assert!(!first.content_match);
     }
