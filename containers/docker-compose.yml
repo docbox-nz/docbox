@@ -39,7 +39,7 @@ services:
 
     # Storage (ARN = arn:minio:sqs::primary:webhook)
     storage:
-        image: minio/minio:latest
+        image: quay.io/minio/minio:latest
         container_name: docbox-storage
         ports:
             - 8109:9000

@@ -83,8 +83,8 @@ jobs:
                   docker pull typesense/typesense:28.0
                   docker save typesense/typesense:28.0 -o /tmp/.docker-cache/typesense.tar
 
-                  docker pull minio/minio:RELEASE.2025-02-28T09-55-16Z
-                  docker save minio/minio:RELEASE.2025-02-28T09-55-16Z -o /tmp/.docker-cache/minio.tar
+                  docker pull quay.io/minio/minio:RELEASE.2025-02-28T09-55-16Z
+                  docker save quay.io/minio/minio:RELEASE.2025-02-28T09-55-16Z -o /tmp/.docker-cache/minio.tar
 
                   docker pull jacobtread/office-convert-server:0.2.2
                   docker save jacobtread/office-convert-server:0.2.2 -o /tmp/.docker-cache/office-convert-server.tar
