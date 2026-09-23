@@ -9,8 +9,8 @@ use docbox_processing::{ProcessingConfig, ProcessingLayerConfig};
 
 use crate::common::{
     database::test_tenant_db,
-    minio::test_tenant_storage,
     processing::{test_office_convert_server_container, test_processing_layer},
+    rustfs::test_tenant_storage,
     tenant::test_tenant,
     typesense::test_tenant_search,
 };

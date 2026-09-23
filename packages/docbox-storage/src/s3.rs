@@ -1,6 +1,6 @@
 //! # S3 Storage Backend
 //!
-//! Storage backend backed by a [S3](https://docs.aws.amazon.com/s3/) compatible storage solution (AWS S3, MinIO, ...etc)
+//! Storage backend backed by a [S3](https://docs.aws.amazon.com/s3/) compatible storage solution (AWS S3, RustFS, MinIO, ...etc)
 //!
 //! # Environment Variables
 //!
@@ -80,7 +80,7 @@ pub enum S3Endpoint {
     /// AWS default endpoint
     #[default]
     Aws,
-    /// Custom endpoint (Minio or other compatible)
+    /// Custom endpoint (RustFS, Minio, or other compatible)
     Custom {
         /// Endpoint URL
         endpoint: String,
@@ -669,7 +669,7 @@ impl StorageLayerImpl for S3StorageLayer {
             .send()
             .await
         {
-            // Handle "NotImplemented" errors (minio does not have CORS support)
+            // Handle "NotImplemented" errors (some s3 compatible servers don't have CORS support)
             if error
                 .raw_response()
                 // (501 Not Implemented)

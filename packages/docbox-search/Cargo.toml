@@ -47,5 +47,5 @@ features = ["rustls-tls", "aws-auth"]
 
 [dev-dependencies]
 testcontainers = { workspace = true, features = ["http_wait"] }
-testcontainers-modules = { workspace = true, features = ["postgres", "minio"] }
+testcontainers-modules = { workspace = true, features = ["postgres", "rustfs"] }
 tokio = { workspace = true, features = ["macros"] }

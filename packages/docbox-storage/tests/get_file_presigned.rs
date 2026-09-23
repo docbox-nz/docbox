@@ -1,4 +1,4 @@
-use crate::common::minio::{test_minio_container, test_storage_factory};
+use crate::common::rustfs::{test_rustfs_container, test_storage_factory};
 use aws_sdk_s3::presigning::PresignedRequest;
 use docbox_storage::UploadFileOptions;
 use reqwest::{
@@ -32,8 +32,8 @@ async fn presigned_request(request: PresignedRequest) -> Response {
 
 /// Tests getting a file's content succeeds and matches the uploaded content
 #[tokio::test]
-async fn test_get_file_presigned_minio() {
-    let container = test_minio_container().await;
+async fn test_get_file_presigned_docker() {
+    let container = test_rustfs_container().await;
     let storage_factory = test_storage_factory(&container).await;
     let storage = storage_factory.create_test_layer();
 
@@ -67,11 +67,11 @@ async fn test_get_file_presigned_minio() {
 
 /// Tests getting a presigned download of an unknown file fails
 ///
-/// Creating the presigned upload will not fail with minio but retrieving the
+/// Creating the presigned upload will not fail with rustfs but retrieving the
 /// resource will fail with a 404
 #[tokio::test]
-async fn test_get_unknown_file_presigned_minio() {
-    let container = test_minio_container().await;
+async fn test_get_unknown_file_presigned_docker() {
+    let container = test_rustfs_container().await;
     let storage_factory = test_storage_factory(&container).await;
     let storage = storage_factory.create_test_layer();
 

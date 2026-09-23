@@ -80,7 +80,7 @@ zip = "8.2.0"
 
 [dev-dependencies]
 testcontainers = { workspace = true, features = ["http_wait"] }
-testcontainers-modules = { workspace = true, features = ["postgres", "minio"] }
+testcontainers-modules = { workspace = true, features = ["postgres", "rustfs"] }
 tokio = { workspace = true, features = ["full"] }
 docbox-search.workspace = true
 fake.workspace = true

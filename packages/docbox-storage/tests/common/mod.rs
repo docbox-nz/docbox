@@ -1,1 +1,1 @@
-pub mod minio;
+pub mod rustfs;

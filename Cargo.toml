@@ -45,7 +45,7 @@ docbox-web-scraper = { version = "0.6.1", path = "packages/docbox-web-scraper" }
 docbox-http = { version = "0.9.2", path = "packages/docbox-http" }
 
 # Management interface
-docbox-management-interface = { version = "0.1.0", path = "packages/docbox-management-interface"}
+docbox-management-interface = { version = "0.1.0", path = "packages/docbox-management-interface" }
 
 # Async runtime
 tokio = "1.49.0"
@@ -122,7 +122,7 @@ base64 = "0.22.1"
 itertools = "0.14.0"
 
 # Test containers for integration tests
-testcontainers = "0.27.1"
+testcontainers = "0.27.2"
 testcontainers-modules = "0.15.0"
 
 # Fake data generation
