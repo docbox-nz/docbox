@@ -2,7 +2,7 @@ use aws_sdk_s3::presigning::PresignedRequest;
 use reqwest::header::{HeaderName, HeaderValue};
 use std::str::FromStr;
 
-use crate::common::minio::{test_minio_container, test_storage_factory};
+use crate::common::rustfs::{test_rustfs_container, test_storage_factory};
 
 mod common;
 
@@ -32,8 +32,8 @@ async fn presigned_upload(request: PresignedRequest, data: &'static [u8]) {
 
 /// Tests uploading a file using presigned uploads succeeds
 #[tokio::test]
-async fn test_upload_file_presigned_minio() {
-    let container = test_minio_container().await;
+async fn test_upload_file_presigned_docker() {
+    let container = test_rustfs_container().await;
     let storage_factory = test_storage_factory(&container).await;
     let storage = storage_factory.create_test_layer();
 
@@ -60,8 +60,8 @@ async fn test_upload_file_presigned_minio() {
 
 /// Tests uploading a file using presigned uploads with a duplicate key will override the existing content
 #[tokio::test]
-async fn test_upload_file_duplicate_key_override_minio() {
-    let container = test_minio_container().await;
+async fn test_upload_file_duplicate_key_override_docker() {
+    let container = test_rustfs_container().await;
     let storage_factory = test_storage_factory(&container).await;
     let storage = storage_factory.create_test_layer();
 

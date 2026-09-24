@@ -4,8 +4,8 @@
 #
 # Requires the following environment variables in .env.docker (inside .containers):
 # * TYPESENSE_API_KEY
-# * MINIO_ROOT_USER
-# * MINIO_ROOT_PASSWORD
+# * RUSTFS_ACCESS_KEY
+# * RUSTFS_SECRET_KEY
 # * POSTGRES_PASSWORD
 # * SM_ENCRYPTION_KEY
 # * SM_ACCESS_KEY_ID
@@ -37,9 +37,9 @@ services:
         volumes:
             - docbox-search-data:/data
 
-    # Storage (ARN = arn:minio:sqs::primary:webhook)
+    # Storage (ARN = arn:rustfs:sqs:us-east-1:primary:webhook)
     storage:
-        image: minio/minio:latest
+        image: rustfs/rustfs:latest
         container_name: docbox-storage
         ports:
             - 8109:9000
@@ -47,10 +47,13 @@ services:
         env_file:
             - .env.docker
         environment:
-            MINIO_NOTIFY_WEBHOOK_ENABLE_primary: "on"
-            MINIO_NOTIFY_WEBHOOK_ENDPOINT_primary: "http://host.docker.internal:8080/webhook/s3"
-            MINIO_NOTIFY_WEBHOOK_QUEUE_DIR: "/data/events"
-        command: server /data --console-address ":9001"
+            RUSTFS_CONSOLE_ENABLE: "true"
+            RUSTFS_NOTIFY_ENABLE: "true"
+            RUSTFS_NOTIFY_WEBHOOK_ENABLE_PRIMARY: "on"
+            RUSTFS_NOTIFY_WEBHOOK_ENDPOINT_PRIMARY: "http://host.docker.internal:8080/webhook/s3"
+            RUSTFS_NOTIFY_WEBHOOK_AUTH_TOKEN_PRIMARY: "test"
+            RUSTFS_NOTIFY_WEBHOOK_QUEUE_DIR_PRIMARY: "/data/events"
+            RUSTFS_OUTBOUND_ALLOW_ORIGINS: "http://host.docker.internal:8080"
         volumes:
             - docbox-storage-data:/data
         extra_hosts:

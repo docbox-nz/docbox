@@ -11,7 +11,7 @@ use docbox_search::models::SearchRequest;
 use uuid::Uuid;
 
 use crate::common::{
-    database::test_tenant_db, minio::test_tenant_storage, tenant::test_tenant,
+    database::test_tenant_db, rustfs::test_tenant_storage, tenant::test_tenant,
     typesense::test_tenant_search,
 };
 
