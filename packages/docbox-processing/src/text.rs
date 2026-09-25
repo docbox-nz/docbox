@@ -29,7 +29,12 @@ pub fn is_application_file(mime: &Mime) -> bool {
     }
 
     let subtype = mime.subtype().as_str();
-    subtype == "json" || subtype == "xml" || subtype.ends_with("+json") || subtype.ends_with("+xml")
+    if subtype == "json" || subtype == "xml" {
+        return true;
+    }
+
+    let suffix = mime.suffix();
+    suffix.is_some_and(|suffix| matches!(suffix.as_str(), "json" | "xml"))
 }
 
 /// Processes a text, JSON, or XML file by decoding the source bytes

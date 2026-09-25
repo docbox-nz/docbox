@@ -79,7 +79,7 @@ fn test_is_text_mime() {
 
 #[test]
 fn test_is_application_mime() {
-    assert!(is_application_file(&mime("application/json"),));
+    assert!(is_application_file(&mime("application/json")));
     assert!(is_application_file(&mime("application/ld+json")));
     assert!(is_application_file(&mime("application/xml")));
     assert!(is_application_file(&mime("application/atom+xml")));
