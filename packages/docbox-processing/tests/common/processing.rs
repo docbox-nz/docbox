@@ -39,3 +39,12 @@ pub async fn test_processing_layer(
         config,
     }
 }
+
+pub fn noop_processing_layer(config: ProcessingLayerConfig) -> ProcessingLayer {
+    ProcessingLayer {
+        office: OfficeProcessingLayer {
+            converter: OfficeConverter::Noop,
+        },
+        config,
+    }
+}
