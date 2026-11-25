@@ -31,7 +31,7 @@ axum = { version = "=0.8.9", features = ["multipart"] }
 axum-server = { version = "=0.8.0", features = ["tls-rustls"] }
 
 # Crypto provider
-rustls = { version = "=0.23.39", features = ["aws-lc-rs"] }
+rustls = { version = "=0.23.46", features = ["aws-lc-rs"] }
 
 # HTTP layers for ratelimiting, CORS, and tracing
 tower-http = { version = "=0.6.8", features = ["limit", "cors", "trace"] }
